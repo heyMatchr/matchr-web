@@ -1,0 +1,377 @@
+"use client";
+
+import { createBrowserClient } from "@supabase/ssr";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { logOut } from "@/app/auth/actions";
+import type { Database, MatchRow } from "@/lib/supabase/types";
+
+type AuthNavProps = {
+  anonKey: string;
+  currentUserId: string;
+  profileId?: string;
+  supabaseUrl: string;
+};
+
+type NavItem = {
+  href: string;
+  icon: ReactNode;
+  label: string;
+  match: (pathname: string) => boolean;
+  notification?: "matches" | "messages";
+};
+
+function DiscoverIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+      <path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z" />
+    </svg>
+  );
+}
+
+function MatchesIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M7 8.5a4 4 0 0 1 6-3.46 4 4 0 0 1 6 3.46c0 5-6 8.5-6 8.5S7 13.5 7 8.5Z" />
+      <path d="M4 12h3" />
+      <path d="M17 12h3" />
+    </svg>
+  );
+}
+
+function MessagesIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M5 6.5A3.5 3.5 0 0 1 8.5 3h7A3.5 3.5 0 0 1 19 6.5v5A3.5 3.5 0 0 1 15.5 15H11l-4.5 4v-4A3.5 3.5 0 0 1 3 11.5v-5Z" />
+    </svg>
+  );
+}
+
+function ProfileIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M9 21H6.5A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3H9" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+export function AuthNav({
+  anonKey,
+  currentUserId,
+  profileId,
+  supabaseUrl,
+}: AuthNavProps) {
+  const pathname = usePathname();
+  const [hasNewMatches, setHasNewMatches] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(supabaseUrl, anonKey),
+    [anonKey, supabaseUrl],
+  );
+  const profileHref = profileId ? `/profile/${profileId}` : "/onboarding";
+  const navItems: NavItem[] = [
+    {
+      href: "/discover",
+      icon: <DiscoverIcon />,
+      label: "Discover",
+      match: (path) => path.startsWith("/discover"),
+    },
+    {
+      href: "/matches",
+      icon: <MatchesIcon />,
+      label: "Matches",
+      match: (path) => path.startsWith("/matches"),
+      notification: "matches",
+    },
+    {
+      href: "/messages",
+      icon: <MessagesIcon />,
+      label: "Messages",
+      match: (path) => path.startsWith("/messages") || path.startsWith("/chat"),
+      notification: "messages",
+    },
+    {
+      href: profileHref,
+      icon: <ProfileIcon />,
+      label: "Profile",
+      match: (path) => path.startsWith("/profile"),
+    },
+  ];
+
+  const desktopLinkClass = (active: boolean) =>
+    `flex items-center gap-3 rounded-full border px-4 py-3 text-sm transition-all duration-300 ${
+      active
+        ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100 shadow-[0_0_28px_rgba(74,222,128,0.10)]"
+        : "border-transparent text-neutral-400 hover:border-neutral-800 hover:bg-white/[0.03] hover:text-white"
+    }`;
+
+  const mobileLinkClass = (active: boolean) =>
+    `relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-all duration-300 ${
+      active
+        ? "scale-[1.02] bg-emerald-300/10 text-emerald-100 shadow-[0_0_22px_rgba(74,222,128,0.10)]"
+        : "text-neutral-500 hover:text-neutral-200"
+    }`;
+
+  const seenMatchesKey = `matchr_seen_matches_${currentUserId}`;
+
+  useEffect(() => {
+    let active = true;
+
+    async function refreshUnreadCount() {
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("receiver_id", currentUserId)
+        .is("read_at", null);
+
+      if (active) {
+        setUnreadCount(count ?? 0);
+      }
+    }
+
+    async function refreshMatchDot() {
+      const { data } = await supabase
+        .from("matches")
+        .select("id")
+        .or(`user_one_id.eq.${currentUserId},user_two_id.eq.${currentUserId}`);
+
+      if (!active) {
+        return;
+      }
+
+      const matchIds = data?.map((match) => match.id) ?? [];
+      const seenIds = new Set(
+        JSON.parse(localStorage.getItem(seenMatchesKey) ?? "[]") as string[],
+      );
+
+      if (pathname.startsWith("/matches")) {
+        localStorage.setItem(seenMatchesKey, JSON.stringify(matchIds));
+        setHasNewMatches(false);
+        return;
+      }
+
+      setHasNewMatches(matchIds.some((matchId) => !seenIds.has(matchId)));
+    }
+
+    void refreshUnreadCount();
+    void refreshMatchDot();
+
+    const channel = supabase
+      .channel(`nav-notifications:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `receiver_id=eq.${currentUserId}`,
+        },
+        () => {
+          void refreshUnreadCount();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `receiver_id=eq.${currentUserId}`,
+        },
+        () => {
+          void refreshUnreadCount();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "matches",
+          filter: `user_one_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const match = payload.new as MatchRow;
+
+          if (pathname.startsWith("/matches")) {
+            const seenIds = new Set(
+              JSON.parse(localStorage.getItem(seenMatchesKey) ?? "[]") as string[],
+            );
+            seenIds.add(match.id);
+            localStorage.setItem(seenMatchesKey, JSON.stringify([...seenIds]));
+            setHasNewMatches(false);
+            return;
+          }
+
+          setHasNewMatches(true);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "matches",
+          filter: `user_two_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          const match = payload.new as MatchRow;
+
+          if (pathname.startsWith("/matches")) {
+            const seenIds = new Set(
+              JSON.parse(localStorage.getItem(seenMatchesKey) ?? "[]") as string[],
+            );
+            seenIds.add(match.id);
+            localStorage.setItem(seenMatchesKey, JSON.stringify([...seenIds]));
+            setHasNewMatches(false);
+            return;
+          }
+
+          setHasNewMatches(true);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUserId, pathname, seenMatchesKey, supabase]);
+
+  function renderNotification(item: NavItem) {
+    if (item.notification === "messages" && unreadCount > 0) {
+      return (
+        <span className="absolute right-2 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-300 px-1.5 text-[10px] font-black text-black shadow-[0_0_18px_rgba(74,222,128,0.35)]">
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      );
+    }
+
+    if (item.notification === "matches" && hasNewMatches) {
+      return (
+        <span className="absolute right-3 top-2 h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_16px_rgba(74,222,128,0.55)]" />
+      );
+    }
+
+    return null;
+  }
+
+  return (
+    <>
+      <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/5 bg-black/70 px-4 py-3 backdrop-blur-xl md:hidden">
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/matchr-logo.png"
+            alt="Matchr"
+            className="h-9 w-9 object-contain drop-shadow-[0_0_18px_rgba(74,222,128,0.22)]"
+          />
+          <span className="text-base font-black tracking-tight text-white">
+            matchr
+          </span>
+        </div>
+      </header>
+
+      <aside className="fixed bottom-0 left-0 top-0 z-40 hidden w-64 flex-col border-r border-white/5 bg-black/80 px-5 py-6 backdrop-blur-xl md:flex">
+        <Link href="/discover" className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/matchr-logo.png"
+            alt="Matchr"
+            className="h-11 w-11 object-contain drop-shadow-[0_0_18px_rgba(74,222,128,0.22)]"
+          />
+          <span className="text-xl font-black tracking-tight">matchr</span>
+        </Link>
+
+        <nav className="mt-10 flex flex-1 flex-col gap-2">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`${desktopLinkClass(item.match(pathname))} relative`}
+            >
+              {item.icon}
+              {item.label}
+              {renderNotification(item)}
+            </Link>
+          ))}
+        </nav>
+
+        <form action={logOut}>
+          <button
+            type="submit"
+            className="flex w-full items-center gap-3 rounded-full border border-neutral-900 px-4 py-3 text-sm text-neutral-400 transition-all duration-300 hover:border-neutral-700 hover:bg-white/[0.03] hover:text-white"
+          >
+            <LogoutIcon />
+            Logout
+          </button>
+        </form>
+      </aside>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-black/75 px-3 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 shadow-[0_-16px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
+        <div className="mx-auto flex max-w-md items-center gap-1.5">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={mobileLinkClass(item.match(pathname))}
+            >
+              {item.icon}
+              <span className="truncate">{item.label}</span>
+              {renderNotification(item)}
+            </Link>
+          ))}
+        </div>
+      </nav>
+    </>
+  );
+}

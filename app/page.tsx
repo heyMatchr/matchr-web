@@ -1,65 +1,103 @@
-import Image from "next/image";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { joinWaitlist } from "./actions";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("onboarding_completed")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    redirect(profile?.onboarding_completed ? "/discover" : "/onboarding");
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="relative min-h-screen overflow-hidden bg-black text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.10)_0%,_rgba(0,0,0,0)_58%)]" />
+
+<div className="absolute top-0 left-1/2 -translate-x-1/2 w-[520px] h-[520px] bg-emerald-500/5 blur-3xl rounded-full" />
+      <header className="relative z-20 mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
+        <Link href="/" className="text-sm font-medium text-neutral-300">
+          matchr
+        </Link>
+        <nav className="flex items-center gap-2 text-sm">
+          <Link
+            href="/login"
+            className="rounded-full border border-neutral-800 px-4 py-2 text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            Login
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-full bg-white px-4 py-2 font-medium text-black transition-colors hover:bg-neutral-200"
           >
-            Documentation
-          </a>
+            Sign up
+          </Link>
+        </nav>
+      </header>
+
+      <section className="relative z-10 flex min-h-[calc(100vh-88px)] flex-col items-center justify-center px-6 pb-20 text-center animate-none">
+        
+       <div className="mb-6 animate-float">
+  {/* eslint-disable-next-line @next/next/no-img-element */}
+  <img
+    src="/matchr-logo.png"
+    alt="Matchr Logo"
+    className="w-32 h-32 object-contain drop-shadow-[0_0_18px_rgba(74,222,128,0.25)] hover:scale-105 transition-all duration-500"
+  />
+</div>
+       <h1 className="text-6xl md:text-7xl font-black tracking-tight leading-none">
+          matchr
+        </h1>
+
+        <p className="mt-2 text-neutral-400 text-xl md:text-2xl max-w-3xl max-w-xl leading-relaxed font-light">
+          Where desires find their match
+        </p>
+
+        <form action={joinWaitlist} className="mt-10 flex w-full max-w-2xl flex-col gap-3 py-3.5 sm:flex-row">
+  <label htmlFor="waitlist-email" className="sr-only">
+    Email address
+  </label>
+  <input
+    id="waitlist-email"
+    name="email"
+    type="email"
+    required
+    placeholder="Email address"
+    className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/40 px-8 py-4 text-lg text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none"
+  />
+
+  <button type="submit" className="rounded-full bg-white px-8 py-4 text-lg font-medium text-black transition-all duration-300 hover:scale-105 hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)]">
+    Join Waitlist
+  </button>
+
+  <Link href="/login?next=/discover" className="rounded-full border border-neutral-700 px-8 py-4 text-lg transition-all duration-300 hover:scale-105 hover:border-neutral-500 hover:bg-neutral-900/80 hover:shadow-[0_0_30px_rgba(74,222,128,0.10)]">
+    Explore
+  </Link>
+
+</form>
+
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-sm text-neutral-500">
+          <span>Already inside?</span>
+          <Link href="/login" className="text-neutral-200 hover:text-white">
+            Login
+          </Link>
+          <span>/</span>
+          <Link href="/signup" className="text-neutral-200 hover:text-white">
+            Sign up
+          </Link>
         </div>
-      </main>
-    </div>
+
+      </section>
+
+    </main>
   );
 }

@@ -1,0 +1,303 @@
+"use client";
+
+import { createBrowserClient } from "@supabase/ssr";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
+
+type ConversationProfile = {
+  id: string;
+  display_name: string;
+  age: number;
+  avatar_url: string | null;
+};
+
+type ConversationMessage = Pick<
+  MessageRow,
+  | "content"
+  | "created_at"
+  | "id"
+  | "match_id"
+  | "read_at"
+  | "receiver_id"
+  | "sender_id"
+>;
+
+export type Conversation = {
+  id: string;
+  created_at: string;
+  user_one_id: string;
+  user_two_id: string;
+  profile: ConversationProfile;
+  latestMessage: ConversationMessage | null;
+  unreadCount: number;
+};
+
+type MessagesClientProps = {
+  anonKey: string;
+  currentUserId: string;
+  initialConversations: Conversation[];
+  supabaseUrl: string;
+};
+
+function formatMessageTime(timestamp?: string) {
+  if (!timestamp) {
+    return "";
+  }
+
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function sortConversations(conversations: Conversation[]) {
+  return [...conversations].sort((a, b) => {
+    const aTime = new Date(a.latestMessage?.created_at ?? a.created_at).getTime();
+    const bTime = new Date(b.latestMessage?.created_at ?? b.created_at).getTime();
+    return bTime - aTime;
+  });
+}
+
+export function MessagesClient({
+  anonKey,
+  currentUserId,
+  initialConversations,
+  supabaseUrl,
+}: MessagesClientProps) {
+  const [conversations, setConversations] = useState(
+    sortConversations(initialConversations),
+  );
+  const [error, setError] = useState("");
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(supabaseUrl, anonKey),
+    [anonKey, supabaseUrl],
+  );
+
+  useEffect(() => {
+    async function addConversation(nextMatch: MatchRow) {
+      if (
+        nextMatch.user_one_id !== currentUserId &&
+        nextMatch.user_two_id !== currentUserId
+      ) {
+        return;
+      }
+
+      const matchedUserId =
+        nextMatch.user_one_id === currentUserId
+          ? nextMatch.user_two_id
+          : nextMatch.user_one_id;
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, display_name, age, avatar_url")
+        .eq("id", matchedUserId)
+        .maybeSingle();
+
+      if (profileError) {
+        setError(profileError.message);
+        return;
+      }
+
+      if (!profile) {
+        return;
+      }
+
+      setConversations((current) => {
+        if (current.some((conversation) => conversation.id === nextMatch.id)) {
+          return current;
+        }
+
+        return sortConversations([
+          {
+            ...nextMatch,
+            latestMessage: null,
+            profile,
+            unreadCount: 0,
+          },
+          ...current,
+        ]);
+      });
+    }
+
+    function updateLatestMessage(nextMessage: MessageRow) {
+      setConversations((current) =>
+        sortConversations(
+          current.map((conversation) =>
+            conversation.id === nextMessage.match_id
+              ? conversation.latestMessage?.id === nextMessage.id
+                ? conversation
+                : {
+                    ...conversation,
+                    latestMessage: nextMessage,
+                    unreadCount:
+                      nextMessage.receiver_id === currentUserId &&
+                      !nextMessage.read_at
+                        ? conversation.unreadCount + 1
+                        : conversation.unreadCount,
+                  }
+              : conversation,
+          ),
+        ),
+      );
+    }
+
+    function refreshReadState(nextMessage: MessageRow) {
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === nextMessage.match_id
+            ? {
+                ...conversation,
+                latestMessage:
+                  conversation.latestMessage?.id === nextMessage.id
+                    ? nextMessage
+                    : conversation.latestMessage,
+                unreadCount:
+                  nextMessage.receiver_id === currentUserId && nextMessage.read_at
+                    ? Math.max(0, conversation.unreadCount - 1)
+                    : conversation.unreadCount,
+              }
+            : conversation,
+        ),
+      );
+    }
+
+    const channel = supabase
+      .channel(`messages-inbox:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          const message = payload.new as MessageRow;
+
+          if (
+            message.sender_id === currentUserId ||
+            message.receiver_id === currentUserId
+          ) {
+            updateLatestMessage(message);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `receiver_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          refreshReadState(payload.new as MessageRow);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "matches",
+          filter: `user_one_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          void addConversation(payload.new as MatchRow);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "matches",
+          filter: `user_two_id=eq.${currentUserId}`,
+        },
+        (payload) => {
+          void addConversation(payload.new as MatchRow);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUserId, supabase]);
+
+  return (
+    <>
+      {error ? (
+        <div className="mt-8 rounded-lg border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-100">
+          {error}
+        </div>
+      ) : null}
+
+      {conversations.length > 0 ? (
+        <div className="mt-6 grid gap-3 md:mt-10">
+          {conversations.map((conversation) => (
+            <Link
+              key={conversation.id}
+              href={`/chat/${conversation.id}`}
+              className="flex items-center gap-4 rounded-lg border border-neutral-800 bg-black/50 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-neutral-600 hover:shadow-[0_0_35px_rgba(74,222,128,0.08)]"
+            >
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-20 sm:w-20">
+                {conversation.profile.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={conversation.profile.avatar_url}
+                    alt={conversation.profile.display_name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-2xl font-black text-neutral-700">
+                    {conversation.profile.display_name.charAt(0)}
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-black tracking-tight sm:text-xl">
+                      {conversation.profile.display_name},{" "}
+                      {conversation.profile.age}
+                    </h2>
+                    <p className="mt-1 text-xs text-emerald-200">
+                      Last seen recently
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-neutral-500">
+                      {formatMessageTime(
+                        conversation.latestMessage?.created_at ??
+                          conversation.created_at,
+                      )}
+                    </p>
+                    {conversation.unreadCount > 0 ? (
+                      <span className="mt-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-300 px-2 text-[11px] font-black text-black shadow-[0_0_18px_rgba(74,222,128,0.25)]">
+                        {conversation.unreadCount > 9
+                          ? "9+"
+                          : conversation.unreadCount}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <p className="mt-3 line-clamp-1 text-sm text-neutral-400">
+                  {conversation.latestMessage
+                    ? conversation.latestMessage.content
+                    : "No messages yet."}
+                </p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-6 text-neutral-400 md:mt-10 md:p-8">
+          No conversations yet.
+        </div>
+      )}
+    </>
+  );
+}
