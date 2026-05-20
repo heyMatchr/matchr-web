@@ -91,6 +91,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     followingListResult,
     matchResult,
     likeResult,
+    activeStoriesResult,
   ] = await Promise.all([
     supabase
       .from("follows")
@@ -141,7 +142,14 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       .eq("liker_id", user.id)
       .eq("liked_profile_id", profile.id)
       .maybeSingle(),
+    supabase
+      .from("stories")
+      .select("id")
+      .eq("user_id", profile.id)
+      .gt("expires_at", new Date().toISOString())
+      .limit(1),
   ]);
+  const hasActiveStories = Boolean(activeStoriesResult.data?.length);
 
   const recentViewerIds =
     recentViewsResult.data?.map((view) => view.viewer_id) ?? [];
@@ -199,7 +207,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       title="Profile"
     >
         <div className="mt-6 grid overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-10 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
-          <div className="min-h-[340px] bg-neutral-950 md:min-h-[420px]">
+          <div
+            className={`min-h-[340px] bg-neutral-950 md:min-h-[420px] ${
+              hasActiveStories ? "ring-2 ring-emerald-300/70" : ""
+            }`}
+          >
             {profile.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

@@ -8,3 +8,9 @@ export const AVATAR_ALLOWED_TYPES = [
 ] as const;
 
 export const AVATAR_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+export const STORY_BUCKET_NAME = "stories";
+
+export const STORY_ALLOWED_TYPES = AVATAR_ALLOWED_TYPES;
+
+export const STORY_MAX_SIZE_BYTES = 10 * 1024 * 1024;

@@ -97,6 +97,23 @@ export type FollowRow = {
   created_at: string;
 };
 
+export type StoryRow = {
+  id: string;
+  user_id: string;
+  media_url: string | null;
+  text: string;
+  background_style: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export type StoryViewRow = {
+  id: string;
+  story_id: string;
+  viewer_id: string;
+  created_at: string;
+};
+
 export type MessageRow = {
   id: string;
   sender_id: string;
@@ -290,6 +307,31 @@ export type Database = {
           reason: string;
           details?: string;
           status?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      stories: {
+        Row: StoryRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          media_url?: string | null;
+          text?: string;
+          background_style?: string;
+          expires_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      story_views: {
+        Row: StoryViewRow;
+        Insert: {
+          id?: string;
+          story_id: string;
+          viewer_id: string;
           created_at?: string;
         };
         Update: never;
