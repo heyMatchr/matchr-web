@@ -79,20 +79,21 @@ export default async function ChatPage({ params }: ChatPageProps) {
   return (
     <AppShell
       currentUserId={user.id}
+      hideHeader
       maxWidth="max-w-4xl"
       profileId={currentProfile.id}
       title={receiverProfile?.display_name ?? "Chat"}
     >
-      <div className="mt-5 flex justify-end md:mt-8">
-        <SafetyActions
-          blockRedirectTo="/messages"
-          reportedUserId={receiverId}
-          reportedUserName={receiverProfile?.display_name ?? "this user"}
-        />
-      </div>
         <ChatClient
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
+          headerActions={
+            <SafetyActions
+              blockRedirectTo="/messages"
+              reportedUserId={receiverId}
+              reportedUserName={receiverProfile?.display_name ?? "this user"}
+            />
+          }
           initialMessages={initialMessages ?? []}
           matchId={match.id}
           receiverAvatarUrl={receiverProfile?.avatar_url ?? null}

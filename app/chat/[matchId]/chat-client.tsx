@@ -4,6 +4,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Database, MessageRow } from "@/lib/supabase/types";
 
@@ -21,6 +22,7 @@ type PresenceMeta = {
 type ChatClientProps = {
   anonKey: string;
   currentUserId: string;
+  headerActions?: ReactNode;
   initialMessages: LocalMessage[];
   matchId: string;
   receiverAvatarUrl: string | null;
@@ -32,6 +34,7 @@ type ChatClientProps = {
 export function ChatClient({
   anonKey,
   currentUserId,
+  headerActions,
   initialMessages,
   matchId,
   receiverAvatarUrl,
@@ -329,7 +332,7 @@ export function ChatClient({
   }
 
   return (
-    <div className="mt-5 flex h-[calc(100dvh-12.5rem)] min-h-[500px] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-8 md:h-auto md:min-h-[70vh]">
+    <div className="mt-2 flex h-[calc(100dvh-9.25rem)] min-h-[540px] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
       <div className="flex min-h-16 items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-6">
         <Link
           href={`/profile/${receiverId}`}
@@ -362,12 +365,15 @@ export function ChatClient({
             </p>
           </div>
         </Link>
-        <div
-          aria-hidden="true"
-          className={`h-2.5 w-2.5 rounded-full transition-colors ${
-            isReceiverOnline ? "bg-emerald-300" : "bg-neutral-700"
-          }`}
-        />
+        <div className="flex items-center gap-3">
+          <div
+            aria-hidden="true"
+            className={`h-2.5 w-2.5 rounded-full transition-colors ${
+              isReceiverOnline ? "bg-emerald-300" : "bg-neutral-700"
+            }`}
+          />
+          {headerActions}
+        </div>
       </div>
 
       <div className="flex-1 space-y-2.5 overflow-y-auto p-3 sm:space-y-3 sm:p-6">
