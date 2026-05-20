@@ -2,27 +2,57 @@
 
 import { useActionState, useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
+import type { ProfileRow } from "@/lib/supabase/types";
 import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
-import { saveOnboarding, type OnboardingFormState } from "./actions";
+import { updateProfile, type ProfileEditFormState } from "./actions";
 
-const initialState: OnboardingFormState = {
+type EditableProfile = Pick<
+  ProfileRow,
+  | "avatar_url"
+  | "age"
+  | "accepting_dating"
+  | "bio"
+  | "body_type"
+  | "country"
+  | "country_flag"
+  | "display_name"
+  | "drinking"
+  | "gender"
+  | "height"
+  | "interested_in"
+  | "interests"
+  | "location"
+  | "occupation"
+  | "looking_for"
+  | "open_to_long_distance"
+  | "relationship_intent"
+  | "relationship_status"
+  | "smoking"
+  | "weight"
+>;
+
+type ProfileEditFormProps = {
+  profile: EditableProfile;
+};
+
+const initialState: ProfileEditFormState = {
   message: "",
 };
 
-export function OnboardingForm() {
+export function ProfileEditForm({ profile }: ProfileEditFormProps) {
   const [avatarError, setAvatarError] = useState("");
-  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState(profile.avatar_url ?? "");
   const [state, formAction, pending] = useActionState(
-    saveOnboarding,
+    updateProfile,
     initialState,
   );
 
   useEffect(() => {
     return () => {
-      if (avatarPreview) {
+      if (avatarPreview && avatarPreview.startsWith("blob:")) {
         URL.revokeObjectURL(avatarPreview);
       }
     };
@@ -31,28 +61,28 @@ export function OnboardingForm() {
   function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
-    if (avatarPreview) {
+    if (avatarPreview.startsWith("blob:")) {
       URL.revokeObjectURL(avatarPreview);
     }
 
     setAvatarError("");
 
     if (!file) {
-      setAvatarPreview("");
+      setAvatarPreview(profile.avatar_url ?? "");
       return;
     }
 
     if (!AVATAR_ALLOWED_TYPES.includes(file.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
       event.target.value = "";
       setAvatarError("Upload a JPG, PNG, WebP, or GIF avatar.");
-      setAvatarPreview("");
+      setAvatarPreview(profile.avatar_url ?? "");
       return;
     }
 
     if (file.size > AVATAR_MAX_SIZE_BYTES) {
       event.target.value = "";
       setAvatarError("Keep your avatar under 5 MB.");
-      setAvatarPreview("");
+      setAvatarPreview(profile.avatar_url ?? "");
       return;
     }
 
@@ -60,25 +90,25 @@ export function OnboardingForm() {
   }
 
   const inputClass =
-    "rounded-full border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
+    "rounded-full border border-neutral-700 bg-black/40 px-5 py-3.5 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 md:px-6 md:py-4";
 
   return (
     <form
       action={formAction}
-      className="mt-8 grid gap-4 sm:grid-cols-2"
+      className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8"
       encType="multipart/form-data"
     >
       <div className="sm:col-span-2">
         <label
           htmlFor="avatar"
-          className="flex min-h-48 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-neutral-700 bg-black/40 px-6 py-8 text-center transition-colors hover:border-neutral-500"
+          className="flex min-h-44 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-neutral-700 bg-black/40 px-6 py-7 text-center transition-colors hover:border-neutral-500 md:min-h-52"
         >
           {avatarPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={avatarPreview}
               alt="Avatar preview"
-              className="h-36 w-36 rounded-full object-cover shadow-[0_0_35px_rgba(74,222,128,0.16)]"
+              className="h-32 w-32 rounded-full object-cover shadow-[0_0_35px_rgba(74,222,128,0.16)] md:h-36 md:w-36"
             />
           ) : (
             <>
@@ -88,13 +118,15 @@ export function OnboardingForm() {
               </p>
             </>
           )}
+          <span className="mt-4 rounded-full border border-neutral-700 px-4 py-2 text-xs text-neutral-300">
+            Replace photo
+          </span>
         </label>
         <input
           id="avatar"
           name="avatar"
           type="file"
           accept="image/*"
-          required
           disabled={pending}
           onChange={handleAvatarChange}
           className="sr-only"
@@ -117,6 +149,7 @@ export function OnboardingForm() {
         required
         disabled={pending}
         placeholder="Display name"
+        defaultValue={profile.display_name}
         className={inputClass}
       />
 
@@ -132,6 +165,7 @@ export function OnboardingForm() {
         required
         disabled={pending}
         placeholder="Age"
+        defaultValue={profile.age}
         className={inputClass}
       />
 
@@ -144,11 +178,8 @@ export function OnboardingForm() {
         required
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.gender}
       >
-        <option value="" disabled>
-          Gender
-        </option>
         <option>Woman</option>
         <option>Man</option>
         <option>Non-binary</option>
@@ -164,11 +195,8 @@ export function OnboardingForm() {
         required
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.interested_in}
       >
-        <option value="" disabled>
-          Interested in
-        </option>
         <option>Women</option>
         <option>Men</option>
         <option>Everyone</option>
@@ -184,6 +212,7 @@ export function OnboardingForm() {
         required
         disabled={pending}
         placeholder="Occupation"
+        defaultValue={profile.occupation}
         className={inputClass}
       />
 
@@ -196,11 +225,8 @@ export function OnboardingForm() {
         required
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.relationship_intent}
       >
-        <option value="" disabled>
-          Relationship intent
-        </option>
         <option>Long-term relationship</option>
         <option>Intentional dating</option>
         <option>Something casual</option>
@@ -216,6 +242,7 @@ export function OnboardingForm() {
         required
         disabled={pending}
         placeholder="Location"
+        defaultValue={profile.location}
         className={`${inputClass} sm:col-span-2`}
       />
 
@@ -227,6 +254,7 @@ export function OnboardingForm() {
         name="country"
         disabled={pending}
         placeholder="Country"
+        defaultValue={profile.country ?? ""}
         className={inputClass}
       />
 
@@ -238,6 +266,7 @@ export function OnboardingForm() {
         name="country_flag"
         disabled={pending}
         placeholder="Country flag"
+        defaultValue={profile.country_flag ?? ""}
         className={inputClass}
       />
 
@@ -249,6 +278,7 @@ export function OnboardingForm() {
         name="height"
         disabled={pending}
         placeholder="Height"
+        defaultValue={profile.height ?? ""}
         className={inputClass}
       />
 
@@ -260,6 +290,7 @@ export function OnboardingForm() {
         name="weight"
         disabled={pending}
         placeholder="Weight"
+        defaultValue={profile.weight ?? ""}
         className={inputClass}
       />
 
@@ -271,7 +302,7 @@ export function OnboardingForm() {
         name="body_type"
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.body_type ?? ""}
       >
         <option value="">Body type</option>
         <option>Lean</option>
@@ -290,7 +321,7 @@ export function OnboardingForm() {
         name="relationship_status"
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.relationship_status ?? ""}
       >
         <option value="">Relationship status</option>
         <option>Single</option>
@@ -308,6 +339,7 @@ export function OnboardingForm() {
         name="looking_for"
         disabled={pending}
         placeholder="Looking for"
+        defaultValue={profile.looking_for ?? ""}
         className={`${inputClass} sm:col-span-2`}
       />
 
@@ -319,7 +351,7 @@ export function OnboardingForm() {
         name="drinking"
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.drinking ?? ""}
       >
         <option value="">Drinking</option>
         <option>Never</option>
@@ -337,7 +369,7 @@ export function OnboardingForm() {
         name="smoking"
         disabled={pending}
         className={inputClass}
-        defaultValue=""
+        defaultValue={profile.smoking ?? ""}
       >
         <option value="">Smoking</option>
         <option>Never</option>
@@ -347,21 +379,22 @@ export function OnboardingForm() {
         <option>Prefer not to say</option>
       </select>
 
-      <label className="flex items-center gap-3 rounded-3xl border border-neutral-700 bg-black/40 px-6 py-4 text-sm text-neutral-200">
+      <label className="flex items-center gap-3 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-sm text-neutral-200">
         <input
           name="accepting_dating"
           type="checkbox"
-          defaultChecked
+          defaultChecked={profile.accepting_dating}
           disabled={pending}
           className="h-4 w-4 accent-emerald-300"
         />
         Accepting dating
       </label>
 
-      <label className="flex items-center gap-3 rounded-3xl border border-neutral-700 bg-black/40 px-6 py-4 text-sm text-neutral-200">
+      <label className="flex items-center gap-3 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-sm text-neutral-200">
         <input
           name="open_to_long_distance"
           type="checkbox"
+          defaultChecked={profile.open_to_long_distance}
           disabled={pending}
           className="h-4 w-4 accent-emerald-300"
         />
@@ -377,6 +410,7 @@ export function OnboardingForm() {
         required
         disabled={pending}
         placeholder="Interests, separated by commas"
+        defaultValue={profile.interests.join(", ")}
         className={`${inputClass} sm:col-span-2`}
       />
 
@@ -390,7 +424,8 @@ export function OnboardingForm() {
         maxLength={500}
         disabled={pending}
         placeholder="Bio"
-        className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
+        defaultValue={profile.bio}
+        className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2 md:px-6"
       />
 
       <p
@@ -404,9 +439,9 @@ export function OnboardingForm() {
       <button
         type="submit"
         disabled={pending || Boolean(avatarError)}
-        className="rounded-full bg-white px-8 py-4 text-lg font-medium text-black transition-all duration-300 hover:scale-105 hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-neutral-300 sm:col-span-2"
+        className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition-all duration-300 hover:scale-[1.02] hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-neutral-300 sm:col-span-2"
       >
-        {pending ? "Uploading avatar..." : "Continue"}
+        {pending ? "Saving profile..." : "Save profile"}
       </button>
     </form>
   );

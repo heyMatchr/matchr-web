@@ -35,6 +35,7 @@ export type Conversation = {
 
 type MessagesClientProps = {
   anonKey: string;
+  blockedUserIds: string[];
   currentUserId: string;
   initialConversations: Conversation[];
   supabaseUrl: string;
@@ -61,6 +62,7 @@ function sortConversations(conversations: Conversation[]) {
 
 export function MessagesClient({
   anonKey,
+  blockedUserIds,
   currentUserId,
   initialConversations,
   supabaseUrl,
@@ -72,6 +74,10 @@ export function MessagesClient({
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
+  );
+  const blockedUserIdSet = useMemo(
+    () => new Set(blockedUserIds),
+    [blockedUserIds],
   );
 
   useEffect(() => {
@@ -87,6 +93,10 @@ export function MessagesClient({
         nextMatch.user_one_id === currentUserId
           ? nextMatch.user_two_id
           : nextMatch.user_one_id;
+
+      if (blockedUserIdSet.has(matchedUserId)) {
+        return;
+      }
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
@@ -223,7 +233,7 @@ export function MessagesClient({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [currentUserId, supabase]);
+  }, [blockedUserIdSet, currentUserId, supabase]);
 
   return (
     <>

@@ -42,6 +42,19 @@ export default async function MessagesPage() {
   );
   const matchIds = matches.map((match) => match.id);
 
+  const { data: blocks, error: blocksError } = await supabase
+    .from("blocks")
+    .select("blocked_user_id")
+    .eq("blocker_id", user.id);
+
+  if (blocksError) {
+    throw new Error(blocksError.message);
+  }
+
+  const blockedUserIds = new Set(
+    blocks?.map((block) => block.blocked_user_id) ?? [],
+  );
+
   const { data: profiles, error: profilesError } = matchedUserIds.length
     ? await supabase
         .from("profiles")
@@ -87,6 +100,11 @@ export default async function MessagesPage() {
     .map((match) => {
       const matchedUserId =
         match.user_one_id === user.id ? match.user_two_id : match.user_one_id;
+
+      if (blockedUserIds.has(matchedUserId)) {
+        return null;
+      }
+
       const profile = profilesByUserId.get(matchedUserId);
 
       if (!profile) {
@@ -113,6 +131,7 @@ export default async function MessagesPage() {
     >
         <MessagesClient
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+          blockedUserIds={[...blockedUserIds]}
           currentUserId={user.id}
           initialConversations={conversations}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}

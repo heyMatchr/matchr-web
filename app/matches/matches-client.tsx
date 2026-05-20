@@ -24,6 +24,7 @@ export type MatchCard = {
 
 type MatchesClientProps = {
   anonKey: string;
+  blockedUserIds: string[];
   currentUserId: string;
   initialMatched: boolean;
   initialMatches: MatchCard[];
@@ -32,6 +33,7 @@ type MatchesClientProps = {
 
 export function MatchesClient({
   anonKey,
+  blockedUserIds,
   currentUserId,
   initialMatched,
   initialMatches,
@@ -43,6 +45,10 @@ export function MatchesClient({
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
+  );
+  const blockedUserIdSet = useMemo(
+    () => new Set(blockedUserIds),
+    [blockedUserIds],
   );
 
   useEffect(() => {
@@ -58,6 +64,10 @@ export function MatchesClient({
         nextMatch.user_one_id === currentUserId
           ? nextMatch.user_two_id
           : nextMatch.user_one_id;
+
+      if (blockedUserIdSet.has(matchedUserId)) {
+        return;
+      }
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
@@ -121,7 +131,7 @@ export function MatchesClient({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [currentUserId, supabase]);
+  }, [blockedUserIdSet, currentUserId, supabase]);
 
   return (
     <>

@@ -24,7 +24,8 @@ export default async function DiscoverPage() {
     redirect("/onboarding");
   }
 
-  const [profilesResult, likesResult, passesResult] = await Promise.all([
+  const [profilesResult, likesResult, passesResult, blocksResult] =
+    await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -38,6 +39,10 @@ export default async function DiscoverPage() {
       .from("passes")
       .select("passed_profile_id")
       .eq("passer_id", user.id),
+    supabase
+      .from("blocks")
+      .select("blocked_user_id")
+      .eq("blocker_id", user.id),
   ]);
 
   if (profilesResult.error) {
@@ -52,9 +57,14 @@ export default async function DiscoverPage() {
     throw new Error(passesResult.error.message);
   }
 
+  if (blocksResult.error) {
+    throw new Error(blocksResult.error.message);
+  }
+
   const excludedUserIds = new Set([
     ...likesResult.data.map((like) => like.liked_profile_id),
     ...passesResult.data.map((pass) => pass.passed_profile_id),
+    ...blocksResult.data.map((block) => block.blocked_user_id),
   ]);
   const visibleProfiles =
     profilesResult.data.filter((profile) => !excludedUserIds.has(profile.id)) ??

@@ -45,6 +45,23 @@ export async function likeProfile(profileUserId: string) {
     throw new Error(likeError.message);
   }
 
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("display_name")
+    .eq("id", userId)
+    .maybeSingle();
+
+  await supabase.from("notifications").insert({
+    actor_id: userId,
+    body: `${currentProfile?.display_name ?? "Someone"} liked your profile.`,
+    metadata: {
+      profile_id: userId,
+    },
+    title: "New like",
+    type: "new_like",
+    user_id: profileUserId,
+  });
+
   const { data: reciprocalLike, error: reciprocalLikeError } = await supabase
     .from("likes")
     .select("id")
@@ -68,6 +85,29 @@ export async function likeProfile(profileUserId: string) {
     if (matchError) {
       throw new Error(matchError.message);
     }
+
+    await Promise.all([
+      supabase.from("notifications").insert({
+        actor_id: userId,
+        body: "You have a new mutual match. Start a conversation when it feels right.",
+        metadata: {
+          profile_id: profileUserId,
+        },
+        title: "It's a match",
+        type: "new_match",
+        user_id: profileUserId,
+      }),
+      supabase.from("notifications").insert({
+        actor_id: profileUserId,
+        body: "You have a new mutual match. Start a conversation when it feels right.",
+        metadata: {
+          profile_id: userId,
+        },
+        title: "It's a match",
+        type: "new_match",
+        user_id: userId,
+      }),
+    ]);
 
     revalidatePath("/matches");
     revalidatePath("/discover");

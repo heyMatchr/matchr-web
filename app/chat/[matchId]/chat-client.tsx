@@ -1,6 +1,7 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -22,7 +23,9 @@ type ChatClientProps = {
   currentUserId: string;
   initialMessages: LocalMessage[];
   matchId: string;
+  receiverAvatarUrl: string | null;
   receiverId: string;
+  receiverName: string;
   supabaseUrl: string;
 };
 
@@ -31,7 +34,9 @@ export function ChatClient({
   currentUserId,
   initialMessages,
   matchId,
+  receiverAvatarUrl,
   receiverId,
+  receiverName,
   supabaseUrl,
 }: ChatClientProps) {
   const [messages, setMessages] = useState(initialMessages);
@@ -303,6 +308,21 @@ export function ChatClient({
       );
     } else {
       mergeConfirmedMessage(savedMessage);
+      if (!isReceiverOnline) {
+        await supabase.from("notifications").insert({
+          actor_id: currentUserId,
+          body:
+            trimmedContent.length > 120
+              ? `${trimmedContent.slice(0, 117)}...`
+              : trimmedContent,
+          metadata: {
+            match_id: matchId,
+          },
+          title: "New message",
+          type: "new_message",
+          user_id: receiverId,
+        });
+      }
     }
 
     setSending(false);
@@ -311,16 +331,37 @@ export function ChatClient({
   return (
     <div className="mt-5 flex h-[calc(100dvh-12.5rem)] min-h-[500px] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-8 md:h-auto md:min-h-[70vh]">
       <div className="flex min-h-16 items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-6">
-        <div>
-          <p className="text-sm font-medium text-white">Conversation</p>
-          <p className="mt-1 min-h-5 text-sm text-neutral-500 transition-colors">
-            {isReceiverOnline ? (
-              <span className="text-emerald-200">Online now</span>
+        <Link
+          href={`/profile/${receiverId}`}
+          className="flex min-w-0 items-center gap-3 rounded-full pr-3 transition-colors hover:bg-white/[0.03]"
+        >
+          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950">
+            {receiverAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={receiverAvatarUrl}
+                alt={receiverName}
+                className="h-full w-full object-cover"
+              />
             ) : (
-              "Last seen recently"
+              <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
+                {receiverName.charAt(0)}
+              </div>
             )}
-          </p>
-        </div>
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-white">
+              {receiverName}
+            </p>
+            <p className="mt-1 min-h-5 text-sm text-neutral-500 transition-colors">
+              {isReceiverOnline ? (
+                <span className="text-emerald-200">Online now</span>
+              ) : (
+                "Last seen recently"
+              )}
+            </p>
+          </div>
+        </Link>
         <div
           aria-hidden="true"
           className={`h-2.5 w-2.5 rounded-full transition-colors ${

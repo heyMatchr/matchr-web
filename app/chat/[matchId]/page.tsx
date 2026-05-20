@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
 import { ChatClient } from "@/app/chat/[matchId]/chat-client";
+import { SafetyActions } from "@/app/safety/safety-actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 
@@ -45,9 +46,20 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const receiverId =
     match.user_one_id === user.id ? match.user_two_id : match.user_one_id;
 
+  const { data: existingBlock } = await supabase
+    .from("blocks")
+    .select("id")
+    .eq("blocker_id", user.id)
+    .eq("blocked_user_id", receiverId)
+    .maybeSingle();
+
+  if (existingBlock) {
+    redirect("/messages");
+  }
+
   const { data: receiverProfile } = await supabase
     .from("profiles")
-    .select("display_name")
+    .select("display_name, avatar_url")
     .eq("id", receiverId)
     .maybeSingle();
 
@@ -71,12 +83,21 @@ export default async function ChatPage({ params }: ChatPageProps) {
       profileId={currentProfile.id}
       title={receiverProfile?.display_name ?? "Chat"}
     >
+      <div className="mt-5 flex justify-end md:mt-8">
+        <SafetyActions
+          blockRedirectTo="/messages"
+          reportedUserId={receiverId}
+          reportedUserName={receiverProfile?.display_name ?? "this user"}
+        />
+      </div>
         <ChatClient
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
           initialMessages={initialMessages ?? []}
           matchId={match.id}
+          receiverAvatarUrl={receiverProfile?.avatar_url ?? null}
           receiverId={receiverId}
+          receiverName={receiverProfile?.display_name ?? "Chat"}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
         />
     </AppShell>

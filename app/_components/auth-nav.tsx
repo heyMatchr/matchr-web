@@ -20,7 +20,7 @@ type NavItem = {
   icon: ReactNode;
   label: string;
   match: (pathname: string) => boolean;
-  notification?: "matches" | "messages";
+  notification?: "matches" | "messages" | "notifications";
 };
 
 function DiscoverIcon() {
@@ -71,6 +71,22 @@ function MessagesIcon() {
   );
 }
 
+function NotificationsIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7Z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+
 function ProfileIcon() {
   return (
     <svg
@@ -112,6 +128,7 @@ export function AuthNav({
 }: AuthNavProps) {
   const pathname = usePathname();
   const [hasNewMatches, setHasNewMatches] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
@@ -138,6 +155,13 @@ export function AuthNav({
       label: "Messages",
       match: (path) => path.startsWith("/messages") || path.startsWith("/chat"),
       notification: "messages",
+    },
+    {
+      href: "/notifications",
+      icon: <NotificationsIcon />,
+      label: "Notifications",
+      match: (path) => path.startsWith("/notifications"),
+      notification: "notifications",
     },
     {
       href: profileHref,
@@ -178,6 +202,18 @@ export function AuthNav({
       }
     }
 
+    async function refreshNotificationCount() {
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", currentUserId)
+        .is("read_at", null);
+
+      if (active) {
+        setNotificationCount(count ?? 0);
+      }
+    }
+
     async function refreshMatchDot() {
       const { data } = await supabase
         .from("matches")
@@ -203,10 +239,35 @@ export function AuthNav({
     }
 
     void refreshUnreadCount();
+    void refreshNotificationCount();
     void refreshMatchDot();
 
     const channel = supabase
       .channel(`nav-notifications:${currentUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        () => {
+          void refreshNotificationCount();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${currentUserId}`,
+        },
+        () => {
+          void refreshNotificationCount();
+        },
+      )
       .on(
         "postgres_changes",
         {
@@ -288,6 +349,14 @@ export function AuthNav({
   }, [currentUserId, pathname, seenMatchesKey, supabase]);
 
   function renderNotification(item: NavItem) {
+    if (item.notification === "notifications" && notificationCount > 0) {
+      return (
+        <span className="absolute right-2 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-300 px-1.5 text-[10px] font-black text-black shadow-[0_0_18px_rgba(74,222,128,0.35)]">
+          {notificationCount > 9 ? "9+" : notificationCount}
+        </span>
+      );
+    }
+
     if (item.notification === "messages" && unreadCount > 0) {
       return (
         <span className="absolute right-2 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-300 px-1.5 text-[10px] font-black text-black shadow-[0_0_18px_rgba(74,222,128,0.35)]">
@@ -308,16 +377,13 @@ export function AuthNav({
   return (
     <>
       <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/5 bg-black/70 px-4 py-3 backdrop-blur-xl md:hidden">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/matchr-logo.png"
             alt="Matchr"
             className="h-9 w-9 object-contain drop-shadow-[0_0_18px_rgba(74,222,128,0.22)]"
           />
-          <span className="text-base font-black tracking-tight text-white">
-            matchr
-          </span>
         </div>
       </header>
 

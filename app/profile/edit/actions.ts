@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
@@ -8,7 +9,7 @@ import {
   AVATAR_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
 
-export type OnboardingFormState = {
+export type ProfileEditFormState = {
   message: string;
 };
 
@@ -35,10 +36,10 @@ function getAvatarExtension(file: File) {
   return file.type.split("/").pop() || "jpg";
 }
 
-export async function saveOnboarding(
-  _previousState: OnboardingFormState,
+export async function updateProfile(
+  _previousState: ProfileEditFormState,
   formData: FormData,
-): Promise<OnboardingFormState> {
+): Promise<ProfileEditFormState> {
   const displayName = getFormString(formData, "display_name");
   const ageValue = getFormString(formData, "age");
   const gender = getFormString(formData, "gender");
@@ -72,7 +73,7 @@ export async function saveOnboarding(
     !bio ||
     !location
   ) {
-    return { message: "Fill out every field to continue." };
+    return { message: "Fill out every field before saving." };
   }
 
   if (interests.length === 0) {
@@ -87,89 +88,100 @@ export async function saveOnboarding(
     return { message: "Keep your bio under 500 characters." };
   }
 
-  if (!(avatar instanceof File) || avatar.size === 0) {
-    return { message: "Upload an avatar to continue." };
-  }
-
-  if (!AVATAR_ALLOWED_TYPES.includes(avatar.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
-    return { message: "Upload a JPG, PNG, WebP, or GIF avatar." };
-  }
-
-  if (avatar.size > AVATAR_MAX_SIZE_BYTES) {
-    return { message: "Keep your avatar under 5 MB." };
-  }
-
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/onboarding");
+    redirect("/login?next=/profile/edit");
   }
 
-  const avatarPath = `${user.id}/avatar-${Date.now()}.${getAvatarExtension(
-    avatar,
-  )}`;
-  const { error: uploadError } = await supabase.storage
-    .from(AVATAR_BUCKET_NAME)
-    .upload(avatarPath, avatar, {
-      cacheControl: "3600",
-      contentType: avatar.type,
-      upsert: true,
-    });
+  let avatarUrl: string | null = null;
+  let uploadedAvatarPath = "";
 
-  if (uploadError) {
-    return {
-      message:
-        uploadError.message ||
-        "Avatar upload failed. Check the Supabase avatars bucket setup.",
-    };
+  if (avatar instanceof File && avatar.size > 0) {
+    if (!AVATAR_ALLOWED_TYPES.includes(avatar.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
+      return { message: "Upload a JPG, PNG, WebP, or GIF avatar." };
+    }
+
+    if (avatar.size > AVATAR_MAX_SIZE_BYTES) {
+      return { message: "Keep your avatar under 5 MB." };
+    }
+
+    uploadedAvatarPath = `${user.id}/avatar-${Date.now()}.${getAvatarExtension(
+      avatar,
+    )}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(AVATAR_BUCKET_NAME)
+      .upload(uploadedAvatarPath, avatar, {
+        cacheControl: "3600",
+        contentType: avatar.type,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return {
+        message:
+          uploadError.message ||
+          "Avatar upload failed. Check the Supabase avatars bucket setup.",
+      };
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(AVATAR_BUCKET_NAME).getPublicUrl(uploadedAvatarPath);
+
+    if (!publicUrl) {
+      return { message: "Avatar uploaded, but no public URL was generated." };
+    }
+
+    avatarUrl = publicUrl;
   }
 
-  const {
-    data: { publicUrl: avatarUrl },
-  } = supabase.storage.from(AVATAR_BUCKET_NAME).getPublicUrl(avatarPath);
+  const updates = {
+    display_name: displayName,
+    age,
+    gender,
+    interested_in: interestedIn,
+    occupation,
+    interests,
+    relationship_intent: relationshipIntent,
+    bio,
+    location,
+    height: height || null,
+    weight: weight || null,
+    body_type: bodyType || null,
+    relationship_status: relationshipStatus || null,
+    country: country || null,
+    country_flag: countryFlag || null,
+    accepting_dating: acceptingDating,
+    open_to_long_distance: openToLongDistance,
+    drinking: drinking || null,
+    smoking: smoking || null,
+    looking_for: lookingFor || null,
+    updated_at: new Date().toISOString(),
+    ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+  };
 
-  if (!avatarUrl) {
-    return { message: "Avatar uploaded, but no public URL was generated." };
-  }
-
-  const { error } = await supabase.from("profiles").upsert(
-    {
-      id: user.id,
-      display_name: displayName,
-      age,
-      gender,
-      interested_in: interestedIn,
-      occupation,
-      interests,
-      relationship_intent: relationshipIntent,
-      bio,
-      location,
-      height: height || null,
-      weight: weight || null,
-      body_type: bodyType || null,
-      relationship_status: relationshipStatus || null,
-      country: country || null,
-      country_flag: countryFlag || null,
-      accepting_dating: acceptingDating,
-      open_to_long_distance: openToLongDistance,
-      drinking: drinking || null,
-      smoking: smoking || null,
-      looking_for: lookingFor || null,
-      avatar_url: avatarUrl,
-      onboarding_completed: true,
-    },
-    {
-      onConflict: "id",
-    },
-  );
+  const { error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", user.id);
 
   if (error) {
-    await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+    if (uploadedAvatarPath) {
+      await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
+    }
+
     return { message: error.message };
   }
 
-  redirect("/discover");
+  revalidatePath("/profile");
+  revalidatePath(`/profile/${user.id}`);
+  revalidatePath("/discover");
+  revalidatePath("/matches");
+  revalidatePath("/messages");
+  redirect("/profile");
 }
