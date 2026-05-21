@@ -72,7 +72,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
 
   const { data: initialMessages } = await supabase
     .from("messages")
-    .select("id, sender_id, receiver_id, match_id, content, read_at, created_at")
+    .select("id, sender_id, receiver_id, match_id, content, message_type, media_url, media_type, expires_at, viewed_at, gift_type, story_id, read_at, created_at")
     .eq("match_id", match.id)
     .order("created_at", { ascending: true });
 

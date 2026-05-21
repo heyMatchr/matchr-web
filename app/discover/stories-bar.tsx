@@ -2,7 +2,7 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import { useActionState, useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import type { Database } from "@/lib/supabase/types";
 import {
   STORY_ALLOWED_TYPES,
@@ -40,6 +40,26 @@ const initialState: StoryFormState = {
   message: "",
 };
 
+type StoryEngagementItem = {
+  avatar_url: string | null;
+  created_at: string;
+  display_name: string;
+  id: string;
+  label: string;
+};
+
+type StoryEngagement = {
+  gifts: StoryEngagementItem[];
+  reactions: StoryEngagementItem[];
+  viewers: StoryEngagementItem[];
+};
+
+const emptyEngagement: StoryEngagement = {
+  gifts: [],
+  reactions: [],
+  viewers: [],
+};
+
 const backgroundClasses: Record<string, string> = {
   emerald: "bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.45),_#020617_62%)]",
   noir: "bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.16),_#000_62%)]",
@@ -71,7 +91,12 @@ export function StoriesBar({
   const [mediaPreview, setMediaPreview] = useState("");
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
+  const [engagement, setEngagement] = useState<StoryEngagement>(emptyEngagement);
+  const [interactionMessage, setInteractionMessage] = useState("");
+  const [isGiftPickerOpen, setIsGiftPickerOpen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
+  const [replyText, setReplyText] = useState("");
   const [state, formAction, pending] = useActionState(
     createStory,
     initialState,
@@ -127,6 +152,10 @@ export function StoriesBar({
       return;
     }
 
+    if (isPaused) {
+      return;
+    }
+
     const timer = setTimeout(() => {
       goNext();
     }, 5000);
@@ -134,7 +163,100 @@ export function StoriesBar({
     return () => clearTimeout(timer);
     // goNext intentionally reads current active indexes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStory?.id, progressKey]);
+  }, [activeStory?.id, isPaused, progressKey]);
+
+  useEffect(() => {
+    if (!activeStory || !activeGroup?.isOwn) {
+      return;
+    }
+
+    let cancelled = false;
+    const story = activeStory;
+
+    async function loadEngagement() {
+      const [viewsResult, reactionsResult, giftsResult] = await Promise.all([
+        supabase
+          .from("story_views")
+          .select("viewer_id, created_at")
+          .eq("story_id", story.id)
+          .neq("viewer_id", currentUserId)
+          .order("created_at", { ascending: false })
+          .limit(12),
+        supabase
+          .from("story_reactions")
+          .select("reactor_id, reaction_type, created_at")
+          .eq("story_id", story.id)
+          .order("created_at", { ascending: false })
+          .limit(12),
+        supabase
+          .from("story_gifts")
+          .select("sender_id, gift_type, created_at")
+          .eq("story_id", story.id)
+          .order("created_at", { ascending: false })
+          .limit(12),
+      ]);
+
+      const profileIds = [
+        ...(viewsResult.data?.map((item) => item.viewer_id) ?? []),
+        ...(reactionsResult.data?.map((item) => item.reactor_id) ?? []),
+        ...(giftsResult.data?.map((item) => item.sender_id) ?? []),
+      ];
+      const uniqueProfileIds = [...new Set(profileIds)];
+      const { data: profiles } = uniqueProfileIds.length
+        ? await supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url")
+            .in("id", uniqueProfileIds)
+        : { data: [] };
+      const profilesById = new Map(profiles?.map((profile) => [profile.id, profile]));
+
+      if (cancelled) {
+        return;
+      }
+
+      setEngagement({
+        gifts:
+          giftsResult.data?.map((item) => {
+            const profile = profilesById.get(item.sender_id);
+            return {
+              avatar_url: profile?.avatar_url ?? null,
+              created_at: item.created_at,
+              display_name: profile?.display_name ?? "Someone",
+              id: item.sender_id,
+              label: item.gift_type,
+            };
+          }) ?? [],
+        reactions:
+          reactionsResult.data?.map((item) => {
+            const profile = profilesById.get(item.reactor_id);
+            return {
+              avatar_url: profile?.avatar_url ?? null,
+              created_at: item.created_at,
+              display_name: profile?.display_name ?? "Someone",
+              id: item.reactor_id,
+              label: item.reaction_type,
+            };
+          }) ?? [],
+        viewers:
+          viewsResult.data?.map((item) => {
+            const profile = profilesById.get(item.viewer_id);
+            return {
+              avatar_url: profile?.avatar_url ?? null,
+              created_at: item.created_at,
+              display_name: profile?.display_name ?? "Someone",
+              id: item.viewer_id,
+              label: "Viewed",
+            };
+          }) ?? [],
+      });
+    }
+
+    void loadEngagement();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeGroup?.isOwn, activeStory, currentUserId, supabase]);
 
   function handleMediaChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -170,12 +292,17 @@ export function StoriesBar({
   function openViewer(index: number) {
     setActiveGroupIndex(index);
     setActiveStoryIndex(0);
+    setEngagement(emptyEngagement);
     setProgressKey((key) => key + 1);
   }
 
   function closeViewer() {
     setActiveGroupIndex(null);
     setActiveStoryIndex(0);
+    setInteractionMessage("");
+    setIsGiftPickerOpen(false);
+    setIsPaused(false);
+    setReplyText("");
   }
 
   function goNext() {
@@ -197,6 +324,175 @@ export function StoriesBar({
     }
 
     closeViewer();
+  }
+
+  async function findMatchId(ownerId: string) {
+    const { data } = await supabase
+      .from("matches")
+      .select("id, user_one_id, user_two_id")
+      .or(`user_one_id.eq.${currentUserId},user_two_id.eq.${currentUserId}`);
+
+    return (
+      data?.find(
+        (match) =>
+          (match.user_one_id === currentUserId && match.user_two_id === ownerId) ||
+          (match.user_two_id === currentUserId && match.user_one_id === ownerId),
+      )?.id ?? null
+    );
+  }
+
+  async function sendStoryDm(
+    ownerId: string,
+    messageType: "story_reaction" | "story_reply" | "story_gift",
+    content: string,
+    extra?: { giftType?: string; reactionType?: string },
+  ) {
+    const matchId = await findMatchId(ownerId);
+
+    if (!matchId) {
+      setInteractionMessage("Story DMs unlock once you match.");
+      return false;
+    }
+
+    const { error } = await supabase.from("messages").insert({
+      content,
+      gift_type: extra?.giftType ?? null,
+      match_id: matchId,
+      message_type: messageType,
+      receiver_id: ownerId,
+      sender_id: currentUserId,
+      story_id: activeStory?.id ?? null,
+    });
+
+    if (error) {
+      setInteractionMessage(error.message);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function reactToStory(reactionType: string) {
+    if (!activeStory || activeStory.user_id === currentUserId) {
+      return;
+    }
+
+    setInteractionMessage("");
+    const { error } = await supabase.from("story_reactions").upsert(
+      {
+        owner_id: activeStory.user_id,
+        reaction_type: reactionType,
+        reactor_id: currentUserId,
+        story_id: activeStory.id,
+      },
+      { ignoreDuplicates: true, onConflict: "story_id,reactor_id,reaction_type" },
+    );
+
+    if (error) {
+      setInteractionMessage(error.message);
+      return;
+    }
+
+    const sent = await sendStoryDm(
+      activeStory.user_id,
+      "story_reaction",
+      `Reacted to your story: ${reactionType}`,
+      { reactionType },
+    );
+
+    await supabase.from("notifications").insert({
+      actor_id: currentUserId,
+      body: `Reacted to your story: ${reactionType}.`,
+      metadata: { reaction_type: reactionType, story_id: activeStory.id },
+      title: "Story reaction",
+      type: "story_reaction",
+      user_id: activeStory.user_id,
+    });
+
+    setInteractionMessage(sent ? "Reaction sent privately." : "Reaction saved.");
+  }
+
+  async function replyToStory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!activeStory || activeStory.user_id === currentUserId) {
+      return;
+    }
+
+    const trimmedReply = replyText.trim();
+
+    if (!trimmedReply) {
+      return;
+    }
+
+    setInteractionMessage("");
+    const { error } = await supabase.from("story_replies").insert({
+      content: trimmedReply,
+      receiver_id: activeStory.user_id,
+      sender_id: currentUserId,
+      story_id: activeStory.id,
+    });
+
+    if (error) {
+      setInteractionMessage(error.message);
+      return;
+    }
+
+    const sent = await sendStoryDm(
+      activeStory.user_id,
+      "story_reply",
+      `Story reply: ${trimmedReply}`,
+    );
+
+    await supabase.from("notifications").insert({
+      actor_id: currentUserId,
+      body: trimmedReply,
+      metadata: { story_id: activeStory.id },
+      title: "Story reply",
+      type: "story_reply",
+      user_id: activeStory.user_id,
+    });
+
+    setReplyText("");
+    setInteractionMessage(sent ? "Reply sent to messages." : "Reply saved.");
+  }
+
+  async function giftStory(giftType: string) {
+    if (!activeStory || activeStory.user_id === currentUserId) {
+      return;
+    }
+
+    setInteractionMessage("");
+    const { error } = await supabase.from("story_gifts").insert({
+      gift_type: giftType,
+      receiver_id: activeStory.user_id,
+      sender_id: currentUserId,
+      story_id: activeStory.id,
+    });
+
+    if (error) {
+      setInteractionMessage(error.message);
+      return;
+    }
+
+    const sent = await sendStoryDm(
+      activeStory.user_id,
+      "story_gift",
+      `Sent a ${giftType} gift from your story.`,
+      { giftType },
+    );
+
+    await supabase.from("notifications").insert({
+      actor_id: currentUserId,
+      body: `Sent you a ${giftType} gift from your story.`,
+      metadata: { gift_type: giftType, story_id: activeStory.id },
+      title: "Story gift",
+      type: "story_gift",
+      user_id: activeStory.user_id,
+    });
+
+    setIsGiftPickerOpen(false);
+    setInteractionMessage(sent ? "Gift sent to messages." : "Gift sent.");
   }
 
   function goPrevious() {
@@ -275,10 +571,10 @@ export function StoriesBar({
       </div>
 
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/80 px-4 pb-4 backdrop-blur-sm sm:items-center sm:justify-center sm:pb-0">
+        <div className="fixed inset-0 z-50 flex items-end overflow-y-auto bg-black/80 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-6 backdrop-blur-sm sm:items-center sm:justify-center sm:pb-6">
           <form
             action={formAction}
-            className="w-full max-w-lg rounded-2xl border border-neutral-800 bg-black p-5 shadow-[0_0_45px_rgba(74,222,128,0.10)]"
+            className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5 shadow-[0_0_45px_rgba(74,222,128,0.10)]"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-black tracking-tight">Create story</h2>
@@ -353,6 +649,9 @@ export function StoriesBar({
       {activeGroup && activeStory ? (
         <div className="fixed inset-0 z-50 bg-black text-white">
           <div
+            onPointerDown={() => setIsPaused(true)}
+            onPointerLeave={() => setIsPaused(false)}
+            onPointerUp={() => setIsPaused(false)}
             className={`relative mx-auto flex h-full max-w-md flex-col overflow-hidden ${
               backgroundClasses[activeStory.background_style] ??
               backgroundClasses.emerald
@@ -374,6 +673,7 @@ export function StoriesBar({
                             ? "w-full"
                             : "w-0"
                       }`}
+                      style={{ animationPlayState: isPaused ? "paused" : "running" }}
                     />
                   </div>
                 ))}
@@ -432,10 +732,124 @@ export function StoriesBar({
                 />
               ) : null}
               {activeStory.text ? (
-                <p className="absolute bottom-16 left-5 right-5 rounded-3xl bg-black/45 p-5 text-center text-2xl font-black leading-tight backdrop-blur-md">
+                <p className="absolute bottom-36 left-5 right-5 rounded-3xl bg-black/45 p-5 text-center text-2xl font-black leading-tight backdrop-blur-md">
                   {activeStory.text}
                 </p>
               ) : null}
+            </div>
+
+            <div className="absolute bottom-0 left-0 right-0 z-30 max-h-[42dvh] overflow-y-auto border-t border-white/10 bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+              {activeGroup.isOwn ? (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.24em] text-emerald-100/70">
+                    Story activity
+                  </p>
+                  <div className="grid gap-2">
+                    {[...engagement.reactions, ...engagement.gifts, ...engagement.viewers]
+                      .slice(0, 8)
+                      .map((item) => (
+                        <div
+                          key={`${item.id}-${item.label}-${item.created_at}`}
+                          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2"
+                        >
+                          <div className="h-8 w-8 overflow-hidden rounded-full bg-neutral-900">
+                            {item.avatar_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={item.avatar_url}
+                                alt={item.display_name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium">
+                              {item.display_name}
+                            </p>
+                            <p className="text-xs text-neutral-400">{item.label}</p>
+                          </div>
+                          <p className="text-xs text-neutral-500">
+                            {storyAge(item.created_at)}
+                          </p>
+                        </div>
+                      ))}
+                    {engagement.reactions.length +
+                      engagement.gifts.length +
+                      engagement.viewers.length ===
+                    0 ? (
+                      <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm text-neutral-400">
+                        Viewers and reactions will appear here.
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    {[
+                      ["heart", "Heart"],
+                      ["fire", "Fire"],
+                      ["eyes", "Eyes"],
+                      ["emerald", "Emerald"],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => void reactToStory(value)}
+                        className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-colors hover:border-emerald-200/40 hover:bg-emerald-300/10"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <form onSubmit={replyToStory} className="flex gap-2">
+                    <input
+                      value={replyText}
+                      onChange={(event) => setReplyText(event.target.value)}
+                      maxLength={1000}
+                      placeholder="Reply privately"
+                      className="min-w-0 flex-1 rounded-full border border-white/10 bg-black/45 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:border-emerald-200 focus:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black"
+                    >
+                      Send
+                    </button>
+                  </form>
+
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsGiftPickerOpen((current) => !current)}
+                      className="w-full rounded-full border border-emerald-200/20 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-50"
+                    >
+                      Send gift
+                    </button>
+                    {isGiftPickerOpen ? (
+                      <div className="absolute bottom-14 left-0 right-0 grid grid-cols-2 gap-2 rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
+                        {["Rose", "Spark", "Crown", "Emerald"].map((gift) => (
+                          <button
+                            key={gift}
+                            type="button"
+                            onClick={() => void giftStory(gift)}
+                            className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-sm text-white hover:border-emerald-200/30"
+                          >
+                            {gift}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {interactionMessage ? (
+                    <p className="text-center text-xs text-emerald-100/80">
+                      {interactionMessage}
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -71,6 +71,23 @@ function MessagesIcon() {
   );
 }
 
+function MomentsIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M4 7.5A3.5 3.5 0 0 1 7.5 4h9A3.5 3.5 0 0 1 20 7.5v9a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 16.5v-9Z" />
+      <path d="m8 15 2.4-2.4a1 1 0 0 1 1.4 0L15 15.8" />
+      <path d="M14.5 9.5h.01" />
+    </svg>
+  );
+}
+
 function NotificationsIcon() {
   return (
     <svg
@@ -155,6 +172,12 @@ export function AuthNav({
       label: "Messages",
       match: (path) => path.startsWith("/messages") || path.startsWith("/chat"),
       notification: "messages",
+    },
+    {
+      href: "/moments",
+      icon: <MomentsIcon />,
+      label: "Moments",
+      match: (path) => path.startsWith("/moments"),
     },
     {
       href: "/notifications",

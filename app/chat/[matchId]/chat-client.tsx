@@ -7,6 +7,11 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { Database, MessageRow } from "@/lib/supabase/types";
+import {
+  MEDIA_ALLOWED_TYPES,
+  MEDIA_BUCKET_NAME,
+  MEDIA_MAX_SIZE_BYTES,
+} from "@/lib/supabase/storage";
 
 type LocalMessage = MessageRow & {
   optimistic?: boolean;
@@ -31,6 +36,17 @@ type ChatClientProps = {
   supabaseUrl: string;
 };
 
+const MESSAGE_SELECT =
+  "id, sender_id, receiver_id, match_id, content, message_type, media_url, media_type, expires_at, viewed_at, gift_type, story_id, read_at, created_at";
+
+const SYSTEM_MESSAGE_TYPES = new Set([
+  "story_reply",
+  "story_reaction",
+  "story_gift",
+  "private_media_opened",
+  "private_media_expired",
+]);
+
 export function ChatClient({
   anonKey,
   currentUserId,
@@ -46,6 +62,12 @@ export function ChatClient({
   const [content, setContent] = useState("");
   const [isReceiverOnline, setIsReceiverOnline] = useState(false);
   const [isReceiverTyping, setIsReceiverTyping] = useState(false);
+  const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
+  const [activePrivateMessage, setActivePrivateMessage] =
+    useState<MessageRow | null>(null);
+  const [now, setNow] = useState(0);
+  const [privacyWarning, setPrivacyWarning] = useState("");
+  const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -54,12 +76,23 @@ export function ChatClient({
     null,
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const privateMediaInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const activePrivateSeconds =
+    activePrivateMessage?.expires_at
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(activePrivateMessage.expires_at).getTime() - now) / 1000,
+          ),
+        )
+      : 0;
 
   const mergeConfirmedMessage = useCallback((nextMessage: MessageRow) => {
     setMessages((current) => {
@@ -164,6 +197,35 @@ export function ChatClient({
   useEffect(() => {
     inputRef.current?.focus({ preventScroll: true });
   }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    function updateProtectionState() {
+      setPrivateMediaShielded(
+        document.visibilityState === "hidden" || !document.hasFocus(),
+      );
+    }
+
+    window.addEventListener("blur", updateProtectionState);
+    window.addEventListener("focus", updateProtectionState);
+    document.addEventListener("visibilitychange", updateProtectionState);
+    updateProtectionState();
+
+    return () => {
+      window.removeEventListener("blur", updateProtectionState);
+      window.removeEventListener("focus", updateProtectionState);
+      document.removeEventListener("visibilitychange", updateProtectionState);
+    };
+  }, []);
+
+  function showPrivacyWarning() {
+    setPrivacyWarning("Private media is protected.");
+    window.setTimeout(() => setPrivacyWarning(""), 2200);
+  }
 
   useEffect(() => {
     const channel = supabase
@@ -284,10 +346,17 @@ export function ChatClient({
       id: `optimistic-${Date.now()}`,
       content: trimmedContent,
       created_at: new Date().toISOString(),
+      expires_at: null,
+      gift_type: null,
       match_id: matchId,
+      media_type: null,
+      media_url: null,
+      message_type: "text",
       read_at: null,
       receiver_id: receiverId,
       sender_id: currentUserId,
+      story_id: null,
+      viewed_at: null,
       optimistic: true,
     };
 
@@ -298,10 +367,11 @@ export function ChatClient({
       .insert({
         content: trimmedContent,
         match_id: matchId,
+        message_type: "text",
         receiver_id: receiverId,
         sender_id: currentUserId,
       })
-      .select("id, sender_id, receiver_id, match_id, content, read_at, created_at")
+      .select(MESSAGE_SELECT)
       .single();
 
     if (sendError) {
@@ -329,6 +399,331 @@ export function ChatClient({
     }
 
     setSending(false);
+  }
+
+  async function getVideoDuration(file: File) {
+    return new Promise<number>((resolve) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.onerror = () => resolve(0);
+      video.src = URL.createObjectURL(file);
+    });
+  }
+
+  async function uploadMediaMessage(file: File, isPrivate = false) {
+    setError("");
+
+    if (!MEDIA_ALLOWED_TYPES.includes(file.type as (typeof MEDIA_ALLOWED_TYPES)[number])) {
+      setError("Upload an image, GIF, MP4, or WebM file.");
+      return;
+    }
+
+    if (file.size > MEDIA_MAX_SIZE_BYTES) {
+      setError("Keep media under 50 MB.");
+      return;
+    }
+
+    const mediaType = file.type.startsWith("video/") ? "video" : "image";
+
+    if (mediaType === "video") {
+      const duration = await getVideoDuration(file);
+
+      if (duration > 30) {
+        setError("Keep videos under 30 seconds.");
+        return;
+      }
+    }
+
+    setSending(true);
+    const extension = file.name.split(".").pop() || (mediaType === "video" ? "mp4" : "jpg");
+    const path = `${currentUserId}/chat-${Date.now()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from(MEDIA_BUCKET_NAME)
+      .upload(path, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+      });
+
+    if (uploadError) {
+      setError(uploadError.message);
+      setSending(false);
+      return;
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(MEDIA_BUCKET_NAME).getPublicUrl(path);
+
+    const { data: savedMessage, error: sendError } = await supabase
+      .from("messages")
+      .insert({
+        content: "",
+        match_id: matchId,
+        media_type: mediaType,
+        media_url: publicUrl,
+        message_type: isPrivate ? "private_media" : mediaType,
+        receiver_id: receiverId,
+        sender_id: currentUserId,
+      })
+      .select(MESSAGE_SELECT)
+      .single();
+
+    if (sendError) {
+      setError(sendError.message);
+    } else {
+      mergeConfirmedMessage(savedMessage);
+      await supabase.from("notifications").insert({
+        actor_id: currentUserId,
+        body: isPrivate ? "Sent you private media." : `Sent you a ${mediaType}.`,
+        metadata: { match_id: matchId },
+        title: isPrivate ? "Private media received" : "New message",
+        type: isPrivate ? "private_media_received" : "new_message",
+        user_id: receiverId,
+      });
+    }
+
+    setSending(false);
+    setIsMediaMenuOpen(false);
+  }
+
+  async function sendGift(giftType: string) {
+    setSending(true);
+    const { data: savedMessage, error: sendError } = await supabase
+      .from("messages")
+      .insert({
+        content: "",
+        gift_type: giftType,
+        match_id: matchId,
+        message_type: "gift",
+        receiver_id: receiverId,
+        sender_id: currentUserId,
+      })
+      .select(MESSAGE_SELECT)
+      .single();
+
+    if (sendError) {
+      setError(sendError.message);
+    } else {
+      mergeConfirmedMessage(savedMessage);
+      await supabase.from("notifications").insert({
+        actor_id: currentUserId,
+        body: `Sent you a ${giftType} gift.`,
+        metadata: { match_id: matchId, gift_type: giftType },
+        title: "Gift received",
+        type: "gift_received",
+        user_id: receiverId,
+      });
+    }
+
+    setSending(false);
+    setIsMediaMenuOpen(false);
+  }
+
+  async function insertSystemMessage(messageType: string, body: string) {
+    const { data: savedMessage } = await supabase
+      .from("messages")
+      .insert({
+        content: body,
+        match_id: matchId,
+        message_type: messageType,
+        receiver_id: receiverId,
+        sender_id: currentUserId,
+      })
+      .select(MESSAGE_SELECT)
+      .single();
+
+    if (savedMessage) {
+      mergeConfirmedMessage(savedMessage);
+    }
+  }
+
+  async function openPrivateMedia(message: MessageRow) {
+    const expired =
+      message.viewed_at &&
+      message.expires_at &&
+      new Date(message.expires_at).getTime() <= now;
+
+    if (message.sender_id === currentUserId || message.viewed_at || expired) {
+      return;
+    }
+
+    const openedAt = new Date();
+    const expiresAt = new Date(openedAt.getTime() + 15000).toISOString();
+    const { data: updatedMessage } = await supabase
+      .from("messages")
+      .update({
+        expires_at: expiresAt,
+        viewed_at: openedAt.toISOString(),
+      })
+      .eq("id", message.id)
+      .eq("receiver_id", currentUserId)
+      .is("viewed_at", null)
+      .select(MESSAGE_SELECT)
+      .single();
+
+    if (updatedMessage) {
+      updateReadReceipt(updatedMessage);
+      setNow(openedAt.getTime());
+      setActivePrivateMessage(updatedMessage);
+      await insertSystemMessage("private_media_opened", "Private media opened once.");
+      setTimeout(() => {
+        setMessages((current) =>
+          current.map((currentMessage) =>
+            currentMessage.id === message.id
+              ? { ...currentMessage, expires_at: new Date().toISOString() }
+              : currentMessage,
+          ),
+        );
+        setActivePrivateMessage(null);
+        void insertSystemMessage("private_media_expired", "Private media expired.");
+      }, 15500);
+    }
+  }
+
+  function renderMessageContent(message: LocalMessage) {
+    const isMine = message.sender_id === currentUserId;
+    const isPrivate = message.message_type === "private_media";
+    const secondsRemaining =
+      isPrivate && message.expires_at
+        ? Math.max(
+            0,
+            Math.ceil((new Date(message.expires_at).getTime() - now) / 1000),
+          )
+        : 0;
+    const isExpired =
+      isPrivate &&
+      message.viewed_at &&
+      message.expires_at &&
+      new Date(message.expires_at).getTime() <= now;
+
+    if (SYSTEM_MESSAGE_TYPES.has(message.message_type)) {
+      return (
+        <p className="text-center text-xs font-medium uppercase tracking-[0.22em] text-neutral-500">
+          {message.content}
+        </p>
+      );
+    }
+
+    if (message.message_type === "gift") {
+      return (
+        <div className="text-center">
+          <p className="text-3xl">✦</p>
+          <p className="mt-2 text-sm">{message.gift_type ?? "Gift"}</p>
+        </div>
+      );
+    }
+
+    if (isPrivate && message.media_url) {
+      if (isExpired) {
+        return (
+          <div className="grid h-28 w-40 place-items-center rounded-2xl border border-neutral-800 bg-[radial-gradient(circle_at_top,_rgba(64,64,64,0.35),_#050505_70%)] px-4 text-center sm:h-32 sm:w-44">
+            <div>
+              <p className="text-sm font-black text-neutral-300">Expired</p>
+              <p className="mt-2 text-xs text-neutral-600">
+                This private media is no longer available.
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      const canReveal = !isMine && !message.viewed_at;
+
+      return (
+        <button
+          type="button"
+          disabled={!canReveal}
+          onClick={() => void openPrivateMedia(message)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            showPrivacyWarning();
+          }}
+          onDragStart={(event) => {
+            event.preventDefault();
+            showPrivacyWarning();
+          }}
+          className="group relative h-32 w-40 overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-36 sm:w-44"
+        >
+          {message.media_type === "video" ? (
+            <video
+              src={message.media_url}
+              playsInline
+              muted
+              disablePictureInPicture
+              controlsList="nodownload noplaybackrate"
+              onContextMenu={(event) => {
+                event.preventDefault();
+                showPrivacyWarning();
+              }}
+              className="absolute inset-0 h-full w-full scale-105 object-cover blur-xl brightness-50"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={message.media_url}
+              alt=""
+              draggable={false}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                showPrivacyWarning();
+              }}
+              className="absolute inset-0 h-full w-full scale-105 object-cover blur-xl brightness-50"
+            />
+          )}
+          <span className="absolute inset-0 bg-black/30" />
+          <span className="relative flex h-full min-h-44 flex-col items-center justify-center px-5 text-white">
+            <span className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/45 text-lg backdrop-blur">
+              ◇
+            </span>
+            <span className="mt-2 text-sm font-black">Private media</span>
+            <span className="mt-1 text-xs text-neutral-300">
+              {canReveal
+                ? "Tap to reveal"
+                : isMine
+                  ? message.viewed_at
+                    ? secondsRemaining > 0
+                      ? "Opened once"
+                      : "Expired"
+                    : "Delivered"
+                  : secondsRemaining > 0
+                    ? "Opened once"
+                    : "Expired"}
+            </span>
+            <span className="mt-2 text-[10px] uppercase tracking-[0.18em] text-emerald-100/70">
+              Protected
+            </span>
+          </span>
+        </button>
+      );
+    }
+
+    if (message.media_url && (message.media_type === "image" || message.media_type === "video")) {
+      return message.media_type === "video" ? (
+        <video
+          src={message.media_url}
+          controls
+          playsInline
+          className="max-h-72 rounded-2xl object-contain"
+        />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={message.media_url}
+          alt=""
+          className="max-h-72 rounded-2xl object-contain"
+        />
+      );
+    }
+
+    return (
+      <p className="whitespace-pre-wrap break-words text-sm leading-6">
+        {message.content}
+      </p>
+    );
   }
 
   return (
@@ -393,9 +788,7 @@ export function ChatClient({
                       : "border border-neutral-800 bg-neutral-950 text-white"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words text-sm leading-6">
-                    {message.content}
-                  </p>
+                  {renderMessageContent(message)}
                   <p
                     className={`mt-2 text-[11px] ${
                       isMine ? "text-neutral-600" : "text-neutral-500"
@@ -432,9 +825,78 @@ export function ChatClient({
 
       <form
         onSubmit={sendMessage}
-        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4"
+        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
-        <div className="flex gap-3">
+        <div className="relative flex gap-3">
+          <button
+            type="button"
+            onClick={() => setIsMediaMenuOpen((current) => !current)}
+            aria-label="Open media options"
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15"
+          >
+            +
+          </button>
+          {isMediaMenuOpen ? (
+            <div className="absolute bottom-16 left-0 z-20 grid w-56 gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+              <button
+                type="button"
+                onClick={() => mediaInputRef.current?.click()}
+                className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
+              >
+                Image or video
+              </button>
+              <button
+                type="button"
+                onClick={() => privateMediaInputRef.current?.click()}
+                className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
+              >
+                Private media
+              </button>
+              <button
+                type="button"
+                onClick={() => setError("Voice notes are coming soon.")}
+                className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
+              >
+                Voice note
+              </button>
+              {["Rose", "Spark", "Crown"].map((gift) => (
+                <button
+                  key={gift}
+                  type="button"
+                  onClick={() => void sendGift(gift)}
+                  className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
+                >
+                  Gift: {gift}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <input
+            ref={mediaInputRef}
+            type="file"
+            accept="image/*,video/mp4,video/webm"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadMediaMessage(file);
+              }
+              event.target.value = "";
+            }}
+            className="sr-only"
+          />
+          <input
+            ref={privateMediaInputRef}
+            type="file"
+            accept="image/*,video/mp4,video/webm"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadMediaMessage(file, true);
+              }
+              event.target.value = "";
+            }}
+            className="sr-only"
+          />
           <input
             ref={inputRef}
             value={content}
@@ -454,6 +916,75 @@ export function ChatClient({
         </div>
         {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
       </form>
+
+      {privacyWarning ? (
+        <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
+          {privacyWarning}
+        </div>
+      ) : null}
+
+      {activePrivateMessage?.media_url && activePrivateSeconds > 0 ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4 text-white backdrop-blur-xl">
+          <div className="relative flex h-full max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)]">
+            <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
+              <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs uppercase tracking-[0.24em] text-emerald-100 backdrop-blur">
+                Private
+              </div>
+              <div className="grid h-12 w-12 place-items-center rounded-full border border-emerald-200/30 bg-black/55 text-xl font-black text-white backdrop-blur">
+                {activePrivateSeconds}
+              </div>
+            </div>
+            <div className="absolute left-4 right-4 top-20 z-20 h-1 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full bg-emerald-200 transition-all duration-1000"
+                style={{ width: `${(activePrivateSeconds / 15) * 100}%` }}
+              />
+            </div>
+            <div className="flex flex-1 items-center justify-center bg-black">
+              {activePrivateMessage.media_type === "video" ? (
+                <video
+                  src={activePrivateMessage.media_url}
+                  autoPlay
+                  muted
+                  playsInline
+                  disablePictureInPicture
+                  controlsList="nodownload noplaybackrate"
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    showPrivacyWarning();
+                  }}
+                  className="max-h-full w-full object-contain"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={activePrivateMessage.media_url}
+                  alt=""
+                  draggable={false}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    showPrivacyWarning();
+                  }}
+                  className="max-h-full w-full object-contain"
+                />
+              )}
+            </div>
+            {privateMediaShielded ? (
+              <div className="absolute inset-0 z-30 grid place-items-center bg-black/80 p-8 text-center backdrop-blur-2xl">
+                <div className="rounded-3xl border border-emerald-200/20 bg-black/70 p-6 shadow-[0_0_70px_rgba(16,185,129,0.15)]">
+                  <p className="text-lg font-black">Private media is protected.</p>
+                  <p className="mt-2 text-sm text-neutral-400">
+                    Return to this tab to continue viewing.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-black/50 p-3 text-center text-xs text-neutral-300 backdrop-blur">
+              Visible once. Browser protections are best effort.
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

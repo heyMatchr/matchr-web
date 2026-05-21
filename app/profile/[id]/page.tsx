@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
+import { logOut } from "@/app/auth/actions";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
@@ -31,6 +32,20 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
   if (!currentProfile?.onboarding_completed) {
     redirect("/onboarding");
+  }
+
+  if (id !== user.id) {
+    const { data: block } = await supabase
+      .from("blocks")
+      .select("id")
+      .or(
+        `and(blocker_id.eq.${user.id},blocked_user_id.eq.${id}),and(blocker_id.eq.${id},blocked_user_id.eq.${user.id})`,
+      )
+      .maybeSingle();
+
+    if (block) {
+      redirect("/discover");
+    }
   }
 
   const { data: profile } = await supabase
@@ -92,6 +107,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     matchResult,
     likeResult,
     activeStoriesResult,
+    profileMomentsResult,
   ] = await Promise.all([
     supabase
       .from("follows")
@@ -148,6 +164,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       .eq("user_id", profile.id)
       .gt("expires_at", new Date().toISOString())
       .limit(1),
+    supabase
+      .from("moments")
+      .select("id, media_url, media_type")
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(6),
   ]);
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
 
@@ -248,12 +270,22 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               {profile.id === user.id ? (
-                <Link
-                  href="/profile/edit"
-                  className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-all duration-300 hover:bg-neutral-200 hover:shadow-[0_0_28px_rgba(255,255,255,0.10)]"
-                >
-                  Edit Profile
-                </Link>
+                <>
+                  <Link
+                    href="/profile/edit"
+                    className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-all duration-300 hover:bg-neutral-200 hover:shadow-[0_0_28px_rgba(255,255,255,0.10)]"
+                  >
+                    Edit Profile
+                  </Link>
+                  <form action={logOut} className="md:hidden">
+                    <button
+                      type="submit"
+                      className="rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
+                    >
+                      Logout
+                    </button>
+                  </form>
+                </>
               ) : (
                 <>
                   <FollowButton
@@ -488,6 +520,51 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-8">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                  Moments
+                </p>
+                <Link
+                  href="/moments"
+                  className="text-xs text-neutral-500 transition-colors hover:text-white"
+                >
+                  Open feed
+                </Link>
+              </div>
+              {profileMomentsResult.data?.length ? (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {profileMomentsResult.data.map((moment) => (
+                    <Link
+                      key={moment.id}
+                      href="/moments"
+                      className="aspect-square overflow-hidden rounded-lg bg-neutral-950"
+                    >
+                      {moment.media_type === "video" ? (
+                        <video
+                          src={moment.media_url}
+                          muted
+                          playsInline
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={moment.media_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-4 text-sm text-neutral-500">
+                  No moments yet.
+                </div>
+              )}
             </div>
           </div>
         </div>

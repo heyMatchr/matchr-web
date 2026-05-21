@@ -114,13 +114,80 @@ export type StoryViewRow = {
   created_at: string;
 };
 
+export type StoryReactionRow = {
+  id: string;
+  story_id: string;
+  reactor_id: string;
+  owner_id: string;
+  reaction_type: string;
+  created_at: string;
+};
+
+export type StoryReplyRow = {
+  id: string;
+  story_id: string;
+  sender_id: string;
+  receiver_id: string;
+  content: string;
+  created_at: string;
+};
+
+export type StoryGiftRow = {
+  id: string;
+  story_id: string;
+  sender_id: string;
+  receiver_id: string;
+  gift_type: string;
+  created_at: string;
+};
+
 export type MessageRow = {
   id: string;
   sender_id: string;
   receiver_id: string;
   match_id: string;
   content: string;
+  message_type: string;
+  media_url: string | null;
+  media_type: string | null;
+  expires_at: string | null;
+  viewed_at: string | null;
+  gift_type: string | null;
+  story_id: string | null;
   read_at: string | null;
+  created_at: string;
+};
+
+export type MomentRow = {
+  id: string;
+  user_id: string;
+  media_url: string;
+  media_type: string;
+  caption: string;
+  created_at: string;
+};
+
+export type MomentLikeRow = {
+  id: string;
+  moment_id: string;
+  user_id: string;
+  created_at: string;
+};
+
+export type MomentCommentRow = {
+  id: string;
+  moment_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+};
+
+export type MomentGiftRow = {
+  id: string;
+  moment_id: string;
+  sender_id: string;
+  receiver_id: string;
+  gift_type: string;
   created_at: string;
 };
 
@@ -179,6 +246,13 @@ export type Database = {
           receiver_id: string;
           match_id: string;
           content: string;
+          message_type?: string;
+          media_url?: string | null;
+          media_type?: string | null;
+          expires_at?: string | null;
+          viewed_at?: string | null;
+          gift_type?: string | null;
+          story_id?: string | null;
           read_at?: string | null;
           created_at?: string;
         };
@@ -188,9 +262,65 @@ export type Database = {
           receiver_id?: string;
           match_id?: string;
           content?: string;
+          message_type?: string;
+          media_url?: string | null;
+          media_type?: string | null;
+          expires_at?: string | null;
+          viewed_at?: string | null;
+          gift_type?: string | null;
+          story_id?: string | null;
           read_at?: string | null;
           created_at?: string;
         };
+        Relationships: [];
+      };
+      moments: {
+        Row: MomentRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          media_url: string;
+          media_type: string;
+          caption?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      moment_likes: {
+        Row: MomentLikeRow;
+        Insert: {
+          id?: string;
+          moment_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      moment_comments: {
+        Row: MomentCommentRow;
+        Insert: {
+          id?: string;
+          moment_id: string;
+          user_id: string;
+          content: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      moment_gifts: {
+        Row: MomentGiftRow;
+        Insert: {
+          id?: string;
+          moment_id: string;
+          sender_id: string;
+          receiver_id: string;
+          gift_type: string;
+          created_at?: string;
+        };
+        Update: never;
         Relationships: [];
       };
       notifications: {
@@ -321,6 +451,45 @@ export type Database = {
           text?: string;
           background_style?: string;
           expires_at?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      story_reactions: {
+        Row: StoryReactionRow;
+        Insert: {
+          id?: string;
+          story_id: string;
+          reactor_id: string;
+          owner_id: string;
+          reaction_type: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      story_replies: {
+        Row: StoryReplyRow;
+        Insert: {
+          id?: string;
+          story_id: string;
+          sender_id: string;
+          receiver_id: string;
+          content: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      story_gifts: {
+        Row: StoryGiftRow;
+        Insert: {
+          id?: string;
+          story_id: string;
+          sender_id: string;
+          receiver_id: string;
+          gift_type: string;
           created_at?: string;
         };
         Update: never;
