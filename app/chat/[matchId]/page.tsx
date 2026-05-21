@@ -24,7 +24,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, gender, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -59,9 +59,23 @@ export default async function ChatPage({ params }: ChatPageProps) {
 
   const { data: receiverProfile } = await supabase
     .from("profiles")
-    .select("display_name, avatar_url")
+    .select("display_name, avatar_url, gender")
     .eq("id", receiverId)
     .maybeSingle();
+  const [{ data: wallet }, { data: premium }] = await Promise.all([
+    supabase
+      .from("user_wallets")
+      .select("gold_balance")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("plan_name", "Matchr Premium")
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
 
   await supabase
     .from("messages")
@@ -87,6 +101,9 @@ export default async function ChatPage({ params }: ChatPageProps) {
         <ChatClient
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
+          currentUserGender={currentProfile.gender}
+          goldBalance={wallet?.gold_balance ?? 0}
+          hasPremium={Boolean(premium)}
           headerActions={
             <SafetyActions
               blockRedirectTo="/messages"
@@ -97,6 +114,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           initialMessages={initialMessages ?? []}
           matchId={match.id}
           receiverAvatarUrl={receiverProfile?.avatar_url ?? null}
+          receiverGender={receiverProfile?.gender ?? ""}
           receiverId={receiverId}
           receiverName={receiverProfile?.display_name ?? "Chat"}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}

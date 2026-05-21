@@ -108,6 +108,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     likeResult,
     activeStoriesResult,
     profileMomentsResult,
+    walletResult,
+    premiumResult,
   ] = await Promise.all([
     supabase
       .from("follows")
@@ -170,6 +172,18 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       .eq("user_id", profile.id)
       .order("created_at", { ascending: false })
       .limit(6),
+    supabase
+      .from("user_wallets")
+      .select("gold_balance")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("subscriptions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("plan_name", "Matchr Premium")
+      .eq("status", "active")
+      .maybeSingle(),
   ]);
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
 
@@ -338,6 +352,35 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 <p className="mt-1 text-xs text-neutral-500">Views</p>
               </div>
             </div>
+
+            {profile.id === user.id ? (
+              <div className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/70">
+                      Wallet
+                    </p>
+                    <p className="mt-1 text-2xl font-black">
+                      {walletResult.data?.gold_balance ?? 0} gold
+                    </p>
+                    <p className="mt-1 text-sm text-neutral-400">
+                      {premiumResult.data ? "Matchr Premium active" : "Premium inactive"}
+                    </p>
+                  </div>
+                  <div className="grid gap-2">
+                    <button className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">
+                      Buy Gold
+                    </button>
+                    <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">
+                      Upgrade
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-neutral-500">
+                  Gold wallet coming soon.
+                </p>
+              </div>
+            ) : null}
 
             <div className="mt-8">
               <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">

@@ -19,22 +19,16 @@ export const GIFT_CATALOG = [
     type: "kiss",
   },
   {
-    coinPrice: 25,
+    coinPrice: 20,
     icon: "💎",
     name: "Diamond",
     type: "diamond",
   },
   {
-    coinPrice: 50,
+    coinPrice: 40,
     icon: "👑",
     name: "Crown",
     type: "crown",
-  },
-  {
-    coinPrice: 100,
-    icon: "🔥",
-    name: "Private Flame",
-    type: "private_flame",
   },
 ] satisfies GiftOption[];
 

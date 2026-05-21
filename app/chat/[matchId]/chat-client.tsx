@@ -28,10 +28,14 @@ type PresenceMeta = {
 type ChatClientProps = {
   anonKey: string;
   currentUserId: string;
+  currentUserGender: string;
+  goldBalance: number;
+  hasPremium: boolean;
   headerActions?: ReactNode;
   initialMessages: LocalMessage[];
   matchId: string;
   receiverAvatarUrl: string | null;
+  receiverGender: string;
   receiverId: string;
   receiverName: string;
   supabaseUrl: string;
@@ -51,10 +55,14 @@ const SYSTEM_MESSAGE_TYPES = new Set([
 export function ChatClient({
   anonKey,
   currentUserId,
+  currentUserGender,
+  goldBalance,
+  hasPremium,
   headerActions,
   initialMessages,
   matchId,
   receiverAvatarUrl,
+  receiverGender,
   receiverId,
   receiverName,
   supabaseUrl,
@@ -69,6 +77,7 @@ export function ChatClient({
   const [now, setNow] = useState(0);
   const [privacyWarning, setPrivacyWarning] = useState("");
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
+  const [goldModal, setGoldModal] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -93,6 +102,13 @@ export function ChatClient({
             (new Date(activePrivateMessage.expires_at).getTime() - now) / 1000,
           ),
         )
+      : 0;
+  const messageGoldCost =
+    currentUserGender.toLowerCase() === "male" &&
+    receiverGender.toLowerCase() === "female"
+      ? hasPremium
+        ? 2
+        : 5
       : 0;
 
   const mergeConfirmedMessage = useCallback((nextMessage: MessageRow) => {
@@ -339,6 +355,11 @@ export function ChatClient({
       return;
     }
 
+    if (messageGoldCost > 0 && goldBalance < messageGoldCost) {
+      setGoldModal("Not enough gold to send this demo paid message.");
+      return;
+    }
+
     setSending(true);
     setError("");
     setContent("");
@@ -387,6 +408,14 @@ export function ChatClient({
       );
     } else {
       mergeConfirmedMessage(savedMessage);
+      if (messageGoldCost > 0) {
+        await supabase.from("message_charges").insert({
+          gold_cost: messageGoldCost,
+          message_id: savedMessage.id,
+          receiver_id: receiverId,
+          sender_id: currentUserId,
+        });
+      }
       if (!isReceiverOnline) {
         await supabase.from("notifications").insert({
           actor_id: currentUserId,
@@ -497,6 +526,11 @@ export function ChatClient({
   }
 
   async function sendGift(gift: GiftOption) {
+    if (goldBalance < gift.coinPrice) {
+      setGoldModal("Not enough gold to send this gift.");
+      return;
+    }
+
     setSending(true);
     const { data: savedMessage, error: sendError } = await supabase
       .from("messages")
@@ -517,6 +551,7 @@ export function ChatClient({
       mergeConfirmedMessage(savedMessage);
       await supabase.from("gift_transactions").insert({
         coin_price: gift.coinPrice,
+        gold_cost: gift.coinPrice,
         gift_type: gift.type,
         message_id: savedMessage.id,
         receiver_id: receiverId,
@@ -894,6 +929,14 @@ export function ChatClient({
           </button>
           {isMediaMenuOpen ? (
             <div className="absolute bottom-16 left-0 z-20 grid w-56 gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+              <p className="px-3 py-2 text-xs text-neutral-500">
+                {goldBalance} gold · Gold wallet coming soon
+              </p>
+              {messageGoldCost > 0 ? (
+                <p className="px-3 pb-2 text-xs text-amber-100/80">
+                  Messages cost {messageGoldCost} gold in demo mode.
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={() => mediaInputRef.current?.click()}
@@ -985,6 +1028,30 @@ export function ChatClient({
       {privacyWarning ? (
         <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
           {privacyWarning}
+        </div>
+      ) : null}
+
+      {goldModal ? (
+        <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-amber-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(245,158,11,0.12)]">
+            <p className="text-xl font-black">Not enough gold</p>
+            <p className="mt-2 text-sm leading-6 text-neutral-400">{goldModal}</p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black">
+                Buy Gold
+              </button>
+              <button className="rounded-full border border-amber-200/30 px-4 py-3 text-sm text-amber-100">
+                Upgrade
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setGoldModal("")}
+              className="mt-4 text-sm text-neutral-500"
+            >
+              Close
+            </button>
+          </div>
         </div>
       ) : null}
 

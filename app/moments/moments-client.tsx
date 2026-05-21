@@ -1,21 +1,28 @@
 "use client";
 
+import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { GIFT_CATALOG } from "@/lib/gifts";
+import type { Database } from "@/lib/supabase/types";
 import {
   commentOnMoment,
   createMoment,
+  deleteMoment,
   giftMoment,
+  toggleMomentLikesVisibility,
   toggleMomentLike,
+  type GiftActionState,
   type MomentFormState,
 } from "./actions";
 
 type MomentProfile = {
+  age: number;
   id: string;
   avatar_url: string | null;
   display_name: string;
+  location: string;
 };
 
 export type MomentCard = {
@@ -24,8 +31,10 @@ export type MomentCard = {
   commentCount: number;
   created_at: string;
   giftCount: number;
+  hide_likes: boolean;
   liked: boolean;
   likeCount: number;
+  likers: MomentProfile[];
   media_type: string;
   media_url: string;
   profile: MomentProfile;
@@ -33,7 +42,11 @@ export type MomentCard = {
 };
 
 type MomentsClientProps = {
+  anonKey: string;
+  currentUserId: string;
+  goldBalance: number;
   moments: MomentCard[];
+  supabaseUrl: string;
 };
 
 const initialState: MomentFormState = {
@@ -53,14 +66,26 @@ function timeAgo(timestamp: string) {
   return `${Math.floor(minutes / 60)}h ago`;
 }
 
-export function MomentsClient({ moments }: MomentsClientProps) {
+export function MomentsClient({
+  anonKey,
+  currentUserId,
+  goldBalance,
+  moments,
+  supabaseUrl,
+}: MomentsClientProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [activeComments, setActiveComments] = useState<MomentCard | null>(null);
   const [activeGifts, setActiveGifts] = useState<MomentCard | null>(null);
+  const [activeLikes, setActiveLikes] = useState<MomentCard | null>(null);
+  const [openSettingsId, setOpenSettingsId] = useState("");
   const [mediaError, setMediaError] = useState("");
   const [state, formAction, pending] = useActionState(
     createMoment,
     initialState,
+  );
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(supabaseUrl, anonKey),
+    [anonKey, supabaseUrl],
   );
 
   function validateMedia(event: ChangeEvent<HTMLInputElement>) {
@@ -100,7 +125,11 @@ export function MomentsClient({ moments }: MomentsClientProps) {
 
       <div className="mt-6 grid gap-5">
         {moments.length > 0 ? (
-          moments.map((moment) => (
+          moments.map((moment) => {
+            const isOwner = moment.user_id === currentUserId;
+            const canShowLikes = isOwner || !moment.hide_likes;
+
+            return (
             <article
               key={moment.id}
               className="overflow-hidden rounded-lg border border-neutral-800 bg-black/50"
@@ -128,6 +157,48 @@ export function MomentsClient({ moments }: MomentsClientProps) {
                   </Link>
                   <p className="text-xs text-neutral-500">{timeAgo(moment.created_at)}</p>
                 </div>
+                {isOwner ? (
+                  <div className="relative ml-auto">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOpenSettingsId((current) =>
+                          current === moment.id ? "" : moment.id,
+                        )
+                      }
+                      className="grid h-9 w-9 place-items-center rounded-full border border-neutral-800 text-neutral-300"
+                    >
+                      ⋮
+                    </button>
+                    {openSettingsId === moment.id ? (
+                      <div className="absolute right-0 top-11 z-20 w-44 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
+                        <form
+                          action={async () => {
+                            await toggleMomentLikesVisibility(
+                              moment.id,
+                              !moment.hide_likes,
+                            );
+                            setOpenSettingsId("");
+                          }}
+                        >
+                          <button className="w-full rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]">
+                            {moment.hide_likes ? "Show likes" : "Hide likes"}
+                          </button>
+                        </form>
+                        <form
+                          action={async () => {
+                            await deleteMoment(moment.id);
+                            setOpenSettingsId("");
+                          }}
+                        >
+                          <button className="w-full rounded-xl px-3 py-3 text-left text-sm text-red-300 hover:bg-red-500/10">
+                            Delete moment
+                          </button>
+                        </form>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="bg-neutral-950">
@@ -180,8 +251,22 @@ export function MomentsClient({ moments }: MomentsClientProps) {
                   </button>
                 </div>
                 <p className="mt-3 text-sm text-neutral-400">
-                  {moment.likeCount} likes · {moment.giftCount} gifts
+                  {canShowLikes ? `${moment.likeCount} likes · ` : ""}
+                  {moment.giftCount} gifts
                 </p>
+                {canShowLikes ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveLikes(moment)}
+                    className="mt-2 text-sm text-emerald-200"
+                  >
+                    View likes
+                  </button>
+                ) : (
+                  <p className="mt-2 text-xs text-neutral-500">
+                    Likes hidden by creator.
+                  </p>
+                )}
                 {moment.caption ? (
                   <p className="mt-3 text-sm leading-6 text-neutral-200">
                     {moment.caption}
@@ -189,7 +274,8 @@ export function MomentsClient({ moments }: MomentsClientProps) {
                 ) : null}
               </div>
             </article>
-          ))
+          );
+          })
         ) : (
           <div className="rounded-lg border border-neutral-800 bg-black/40 p-8">
             <p className="text-xl font-black text-white">No moments yet</p>
@@ -247,11 +333,23 @@ export function MomentsClient({ moments }: MomentsClientProps) {
       ) : null}
 
       {activeComments ? (
-        <CommentsSheet moment={activeComments} onClose={() => setActiveComments(null)} />
+        <CommentsSheet
+          moment={activeComments}
+          onClose={() => setActiveComments(null)}
+          supabase={supabase}
+        />
+      ) : null}
+
+      {activeLikes ? (
+        <LikesSheet moment={activeLikes} onClose={() => setActiveLikes(null)} />
       ) : null}
 
       {activeGifts ? (
-        <GiftsSheet moment={activeGifts} onClose={() => setActiveGifts(null)} />
+        <GiftsSheet
+          goldBalance={goldBalance}
+          moment={activeGifts}
+          onClose={() => setActiveGifts(null)}
+        />
       ) : null}
     </>
   );
@@ -260,28 +358,149 @@ export function MomentsClient({ moments }: MomentsClientProps) {
 function CommentsSheet({
   moment,
   onClose,
+  supabase,
 }: {
   moment: MomentCard;
   onClose: () => void;
+  supabase: ReturnType<typeof createBrowserClient<Database>>;
 }) {
+  type CommentItem = {
+    avatar_url: string | null;
+    content: string;
+    created_at: string;
+    display_name: string;
+    id: string;
+    user_id: string;
+  };
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [draft, setDraft] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadComments() {
+      setIsLoading(true);
+      const { data } = await supabase
+        .from("moment_comments")
+        .select("id, user_id, content, created_at")
+        .eq("moment_id", moment.id)
+        .order("created_at", { ascending: true });
+      const userIds = [...new Set(data?.map((comment) => comment.user_id) ?? [])];
+      const { data: profiles } = userIds.length
+        ? await supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url")
+            .in("id", userIds)
+        : { data: [] };
+      const profilesById = new Map(profiles?.map((profile) => [profile.id, profile]));
+
+      if (!active) {
+        return;
+      }
+
+      setComments(
+        data?.map((comment) => {
+          const profile = profilesById.get(comment.user_id);
+          return {
+            avatar_url: profile?.avatar_url ?? null,
+            content: comment.content,
+            created_at: comment.created_at,
+            display_name: profile?.display_name ?? "Someone",
+            id: comment.id,
+            user_id: comment.user_id,
+          };
+        }) ?? [],
+      );
+      setIsLoading(false);
+    }
+
+    void loadComments();
+
+    const channel = supabase
+      .channel(`moment-comments:${moment.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "moment_comments",
+          filter: `moment_id=eq.${moment.id}`,
+        },
+        () => {
+          void loadComments();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [moment.id, supabase]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-4 backdrop-blur-sm">
-      <div className="max-h-[80vh] w-full overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5">
+    <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
+      <div className="flex max-h-[82vh] w-full flex-col rounded-2xl border border-neutral-800 bg-black p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black">Comments</h2>
           <button type="button" onClick={onClose} className="text-sm text-neutral-400">
             Close
           </button>
         </div>
+        <div className="mt-4 min-h-40 flex-1 space-y-3 overflow-y-auto pr-1">
+          {isLoading ? (
+            <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-500">
+              Loading comments...
+            </p>
+          ) : comments.length > 0 ? (
+            comments.map((comment) => (
+              <div key={comment.id} className="flex gap-3 rounded-2xl bg-white/[0.03] p-3">
+                <Link
+                  href={`/profile/${comment.user_id}`}
+                  className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-900"
+                >
+                  {comment.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={comment.avatar_url}
+                      alt={comment.display_name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                </Link>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Link href={`/profile/${comment.user_id}`} className="text-sm font-black">
+                      {comment.display_name}
+                    </Link>
+                    <span className="text-xs text-neutral-600">
+                      {timeAgo(comment.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-1 break-words text-sm leading-6 text-neutral-300">
+                    {comment.content}
+                  </p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-6 text-center text-sm text-neutral-500">
+              No comments yet.
+            </p>
+          )}
+        </div>
         <form
           action={async (formData) => {
             await commentOnMoment(moment.id, moment.user_id, formData);
-            onClose();
+            setDraft("");
           }}
           className="mt-4 flex gap-2"
         >
           <input
             name="content"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
             required
             placeholder="Write a comment"
             className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white"
@@ -295,13 +514,71 @@ function CommentsSheet({
   );
 }
 
-function GiftsSheet({
+function LikesSheet({
   moment,
   onClose,
 }: {
   moment: MomentCard;
   onClose: () => void;
 }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
+      <div className="max-h-[82vh] w-full overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-black">Liked by</h2>
+          <button type="button" onClick={onClose} className="text-sm text-neutral-400">
+            Close
+          </button>
+        </div>
+        <div className="mt-4 grid gap-2">
+          {moment.likers.length > 0 ? (
+            moment.likers.map((profile) => (
+              <Link
+                key={profile.id}
+                href={`/profile/${profile.id}`}
+                className="flex items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3 transition-colors hover:border-emerald-300/30"
+              >
+                <span className="h-11 w-11 overflow-hidden rounded-full bg-neutral-900">
+                  {profile.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={profile.avatar_url}
+                      alt={profile.display_name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : null}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-white">
+                    {profile.display_name}, {profile.age}
+                  </span>
+                  <span className="text-sm text-neutral-500">{profile.location}</span>
+                </span>
+                <span className="text-sm text-emerald-200">Open</span>
+              </Link>
+            ))
+          ) : (
+            <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-6 text-center text-sm text-neutral-500">
+              No likes yet.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GiftsSheet({
+  goldBalance,
+  moment,
+  onClose,
+}: {
+  goldBalance: number;
+  moment: MomentCard;
+  onClose: () => void;
+}) {
+  const [giftState, setGiftState] = useState<GiftActionState | null>(null);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
       <div className="max-h-[80vh] w-full overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5 shadow-[0_0_45px_rgba(16,185,129,0.10)]">
@@ -311,14 +588,34 @@ function GiftsSheet({
             Close
           </button>
         </div>
-        <p className="mt-2 text-sm text-neutral-500">Coin wallet coming soon</p>
+        <p className="mt-2 text-sm text-neutral-500">
+          {goldBalance} gold available · Gold wallet coming soon
+        </p>
+        {giftState?.status === "error" ? (
+          <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
+            <p className="font-black text-amber-100">Not enough gold</p>
+            <p className="mt-1 text-sm text-amber-100/70">{giftState.message}</p>
+            <div className="mt-3 flex gap-2">
+              <button className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">
+                Buy Gold
+              </button>
+              <button className="rounded-full border border-amber-200/30 px-4 py-2 text-sm text-amber-100">
+                Upgrade
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-2">
           {GIFT_CATALOG.map((gift) => (
             <form
               key={gift.type}
               action={async () => {
-                await giftMoment(moment.id, moment.user_id, gift.type);
-                onClose();
+                const result = await giftMoment(moment.id, moment.user_id, gift.type);
+                setGiftState(result);
+
+                if (result?.status === "success") {
+                  onClose();
+                }
               }}
             >
               <button className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10">

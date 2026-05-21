@@ -14,6 +14,7 @@ create table if not exists public.gift_transactions (
   id uuid primary key default gen_random_uuid(),
   gift_type text not null references public.gifts_catalog(gift_type),
   coin_price integer not null check (coin_price > 0),
+  gold_cost integer,
   sender_id uuid not null references auth.users(id) on delete cascade,
   receiver_id uuid not null references auth.users(id) on delete cascade,
   source text not null check (source in ('chat', 'story', 'moment')),
@@ -27,15 +28,18 @@ insert into public.gifts_catalog (gift_type, name, icon, coin_price)
 values
   ('rose', 'Rose', '🌹', 5),
   ('kiss', 'Kiss', '💋', 10),
-  ('diamond', 'Diamond', '💎', 25),
-  ('crown', 'Crown', '👑', 50),
-  ('private_flame', 'Private Flame', '🔥', 100)
+  ('diamond', 'Diamond', '💎', 20),
+  ('crown', 'Crown', '👑', 40)
 on conflict (gift_type) do update
 set
   name = excluded.name,
   icon = excluded.icon,
   coin_price = excluded.coin_price,
   active = true;
+
+update public.gifts_catalog
+set active = false
+where gift_type not in ('rose', 'kiss', 'diamond', 'crown');
 
 create index if not exists gift_transactions_receiver_created_idx
   on public.gift_transactions (receiver_id, created_at desc);

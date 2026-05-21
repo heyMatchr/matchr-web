@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MomentsClient, type MomentCard } from "./moments-client";
 
@@ -33,7 +34,7 @@ export default async function MomentsPage() {
 
   const { data: moments, error } = await supabase
     .from("moments")
-    .select("id, user_id, media_url, media_type, caption, created_at")
+    .select("id, user_id, media_url, media_type, caption, hide_likes, created_at")
     .order("created_at", { ascending: false })
     .limit(40);
 
@@ -52,15 +53,16 @@ export default async function MomentsPage() {
     commentsResult,
     giftsResult,
     myLikesResult,
+    walletResult,
   ] = await Promise.all([
     userIds.length
       ? supabase
           .from("profiles")
-          .select("id, display_name, avatar_url")
+          .select("id, display_name, avatar_url, age, location")
           .in("id", userIds)
       : { data: [] },
     momentIds.length
-      ? supabase.from("moment_likes").select("moment_id").in("moment_id", momentIds)
+      ? supabase.from("moment_likes").select("moment_id, user_id").in("moment_id", momentIds)
       : { data: [] },
     momentIds.length
       ? supabase
@@ -78,7 +80,24 @@ export default async function MomentsPage() {
           .eq("user_id", user.id)
           .in("moment_id", momentIds)
       : { data: [] },
+    supabase
+      .from("user_wallets")
+      .select("gold_balance")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
+  const likerIds = [
+    ...new Set(likesResult.data?.map((like) => "user_id" in like ? like.user_id : "") ?? []),
+  ].filter(Boolean);
+  const { data: likerProfiles } = likerIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url, age, location")
+        .in("id", likerIds)
+    : { data: [] };
+  const likerProfilesById = new Map(
+    likerProfiles?.map((profile) => [profile.id, profile]) ?? [],
+  );
 
   const profilesById = new Map(
     profilesResult.data?.map((profile) => [profile.id, profile]) ?? [],
@@ -96,6 +115,32 @@ export default async function MomentsPage() {
   const likeCounts = countByMoment(likesResult.data);
   const commentCounts = countByMoment(commentsResult.data);
   const giftCounts = countByMoment(giftsResult.data);
+  const likesByMoment = new Map<
+    string,
+    {
+      age: number;
+      avatar_url: string | null;
+      display_name: string;
+      id: string;
+      location: string;
+    }[]
+  >();
+  likesResult.data?.forEach((like) => {
+    if (!("user_id" in like)) {
+      return;
+    }
+
+    const profile = likerProfilesById.get(like.user_id);
+
+    if (!profile) {
+      return;
+    }
+
+    likesByMoment.set(like.moment_id, [
+      ...(likesByMoment.get(like.moment_id) ?? []),
+      profile,
+    ]);
+  });
   const momentCards: MomentCard[] = visibleMoments
     .map((moment) => {
       const profile = profilesById.get(moment.user_id);
@@ -110,6 +155,7 @@ export default async function MomentsPage() {
         giftCount: giftCounts.get(moment.id) ?? 0,
         liked: likedMomentIds.has(moment.id),
         likeCount: likeCounts.get(moment.id) ?? 0,
+        likers: likesByMoment.get(moment.id) ?? [],
         profile,
       };
     })
@@ -122,7 +168,13 @@ export default async function MomentsPage() {
       profileId={currentProfile.id}
       title="Moments"
     >
-      <MomentsClient moments={momentCards} />
+      <MomentsClient
+        anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+        currentUserId={user.id}
+        goldBalance={walletResult.data?.gold_balance ?? 0}
+        moments={momentCards}
+        supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
+      />
     </AppShell>
   );
 }

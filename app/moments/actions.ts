@@ -14,6 +14,11 @@ export type MomentFormState = {
   message: string;
 };
 
+export type GiftActionState = {
+  message: string;
+  status: "error" | "success";
+};
+
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -174,7 +179,32 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
   const gift = getGiftOption(giftType);
 
   if (ownerId === user.id || !gift) {
-    return;
+    return {
+      message: "Choose a valid gift.",
+      status: "error",
+    } satisfies GiftActionState;
+  }
+
+  const { data: wallet } = await supabase
+    .from("user_wallets")
+    .select("gold_balance")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if ((wallet?.gold_balance ?? 0) < gift.coinPrice) {
+    await supabase.from("notifications").insert({
+      actor_id: user.id,
+      body: "Add gold to continue.",
+      metadata: { gift_type: gift.type, moment_id: momentId },
+      title: "Low gold",
+      type: "low_gold",
+      user_id: user.id,
+    });
+
+    return {
+      message: "Not enough gold. Add gold to continue.",
+      status: "error",
+    } satisfies GiftActionState;
   }
 
   const { error } = await supabase.from("moment_gifts").insert({
@@ -190,6 +220,7 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
 
   await supabase.from("gift_transactions").insert({
     coin_price: gift.coinPrice,
+    gold_cost: gift.coinPrice,
     gift_type: gift.type,
     receiver_id: ownerId,
     sender_id: user.id,
@@ -211,4 +242,42 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
   });
 
   revalidatePath("/moments");
+  return {
+    message: `${gift.name} sent.`,
+    status: "success",
+  } satisfies GiftActionState;
+}
+
+export async function toggleMomentLikesVisibility(
+  momentId: string,
+  nextHidden: boolean,
+) {
+  const { supabase, user } = await currentUser();
+  const { error } = await supabase
+    .from("moments")
+    .update({ hide_likes: nextHidden })
+    .eq("id", momentId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/moments");
+}
+
+export async function deleteMoment(momentId: string) {
+  const { supabase, user } = await currentUser();
+  const { error } = await supabase
+    .from("moments")
+    .delete()
+    .eq("id", momentId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/moments");
+  revalidatePath(`/profile/${user.id}`);
 }

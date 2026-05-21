@@ -497,6 +497,7 @@ export function StoriesBar({
 
     await supabase.from("gift_transactions").insert({
       coin_price: gift.coinPrice,
+      gold_cost: gift.coinPrice,
       gift_type: gift.type,
       receiver_id: activeStory.user_id,
       sender_id: currentUserId,

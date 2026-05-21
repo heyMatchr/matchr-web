@@ -155,12 +155,48 @@ export type GiftTransactionRow = {
   id: string;
   gift_type: string;
   coin_price: number;
+  gold_cost: number | null;
   sender_id: string;
   receiver_id: string;
   source: string;
   source_id: string | null;
   message_id: string | null;
   created_at: string;
+};
+
+export type UserWalletRow = {
+  user_id: string;
+  gold_balance: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GoldPackageRow = {
+  id: string;
+  name: string;
+  gold_amount: number;
+  price_usd: number;
+  created_at: string;
+};
+
+export type MessageChargeRow = {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  message_id: string | null;
+  gold_cost: number;
+  created_at: string;
+};
+
+export type SubscriptionRow = {
+  id: string;
+  user_id: string;
+  plan_name: string;
+  status: string;
+  price_usd: number;
+  interval: string;
+  created_at: string;
+  expires_at: string | null;
 };
 
 export type MessageRow = {
@@ -186,6 +222,7 @@ export type MomentRow = {
   media_url: string;
   media_type: string;
   caption: string;
+  hide_likes: boolean;
   created_at: string;
 };
 
@@ -277,11 +314,24 @@ export type Database = {
           id?: string;
           gift_type: string;
           coin_price: number;
+          gold_cost?: number | null;
           sender_id: string;
           receiver_id: string;
           source: string;
           source_id?: string | null;
           message_id?: string | null;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      gold_packages: {
+        Row: GoldPackageRow;
+        Insert: {
+          id?: string;
+          name: string;
+          gold_amount: number;
+          price_usd: number;
           created_at?: string;
         };
         Update: never;
@@ -342,9 +392,18 @@ export type Database = {
           media_url: string;
           media_type: string;
           caption?: string;
+          hide_likes?: boolean;
           created_at?: string;
         };
-        Update: never;
+        Update: {
+          id?: string;
+          user_id?: string;
+          media_url?: string;
+          media_type?: string;
+          caption?: string;
+          hide_likes?: boolean;
+          created_at?: string;
+        };
         Relationships: [];
       };
       moment_likes: {
@@ -378,6 +437,19 @@ export type Database = {
           sender_id: string;
           receiver_id: string;
           gift_type: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      message_charges: {
+        Row: MessageChargeRow;
+        Insert: {
+          id?: string;
+          sender_id: string;
+          receiver_id: string;
+          message_id?: string | null;
+          gold_cost: number;
           created_at?: string;
         };
         Update: never;
@@ -555,6 +627,21 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      subscriptions: {
+        Row: SubscriptionRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan_name: string;
+          status?: string;
+          price_usd: number;
+          interval: string;
+          created_at?: string;
+          expires_at?: string | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
       story_views: {
         Row: StoryViewRow;
         Insert: {
@@ -575,6 +662,22 @@ export type Database = {
           created_at?: string;
         };
         Update: never;
+        Relationships: [];
+      };
+      user_wallets: {
+        Row: UserWalletRow;
+        Insert: {
+          user_id: string;
+          gold_balance?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          gold_balance?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       waitlist: {
