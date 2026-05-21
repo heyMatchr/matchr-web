@@ -199,6 +199,82 @@ export type SubscriptionRow = {
   expires_at: string | null;
 };
 
+export type UserSettingsRow = {
+  user_id: string;
+  private_profile: boolean;
+  hide_online_status: boolean;
+  hide_read_receipts: boolean;
+  hide_followers_count: boolean;
+  hide_following_count: boolean;
+  hide_moments_likes: boolean;
+  allow_story_replies: boolean;
+  allow_gifts: boolean;
+  allow_profile_views: boolean;
+  dm_permissions: string;
+  show_in_discover: boolean;
+  distance_preference: number;
+  min_age_preference: number;
+  max_age_preference: number;
+  gender_preference: string;
+  relationship_intent_preference: string | null;
+  push_notifications: boolean;
+  story_notifications: boolean;
+  message_notifications: boolean;
+  gift_notifications: boolean;
+  match_notifications: boolean;
+  updated_at: string;
+};
+
+export type FollowRequestRow = {
+  id: string;
+  requester_id: string;
+  requested_user_id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UserReportRow = {
+  id: string;
+  reporter_id: string;
+  reported_user_id: string;
+  category: string;
+  details: string;
+  status: string;
+  created_at: string;
+};
+
+export type MutedUserRow = {
+  id: string;
+  muter_id: string;
+  muted_user_id: string;
+  created_at: string;
+};
+
+export type BlockedUserRow = {
+  id: string;
+  blocker_id: string;
+  blocked_user_id: string;
+  created_at: string;
+};
+
+export type HiddenUserRow = {
+  id: string;
+  hider_id: string;
+  hidden_user_id: string;
+  created_at: string;
+};
+
+export type WalletTransactionRow = {
+  id: string;
+  user_id: string;
+  transaction_type: string;
+  gold_delta: number;
+  reference_type: string | null;
+  reference_id: string | null;
+  created_at: string;
+};
+
 export type MessageRow = {
   id: string;
   sender_id: string;
@@ -264,6 +340,17 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      blocked_users: {
+        Row: BlockedUserRow;
+        Insert: {
+          id?: string;
+          blocker_id: string;
+          blocked_user_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       likes: {
         Row: LikeRow;
         Insert: {
@@ -284,6 +371,22 @@ export type Database = {
           created_at?: string;
         };
         Update: never;
+        Relationships: [];
+      };
+      follow_requests: {
+        Row: FollowRequestRow;
+        Insert: {
+          id?: string;
+          requester_id: string;
+          requested_user_id: string;
+          status?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       gifts_catalog: {
@@ -481,6 +584,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      muted_users: {
+        Row: MutedUserRow;
+        Insert: {
+          id?: string;
+          muter_id: string;
+          muted_user_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      hidden_users: {
+        Row: HiddenUserRow;
+        Insert: {
+          id?: string;
+          hider_id: string;
+          hidden_user_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      user_reports: {
+        Row: UserReportRow;
+        Insert: {
+          id?: string;
+          reporter_id: string;
+          reported_user_id: string;
+          category: string;
+          details?: string;
+          status?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       passes: {
         Row: PassRow;
         Insert: {
@@ -642,6 +781,21 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      premium_subscriptions: {
+        Row: SubscriptionRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan_name?: string;
+          status?: string;
+          price_usd?: number;
+          interval?: string;
+          created_at?: string;
+          expires_at?: string | null;
+        };
+        Update: never;
+        Relationships: [];
+      };
       story_views: {
         Row: StoryViewRow;
         Insert: {
@@ -678,6 +832,26 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      user_settings: {
+        Row: UserSettingsRow;
+        Insert: Partial<UserSettingsRow> & { user_id: string };
+        Update: Partial<UserSettingsRow>;
+        Relationships: [];
+      };
+      wallet_transactions: {
+        Row: WalletTransactionRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          transaction_type: string;
+          gold_delta: number;
+          reference_type?: string | null;
+          reference_id?: string | null;
+          created_at?: string;
+        };
+        Update: never;
         Relationships: [];
       };
       waitlist: {

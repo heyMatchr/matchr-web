@@ -166,11 +166,13 @@ export function SafetyActions({
                 <option value="" disabled>
                   Choose a reason
                 </option>
-                <option>Harassment or hate</option>
-                <option>Fake profile or scam</option>
-                <option>Inappropriate content</option>
-                <option>Unsafe behavior</option>
-                <option>Other</option>
+                <option value="spam">Spam</option>
+                <option value="fake_profile">Fake profile</option>
+                <option value="harassment">Harassment</option>
+                <option value="inappropriate_content">Inappropriate content</option>
+                <option value="underage">Underage</option>
+                <option value="scam_fraud">Scam/fraud</option>
+                <option value="other">Other</option>
               </select>
 
               <label className="sr-only" htmlFor="details">

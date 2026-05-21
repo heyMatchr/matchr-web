@@ -94,7 +94,7 @@ export async function likeProfile(profileUserId: string) {
           profile_id: profileUserId,
         },
         title: "It's a match",
-        type: "new_match",
+        type: "mutual_attraction",
         user_id: profileUserId,
       }),
       supabase.from("notifications").insert({
@@ -104,7 +104,7 @@ export async function likeProfile(profileUserId: string) {
           profile_id: userId,
         },
         title: "It's a match",
-        type: "new_match",
+        type: "mutual_attraction",
         user_id: userId,
       }),
     ]);

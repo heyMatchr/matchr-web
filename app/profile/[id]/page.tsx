@@ -110,6 +110,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     profileMomentsResult,
     walletResult,
     premiumResult,
+    giftsReceivedResult,
+    viewedSettingsResult,
   ] = await Promise.all([
     supabase
       .from("follows")
@@ -184,7 +186,23 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       .eq("plan_name", "Matchr Premium")
       .eq("status", "active")
       .maybeSingle(),
+    supabase
+      .from("gift_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("receiver_id", profile.id),
+    supabase
+      .from("user_settings")
+      .select("private_profile, hide_followers_count, hide_following_count, allow_profile_views")
+      .eq("user_id", profile.id)
+      .maybeSingle(),
   ]);
+  if (
+    profile.id !== user.id &&
+    viewedSettingsResult.data?.private_profile &&
+    !isFollowingResult.data
+  ) {
+    redirect("/discover");
+  }
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
 
   const recentViewerIds =
@@ -235,6 +253,24 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const following = followingIds
     .map((followingId) => socialProfilesById.get(followingId))
     .filter(Boolean);
+  const completedFields = [
+    profile.avatar_url,
+    profile.bio,
+    profile.occupation,
+    profile.relationship_intent,
+    profile.location,
+    profile.height,
+    profile.body_type,
+    profile.looking_for,
+    profile.interests.length ? "interests" : "",
+  ].filter(Boolean).length;
+  const completion = Math.round((completedFields / 9) * 100);
+  const profileBadges = [
+    premiumResult.data ? "Premium" : "",
+    profile.verified ? "Verified" : "",
+    (giftsReceivedResult.count ?? 0) >= 3 ? "Top gifted" : "",
+    (followersResult.count ?? 0) >= 10 ? "Trending" : "",
+  ].filter(Boolean);
 
   return (
     <AppShell
@@ -290,6 +326,18 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-all duration-300 hover:bg-neutral-200 hover:shadow-[0_0_28px_rgba(255,255,255,0.10)]"
                   >
                     Edit Profile
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="inline-flex rounded-full border border-emerald-300/30 px-5 py-2.5 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-300/10"
+                  >
+                    Settings
+                  </Link>
+                  <Link
+                    href="/wallet"
+                    className="inline-flex rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
+                  >
+                    Wallet
                   </Link>
                   <form action={logOut} className="md:hidden">
                     <button
@@ -353,6 +401,41 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               </div>
             </div>
 
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
+                <p className="text-xl font-black">{giftsReceivedResult.count ?? 0}</p>
+                <p className="mt-1 text-xs text-neutral-500">Gifts received</p>
+              </div>
+              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
+                <p className="text-xl font-black">{profileMomentsResult.data?.length ?? 0}</p>
+                <p className="mt-1 text-xs text-neutral-500">Moments posted</p>
+              </div>
+              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
+                <p className="text-xl font-black">{completion}%</p>
+                <p className="mt-1 text-xs text-neutral-500">Complete</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {profileBadges.map((badge) => (
+                <span
+                  key={badge}
+                  className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100"
+                >
+                  {badge}
+                </span>
+              ))}
+              <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
+                Last active recently
+              </span>
+              <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
+                Email verified
+              </span>
+              <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
+                Phone verification placeholder
+              </span>
+            </div>
+
             {profile.id === user.id ? (
               <div className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4">
                 <div className="flex items-center justify-between gap-3">
@@ -387,6 +470,44 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 Intent
               </p>
               <p className="mt-2 text-xl">{profile.relationship_intent}</p>
+            </div>
+
+            <div className="mt-8">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                Lifestyle
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {[
+                  ["Drinks", profile.drinking],
+                  ["Smoking", profile.smoking],
+                  ["Workouts", "Fitness vibe placeholder"],
+                  ["Late nights", "Open to spontaneous plans"],
+                  ["Relationship type", profile.relationship_status],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
+                    <p className="text-xs text-neutral-500">{label}</p>
+                    <p className="mt-1 text-sm text-neutral-200">{value ?? "Not shared"}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-8">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                Attraction prompts
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {[
+                  "Reply to their story",
+                  "Send a gift",
+                  "Say hi",
+                  profile.id === user.id ? "Complete your profile" : "Mention a shared interest",
+                ].map((prompt) => (
+                  <div key={prompt} className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4 text-sm text-emerald-50">
+                    {prompt}
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="mt-8">

@@ -54,6 +54,13 @@ export async function reportUser(
     return { message: error.message, success: false };
   }
 
+  await supabase.from("user_reports").insert({
+    category: reason,
+    details,
+    reported_user_id: reportedUserId,
+    reporter_id: user.id,
+  });
+
   return {
     message: "Report submitted. Thanks for helping keep Matchr safer.",
     success: true,
@@ -87,6 +94,16 @@ export async function blockUser(blockedUserId: string, redirectTo = "/discover")
   if (error) {
     throw new Error(error.message);
   }
+
+  await supabase.from("blocked_users").upsert(
+    {
+      blocked_user_id: blockedUserId,
+      blocker_id: user.id,
+    },
+    {
+      onConflict: "blocker_id,blocked_user_id",
+    },
+  );
 
   revalidatePath("/discover");
   revalidatePath("/matches");

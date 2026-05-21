@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { DiscoverClient, type DiscoverProfile } from "./discover-client";
 import { StoriesBar, type StoryGroup } from "./stories-bar";
-import { likeProfile, passProfile } from "./actions";
 
 export default async function DiscoverPage() {
   const supabase = await createSupabaseServerClient();
@@ -31,7 +30,7 @@ export default async function DiscoverPage() {
     supabase
       .from("profiles")
       .select(
-        "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, created_at",
+        "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, created_at",
       )
       .eq("onboarding_completed", true)
       .neq("id", user.id)
@@ -146,6 +145,96 @@ export default async function DiscoverPage() {
     );
   });
   const activeStoryUserIds = new Set(storyGroups.map((group) => group.user_id));
+  const visibleProfileIds = visibleProfiles.map((profile) => profile.id);
+  const [
+    settingsResult,
+    followersResult,
+    momentsResult,
+    momentLikesResult,
+    momentCommentsResult,
+    giftTransactionsResult,
+  ] = await Promise.all([
+    visibleProfileIds.length
+      ? supabase
+          .from("user_settings")
+          .select("user_id, private_profile, show_in_discover")
+          .in("user_id", visibleProfileIds)
+      : { data: [] },
+    visibleProfileIds.length
+      ? supabase.from("follows").select("following_id").in("following_id", visibleProfileIds)
+      : { data: [] },
+    visibleProfileIds.length
+      ? supabase.from("moments").select("id, user_id").in("user_id", visibleProfileIds)
+      : { data: [] },
+    supabase.from("moment_likes").select("moment_id"),
+    supabase.from("moment_comments").select("moment_id"),
+    visibleProfileIds.length
+      ? supabase
+          .from("gift_transactions")
+          .select("receiver_id")
+          .in("receiver_id", visibleProfileIds)
+      : { data: [] },
+  ]);
+  const settingsByUser = new Map(
+    settingsResult.data?.map((setting) => [setting.user_id, setting]) ?? [],
+  );
+  const countBy = (rows: Record<string, string>[] | null | undefined, key: string) => {
+    const counts = new Map<string, number>();
+    rows?.forEach((row) => counts.set(row[key], (counts.get(row[key]) ?? 0) + 1));
+    return counts;
+  };
+  const followerCounts = countBy(followersResult.data, "following_id");
+  const momentCounts = countBy(momentsResult.data, "user_id");
+  const momentOwnerById = new Map(momentsResult.data?.map((moment) => [moment.id, moment.user_id]) ?? []);
+  const engagementByUser = new Map<string, number>();
+  [...(momentLikesResult.data ?? []), ...(momentCommentsResult.data ?? [])].forEach((row) => {
+    const ownerId = momentOwnerById.get(row.moment_id);
+    if (ownerId) {
+      engagementByUser.set(ownerId, (engagementByUser.get(ownerId) ?? 0) + 1);
+    }
+  });
+  const giftCounts = countBy(giftTransactionsResult.data, "receiver_id");
+  const activityHash = (value: string) =>
+    value.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  const discoverProfiles: DiscoverProfile[] = visibleProfiles.map((profile) => {
+    const sharedInterests = profile.interests?.length ?? 0;
+    const momentCount = momentCounts.get(profile.id) ?? 0;
+    const followerCount = followerCounts.get(profile.id) ?? 0;
+    const hasStories = activeStoryUserIds.has(profile.id);
+    const isOnline = activityHash(profile.id) % 3 !== 0;
+    const trendingScore =
+      followerCount * 3 +
+      momentCount * 4 +
+      (engagementByUser.get(profile.id) ?? 0) * 2 +
+      (giftCounts.get(profile.id) ?? 0) * 6 +
+      (hasStories ? 8 : 0);
+
+    return {
+      accepting_dating: profile.accepting_dating,
+      age: profile.age,
+      avatar_url: profile.avatar_url,
+      bio: profile.bio,
+      compatibility: Math.min(98, 58 + sharedInterests * 4 + (hasStories ? 8 : 0) + Math.min(18, momentCount * 3)),
+      country: profile.country,
+      display_name: profile.display_name,
+      followerCount,
+      hasMoments: momentCount > 0,
+      hasStories,
+      id: profile.id,
+      interests: profile.interests ?? [],
+      isOnline,
+      location: profile.location,
+      momentCount,
+      relationship_intent: profile.relationship_intent,
+      trendingScore,
+      verified: profile.verified,
+    };
+  }).filter((profile) => {
+    const setting = settingsByUser.get(profile.id);
+    return setting?.show_in_discover !== false && !setting?.private_profile;
+  }).sort((a, b) => b.compatibility - a.compatibility);
+  const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
+  const trendingProfiles = [...discoverProfiles].sort((a, b) => b.trendingScore - a.trendingScore).slice(0, 10);
 
   return (
     <AppShell
@@ -161,118 +250,11 @@ export default async function DiscoverPage() {
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
         />
 
-        <div className="mt-5 md:mt-8">
-          <p className="max-w-2xl text-sm leading-6 text-neutral-400">
-            New profiles are curated from people who have completed onboarding.
-          </p>
-        </div>
-
-        {visibleProfiles.length > 0 ? (
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8 md:gap-5 lg:grid-cols-3">
-            {visibleProfiles.map((profile) => (
-              <article
-                key={profile.id}
-                className="group overflow-hidden rounded-lg border border-neutral-800 bg-black/50 transition-all duration-300 hover:-translate-y-1 hover:border-neutral-600 hover:shadow-[0_0_40px_rgba(74,222,128,0.10)]"
-              >
-                <div
-                  className={`aspect-[4/5] overflow-hidden bg-neutral-950 ${
-                    activeStoryUserIds.has(profile.id)
-                      ? "ring-2 ring-emerald-300/70"
-                      : ""
-                  }`}
-                >
-                  {profile.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={profile.avatar_url}
-                      alt={profile.display_name}
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-6xl font-black text-neutral-700">
-                      {profile.display_name.charAt(0)}
-                    </div>
-                  )}
-                </div>
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="text-2xl font-black tracking-tight">
-                        {profile.display_name}, {profile.age}
-                      </h2>
-                      <p className="mt-1 text-sm text-neutral-400">
-                        {profile.location}
-                      </p>
-                      <p className="mt-1 text-sm text-neutral-500">
-                        {profile.occupation}
-                      </p>
-                    </div>
-                    {profile.verified ? (
-                      <span className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs text-emerald-200">
-                        Verified
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-4 rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-emerald-200">
-                      Intent
-                    </p>
-                    <p className="mt-2 text-sm text-neutral-200">
-                      {profile.relationship_intent}
-                    </p>
-                  </div>
-                  <p className="mt-4 line-clamp-3 text-sm leading-6 text-neutral-300">
-                    {profile.bio}
-                  </p>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {profile.interests.slice(0, 5).map((interest) => (
-                      <span
-                        key={interest}
-                        className="rounded-full bg-white/5 px-3 py-1 text-xs text-neutral-300"
-                      >
-                        {interest}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-5 grid grid-cols-3 gap-2">
-                    <form action={passProfile.bind(null, profile.id)}>
-                      <button
-                        type="submit"
-                        className="w-full rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
-                      >
-                        Pass
-                      </button>
-                    </form>
-                    <Link
-                      href={`/profile/${profile.id}`}
-                      className="rounded-full border border-neutral-700 px-3 py-2 text-center text-sm text-neutral-300 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
-                    >
-                      View
-                    </Link>
-                    <form action={likeProfile.bind(null, profile.id)}>
-                      <button
-                        type="submit"
-                        className="w-full rounded-full bg-white px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
-                      >
-                        Like
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-6 md:mt-8 md:p-8">
-            <p className="text-xl font-black tracking-tight text-white">
-              No new profiles yet
-            </p>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-neutral-400">
-              You have seen every completed profile available right now. New
-              people will appear here as they join Matchr.
-            </p>
-          </div>
-        )}
+        <DiscoverClient
+          profiles={discoverProfiles}
+          recentlyActive={recentlyActive}
+          trending={trendingProfiles}
+        />
     </AppShell>
   );
 }
