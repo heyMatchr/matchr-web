@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
 import type { Database, MessageRow } from "@/lib/supabase/types";
 import {
   MEDIA_ALLOWED_TYPES,
@@ -191,7 +192,12 @@ export function ChatClient({
   }, [receiverId]);
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const scrollTimer = window.setTimeout(() => {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 80);
+
+    return () => window.clearTimeout(scrollTimer);
   }, [messages]);
 
   useEffect(() => {
@@ -490,13 +496,13 @@ export function ChatClient({
     setIsMediaMenuOpen(false);
   }
 
-  async function sendGift(giftType: string) {
+  async function sendGift(gift: GiftOption) {
     setSending(true);
     const { data: savedMessage, error: sendError } = await supabase
       .from("messages")
       .insert({
-        content: "",
-        gift_type: giftType,
+        content: `${gift.icon} ${gift.name} · ${gift.coinPrice} coins`,
+        gift_type: gift.type,
         match_id: matchId,
         message_type: "gift",
         receiver_id: receiverId,
@@ -509,10 +515,23 @@ export function ChatClient({
       setError(sendError.message);
     } else {
       mergeConfirmedMessage(savedMessage);
+      await supabase.from("gift_transactions").insert({
+        coin_price: gift.coinPrice,
+        gift_type: gift.type,
+        message_id: savedMessage.id,
+        receiver_id: receiverId,
+        sender_id: currentUserId,
+        source: "chat",
+        source_id: matchId,
+      });
       await supabase.from("notifications").insert({
         actor_id: currentUserId,
-        body: `Sent you a ${giftType} gift.`,
-        metadata: { match_id: matchId, gift_type: giftType },
+        body: `Sent you ${gift.icon} ${gift.name}.`,
+        metadata: {
+          coin_price: gift.coinPrice,
+          gift_type: gift.type,
+          match_id: matchId,
+        },
         title: "Gift received",
         type: "gift_received",
         user_id: receiverId,
@@ -587,6 +606,7 @@ export function ChatClient({
   function renderMessageContent(message: LocalMessage) {
     const isMine = message.sender_id === currentUserId;
     const isPrivate = message.message_type === "private_media";
+    const privateMediaKind = message.media_type === "video" ? "Video" : "Photo";
     const secondsRemaining =
       isPrivate && message.expires_at
         ? Math.max(
@@ -601,30 +621,66 @@ export function ChatClient({
       new Date(message.expires_at).getTime() <= now;
 
     if (SYSTEM_MESSAGE_TYPES.has(message.message_type)) {
+      const gift = message.message_type === "story_gift"
+        ? getGiftOption(message.gift_type)
+        : null;
+      const label = message.message_type === "story_reaction"
+        ? "Story reaction"
+        : message.message_type === "story_gift"
+          ? "Story gift"
+          : message.message_type === "story_reply"
+            ? "Story reply"
+            : "Activity";
+
       return (
-        <p className="text-center text-xs font-medium uppercase tracking-[0.22em] text-neutral-500">
-          {message.content}
-        </p>
+        <div className="rounded-2xl border border-neutral-800 bg-black/25 px-4 py-3 text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-neutral-500">
+            {label}
+          </p>
+          <p className="mt-1 text-sm text-neutral-300">
+            {gift
+              ? `${gift.icon} ${gift.name} · ${gift.coinPrice} coins`
+              : message.content}
+          </p>
+        </div>
       );
     }
 
     if (message.message_type === "gift") {
+      const gift = getGiftOption(message.gift_type);
+
       return (
-        <div className="text-center">
-          <p className="text-3xl">✦</p>
-          <p className="mt-2 text-sm">{message.gift_type ?? "Gift"}</p>
+        <div className="min-w-40 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-center shadow-[0_0_26px_rgba(16,185,129,0.08)]">
+          <p className="text-3xl">{gift?.icon ?? "✦"}</p>
+          <p className="mt-2 text-sm font-black">
+            {gift?.name ?? message.gift_type ?? "Gift"}
+          </p>
+          <p className="mt-1 text-xs text-neutral-500">
+            {gift ? `${gift.coinPrice} coins` : "Gift"}
+          </p>
         </div>
       );
     }
 
     if (isPrivate && message.media_url) {
-      if (isExpired) {
+      if (message.viewed_at) {
+        const status = isMine
+          ? "Opened"
+          : isExpired || secondsRemaining === 0
+            ? "Expired"
+            : "Opened";
+
         return (
-          <div className="grid h-28 w-40 place-items-center rounded-2xl border border-neutral-800 bg-[radial-gradient(circle_at_top,_rgba(64,64,64,0.35),_#050505_70%)] px-4 text-center sm:h-32 sm:w-44">
-            <div>
-              <p className="text-sm font-black text-neutral-300">Expired</p>
-              <p className="mt-2 text-xs text-neutral-600">
-                This private media is no longer available.
+          <div className="flex min-h-12 w-44 items-center gap-3 rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-2 text-left sm:w-48">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-300/25 bg-emerald-300/10 text-sm text-emerald-100">
+              ◇
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-neutral-200">
+                {privateMediaKind} · {status}
+              </p>
+              <p className="mt-0.5 text-[11px] text-neutral-500">
+                View once private media
               </p>
             </div>
           </div>
@@ -646,7 +702,7 @@ export function ChatClient({
             event.preventDefault();
             showPrivacyWarning();
           }}
-          className="group relative h-32 w-40 overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-36 sm:w-44"
+          className="group relative h-36 w-40 overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
         >
           {message.media_type === "video" ? (
             <video
@@ -675,8 +731,8 @@ export function ChatClient({
             />
           )}
           <span className="absolute inset-0 bg-black/30" />
-          <span className="relative flex h-full min-h-44 flex-col items-center justify-center px-5 text-white">
-            <span className="grid h-11 w-11 place-items-center rounded-full border border-white/20 bg-black/45 text-lg backdrop-blur">
+          <span className="relative flex h-full flex-col items-center justify-center px-4 text-white">
+            <span className="grid h-10 w-10 place-items-center rounded-full border border-white/20 bg-black/45 text-lg backdrop-blur">
               ◇
             </span>
             <span className="mt-2 text-sm font-black">Private media</span>
@@ -771,7 +827,7 @@ export function ChatClient({
         </div>
       </div>
 
-      <div className="flex-1 space-y-2.5 overflow-y-auto p-3 sm:space-y-3 sm:p-6">
+      <div className="flex-1 space-y-2.5 overflow-y-auto p-3 pb-8 sm:space-y-3 sm:p-6 sm:pb-8">
         {messages.length > 0 ? (
           messages.map((message) => {
             const isMine = message.sender_id === currentUserId;
@@ -820,12 +876,12 @@ export function ChatClient({
             </div>
           ) : null}
         </div>
-        <div ref={scrollRef} />
+        <div ref={scrollRef} className="h-2" />
       </div>
 
       <form
         onSubmit={sendMessage}
-        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-3 pb-[calc(env(safe-area-inset-bottom)+5.5rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
+        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
         <div className="relative flex gap-3">
           <button
@@ -859,14 +915,23 @@ export function ChatClient({
               >
                 Voice note
               </button>
-              {["Rose", "Spark", "Crown"].map((gift) => (
+              <p className="px-3 py-2 text-xs text-neutral-500">
+                Coin wallet coming soon
+              </p>
+              {GIFT_CATALOG.map((gift) => (
                 <button
-                  key={gift}
+                  key={gift.type}
                   type="button"
                   onClick={() => void sendGift(gift)}
-                  className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
+                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
                 >
-                  Gift: {gift}
+                  <span className="text-xl">{gift.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium text-white">{gift.name}</span>
+                    <span className="text-xs text-neutral-500">
+                      {gift.coinPrice} coins
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>

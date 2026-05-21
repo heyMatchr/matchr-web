@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import type { ChangeEvent } from "react";
+import { GIFT_CATALOG } from "@/lib/gifts";
 import {
   commentOnMoment,
   createMoment,
@@ -301,28 +302,33 @@ function GiftsSheet({
   moment: MomentCard;
   onClose: () => void;
 }) {
-  const gifts = ["Rose", "Spark", "Crown", "Emerald"];
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-4 backdrop-blur-sm">
-      <div className="w-full rounded-2xl border border-neutral-800 bg-black p-5">
+    <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
+      <div className="max-h-[80vh] w-full overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5 shadow-[0_0_45px_rgba(16,185,129,0.10)]">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-black">Send a gift</h2>
           <button type="button" onClick={onClose} className="text-sm text-neutral-400">
             Close
           </button>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {gifts.map((gift) => (
+        <p className="mt-2 text-sm text-neutral-500">Coin wallet coming soon</p>
+        <div className="mt-4 grid gap-2">
+          {GIFT_CATALOG.map((gift) => (
             <form
-              key={gift}
+              key={gift.type}
               action={async () => {
-                await giftMoment(moment.id, moment.user_id, gift);
+                await giftMoment(moment.id, moment.user_id, gift.type);
                 onClose();
               }}
             >
-              <button className="w-full rounded-xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-sm text-neutral-200">
-                {gift}
+              <button className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10">
+                <span className="text-2xl">{gift.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-white">{gift.name}</span>
+                  <span className="text-xs text-neutral-500">
+                    {gift.coinPrice} coins
+                  </span>
+                </span>
               </button>
             </form>
           ))}

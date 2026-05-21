@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getGiftOption } from "@/lib/gifts";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   MEDIA_ALLOWED_TYPES,
@@ -170,13 +171,14 @@ export async function commentOnMoment(momentId: string, ownerId: string, formDat
 
 export async function giftMoment(momentId: string, ownerId: string, giftType: string) {
   const { supabase, user } = await currentUser();
+  const gift = getGiftOption(giftType);
 
-  if (ownerId === user.id) {
+  if (ownerId === user.id || !gift) {
     return;
   }
 
   const { error } = await supabase.from("moment_gifts").insert({
-    gift_type: giftType,
+    gift_type: gift.type,
     moment_id: momentId,
     receiver_id: ownerId,
     sender_id: user.id,
@@ -186,10 +188,23 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
     throw new Error(error.message);
   }
 
+  await supabase.from("gift_transactions").insert({
+    coin_price: gift.coinPrice,
+    gift_type: gift.type,
+    receiver_id: ownerId,
+    sender_id: user.id,
+    source: "moment",
+    source_id: momentId,
+  });
+
   await supabase.from("notifications").insert({
     actor_id: user.id,
-    body: `Sent you a ${giftType} gift.`,
-    metadata: { moment_id: momentId, gift_type: giftType },
+    body: `Sent you ${gift.icon} ${gift.name}.`,
+    metadata: {
+      coin_price: gift.coinPrice,
+      gift_type: gift.type,
+      moment_id: momentId,
+    },
     title: "Gift received",
     type: "gift_received",
     user_id: ownerId,

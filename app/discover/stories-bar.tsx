@@ -3,6 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
 import type { Database } from "@/lib/supabase/types";
 import {
   STORY_ALLOWED_TYPES,
@@ -60,6 +61,13 @@ const emptyEngagement: StoryEngagement = {
   viewers: [],
 };
 
+const STORY_REACTIONS = [
+  { icon: "💚", label: "Heart", type: "heart" },
+  { icon: "🔥", label: "Fire", type: "fire" },
+  { icon: "👀", label: "Eyes", type: "eyes" },
+  { icon: "💎", label: "Emerald", type: "emerald" },
+];
+
 const backgroundClasses: Record<string, string> = {
   emerald: "bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.45),_#020617_62%)]",
   noir: "bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.16),_#000_62%)]",
@@ -97,6 +105,7 @@ export function StoriesBar({
   const [isPaused, setIsPaused] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
   const [replyText, setReplyText] = useState("");
+  const [selectedReaction, setSelectedReaction] = useState("");
   const [state, formAction, pending] = useActionState(
     createStory,
     initialState,
@@ -303,6 +312,7 @@ export function StoriesBar({
     setIsGiftPickerOpen(false);
     setIsPaused(false);
     setReplyText("");
+    setSelectedReaction("");
   }
 
   function goNext() {
@@ -377,7 +387,10 @@ export function StoriesBar({
       return;
     }
 
+    const reaction = STORY_REACTIONS.find((item) => item.type === reactionType);
+
     setInteractionMessage("");
+    setSelectedReaction(reactionType);
     const { error } = await supabase.from("story_reactions").upsert(
       {
         owner_id: activeStory.user_id,
@@ -396,13 +409,13 @@ export function StoriesBar({
     const sent = await sendStoryDm(
       activeStory.user_id,
       "story_reaction",
-      `Reacted to your story: ${reactionType}`,
+      `Story reaction: ${reaction?.icon ?? reactionType}`,
       { reactionType },
     );
 
     await supabase.from("notifications").insert({
       actor_id: currentUserId,
-      body: `Reacted to your story: ${reactionType}.`,
+      body: `Reacted to your story with ${reaction?.icon ?? reactionType}.`,
       metadata: { reaction_type: reactionType, story_id: activeStory.id },
       title: "Story reaction",
       type: "story_reaction",
@@ -457,14 +470,14 @@ export function StoriesBar({
     setInteractionMessage(sent ? "Reply sent to messages." : "Reply saved.");
   }
 
-  async function giftStory(giftType: string) {
+  async function giftStory(gift: GiftOption) {
     if (!activeStory || activeStory.user_id === currentUserId) {
       return;
     }
 
     setInteractionMessage("");
     const { error } = await supabase.from("story_gifts").insert({
-      gift_type: giftType,
+      gift_type: gift.type,
       receiver_id: activeStory.user_id,
       sender_id: currentUserId,
       story_id: activeStory.id,
@@ -478,14 +491,27 @@ export function StoriesBar({
     const sent = await sendStoryDm(
       activeStory.user_id,
       "story_gift",
-      `Sent a ${giftType} gift from your story.`,
-      { giftType },
+      `Sent ${gift.icon} ${gift.name} from your story.`,
+      { giftType: gift.type },
     );
+
+    await supabase.from("gift_transactions").insert({
+      coin_price: gift.coinPrice,
+      gift_type: gift.type,
+      receiver_id: activeStory.user_id,
+      sender_id: currentUserId,
+      source: "story",
+      source_id: activeStory.id,
+    });
 
     await supabase.from("notifications").insert({
       actor_id: currentUserId,
-      body: `Sent you a ${giftType} gift from your story.`,
-      metadata: { gift_type: giftType, story_id: activeStory.id },
+      body: `Sent you ${gift.icon} ${gift.name} from your story.`,
+      metadata: {
+        coin_price: gift.coinPrice,
+        gift_type: gift.type,
+        story_id: activeStory.id,
+      },
       title: "Story gift",
       type: "story_gift",
       user_id: activeStory.user_id,
@@ -786,19 +812,19 @@ export function StoriesBar({
               ) : (
                 <div className="space-y-3">
                   <div className="flex gap-2">
-                    {[
-                      ["heart", "Heart"],
-                      ["fire", "Fire"],
-                      ["eyes", "Eyes"],
-                      ["emerald", "Emerald"],
-                    ].map(([value, label]) => (
+                    {STORY_REACTIONS.map((reaction) => (
                       <button
-                        key={value}
+                        key={reaction.type}
                         type="button"
-                        onClick={() => void reactToStory(value)}
-                        className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-colors hover:border-emerald-200/40 hover:bg-emerald-300/10"
+                        aria-label={reaction.label}
+                        onClick={() => void reactToStory(reaction.type)}
+                        className={`grid h-12 w-12 flex-1 place-items-center rounded-full border text-xl transition-all duration-300 hover:border-emerald-200/50 hover:bg-emerald-300/10 ${
+                          selectedReaction === reaction.type
+                            ? "scale-110 border-emerald-200/60 bg-emerald-300/15 shadow-[0_0_28px_rgba(16,185,129,0.18)]"
+                            : "border-white/10 bg-white/[0.06]"
+                        }`}
                       >
-                        {label}
+                        {reaction.icon}
                       </button>
                     ))}
                   </div>
@@ -828,15 +854,24 @@ export function StoriesBar({
                       Send gift
                     </button>
                     {isGiftPickerOpen ? (
-                      <div className="absolute bottom-14 left-0 right-0 grid grid-cols-2 gap-2 rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
-                        {["Rose", "Spark", "Crown", "Emerald"].map((gift) => (
+                      <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-2 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
+                        <p className="px-2 text-xs text-neutral-500">
+                          Coin wallet coming soon
+                        </p>
+                        {GIFT_CATALOG.map((gift) => (
                           <button
-                            key={gift}
+                            key={gift.type}
                             type="button"
                             onClick={() => void giftStory(gift)}
-                            className="rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-sm text-white hover:border-emerald-200/30"
+                            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30"
                           >
-                            {gift}
+                            <span className="text-2xl">{gift.icon}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium">{gift.name}</span>
+                              <span className="text-xs text-neutral-500">
+                                {gift.coinPrice} coins
+                              </span>
+                            </span>
                           </button>
                         ))}
                       </div>

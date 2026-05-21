@@ -141,6 +141,28 @@ export type StoryGiftRow = {
   created_at: string;
 };
 
+export type GiftCatalogRow = {
+  id: string;
+  gift_type: string;
+  name: string;
+  icon: string;
+  coin_price: number;
+  active: boolean;
+  created_at: string;
+};
+
+export type GiftTransactionRow = {
+  id: string;
+  gift_type: string;
+  coin_price: number;
+  sender_id: string;
+  receiver_id: string;
+  source: string;
+  source_id: string | null;
+  message_id: string | null;
+  created_at: string;
+};
+
 export type MessageRow = {
   id: string;
   sender_id: string;
@@ -222,6 +244,44 @@ export type Database = {
           id?: string;
           follower_id: string;
           following_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      gifts_catalog: {
+        Row: GiftCatalogRow;
+        Insert: {
+          id?: string;
+          gift_type: string;
+          name: string;
+          icon: string;
+          coin_price: number;
+          active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          gift_type?: string;
+          name?: string;
+          icon?: string;
+          coin_price?: number;
+          active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      gift_transactions: {
+        Row: GiftTransactionRow;
+        Insert: {
+          id?: string;
+          gift_type: string;
+          coin_price: number;
+          sender_id: string;
+          receiver_id: string;
+          source: string;
+          source_id?: string | null;
+          message_id?: string | null;
           created_at?: string;
         };
         Update: never;
