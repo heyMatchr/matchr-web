@@ -111,6 +111,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
                 anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
                 currentUserId={user.id}
                 matchId={match.id}
+                receiverAvatarUrl={receiverProfile?.avatar_url ?? null}
                 receiverId={receiverId}
                 receiverName={receiverProfile?.display_name ?? "this user"}
                 supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}

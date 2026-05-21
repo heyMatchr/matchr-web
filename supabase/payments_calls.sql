@@ -38,12 +38,41 @@ create table if not exists public.call_sessions (
   caller_id uuid not null references auth.users(id) on delete cascade,
   receiver_id uuid not null references auth.users(id) on delete cascade,
   match_id uuid not null references public.matches(id) on delete cascade,
+  call_type text not null default 'audio' check (call_type in ('audio', 'video')),
   status text not null default 'ringing' check (status in ('ringing', 'accepted', 'declined', 'ended', 'missed')),
   started_at timestamptz,
+  accepted_at timestamptz,
   ended_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   constraint call_sessions_no_self check (caller_id <> receiver_id)
 );
+
+alter table public.call_sessions
+  add column if not exists call_type text default 'audio',
+  add column if not exists accepted_at timestamptz;
+
+update public.call_sessions
+set call_type = 'audio'
+where call_type is null;
+
+alter table public.call_sessions
+  alter column call_type set default 'audio',
+  alter column call_type set not null;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'call_sessions_call_type_check'
+      and conrelid = 'public.call_sessions'::regclass
+  ) then
+    alter table public.call_sessions
+      add constraint call_sessions_call_type_check
+      check (call_type in ('audio', 'video'));
+  end if;
+end;
+$$;
 
 insert into public.gold_packages (name, gold_amount, price_usd)
 values

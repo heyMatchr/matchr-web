@@ -50,6 +50,7 @@ const SYSTEM_MESSAGE_TYPES = new Set([
   "story_gift",
   "private_media_opened",
   "private_media_expired",
+  "call_event",
 ]);
 
 export function ChatClient({
@@ -665,7 +666,9 @@ export function ChatClient({
           ? "Story gift"
           : message.message_type === "story_reply"
             ? "Story reply"
-            : "Activity";
+            : message.message_type === "call_event"
+              ? "Call"
+              : "Activity";
 
       return (
         <div className="rounded-2xl border border-neutral-800 bg-black/25 px-4 py-3 text-center">

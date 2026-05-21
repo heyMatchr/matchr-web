@@ -313,9 +313,16 @@ export type CallSessionRow = {
   caller_id: string;
   receiver_id: string;
   match_id: string;
+  call_type: string;
   status: string;
   started_at: string | null;
+  accepted_at: string | null;
   ended_at: string | null;
+  offer: unknown;
+  answer: unknown;
+  ice_candidates: unknown;
+  connection_state: string | null;
+  ended_reason: string | null;
   created_at: string;
 };
 
@@ -391,15 +398,29 @@ export type Database = {
           caller_id: string;
           receiver_id: string;
           match_id: string;
+          call_type?: string;
           status?: string;
           started_at?: string | null;
+          accepted_at?: string | null;
           ended_at?: string | null;
+          offer?: unknown;
+          answer?: unknown;
+          ice_candidates?: unknown;
+          connection_state?: string | null;
+          ended_reason?: string | null;
           created_at?: string;
         };
         Update: {
+          call_type?: string;
           status?: string;
           started_at?: string | null;
+          accepted_at?: string | null;
           ended_at?: string | null;
+          offer?: unknown;
+          answer?: unknown;
+          ice_candidates?: unknown;
+          connection_state?: string | null;
+          ended_reason?: string | null;
         };
         Relationships: [];
       };
