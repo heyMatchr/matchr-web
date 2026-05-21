@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { CallControls } from "@/app/calls/call-controls";
 import { ChatClient } from "@/app/chat/[matchId]/chat-client";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -105,11 +106,21 @@ export default async function ChatPage({ params }: ChatPageProps) {
           goldBalance={wallet?.gold_balance ?? 0}
           hasPremium={Boolean(premium)}
           headerActions={
-            <SafetyActions
-              blockRedirectTo="/messages"
-              reportedUserId={receiverId}
-              reportedUserName={receiverProfile?.display_name ?? "this user"}
-            />
+            <div className="flex items-center gap-2">
+              <CallControls
+                anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+                currentUserId={user.id}
+                matchId={match.id}
+                receiverId={receiverId}
+                receiverName={receiverProfile?.display_name ?? "this user"}
+                supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
+              />
+              <SafetyActions
+                blockRedirectTo="/messages"
+                reportedUserId={receiverId}
+                reportedUserName={receiverProfile?.display_name ?? "this user"}
+              />
+            </div>
           }
           initialMessages={initialMessages ?? []}
           matchId={match.id}

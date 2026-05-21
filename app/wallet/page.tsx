@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { startGoldCheckout, startPremiumCheckout } from "./actions";
 
 export default async function WalletPage() {
   const supabase = await createSupabaseServerClient();
@@ -30,14 +31,16 @@ export default async function WalletPage() {
     outgoingGiftsResult,
     messageChargesResult,
     premiumResult,
+    paymentOrdersResult,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
-    supabase.from("gold_packages").select("name, gold_amount, price_usd").order("price_usd", { ascending: true }),
+    supabase.from("gold_packages").select("id, name, gold_amount, price_usd").order("price_usd", { ascending: true }),
     supabase.from("wallet_transactions").select("transaction_type, gold_delta, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
+    supabase.from("payment_orders").select("order_type, status, amount_usd, gold_amount, plan_name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
   ]);
 
   return (
@@ -48,18 +51,26 @@ export default async function WalletPage() {
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
           <p className="mt-3 text-sm text-neutral-400">Gold wallet coming soon. Demo balances are read-only placeholders.</p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</button>
-            <button className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Upgrade to Premium</button>
+            <form action={startGoldCheckout}>
+              <input type="hidden" name="package" value="500" />
+              <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</button>
+            </form>
+            <form action={startPremiumCheckout}>
+              <button className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Upgrade to Premium</button>
+            </form>
           </div>
         </section>
 
         <section className="grid gap-3 rounded-3xl border border-neutral-800 bg-black/50 p-5">
           <h2 className="text-lg font-black">Gold packages</h2>
-          {(packagesResult.data ?? []).map((pack) => (
-            <div key={pack.name} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
-              <p className="font-black">{pack.name}</p>
-              <p className="mt-1 text-sm text-neutral-400">{pack.gold_amount} gold · ${pack.price_usd}</p>
-            </div>
+          {(packagesResult.data ?? []).map((pack, index) => (
+            <form key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`} action={startGoldCheckout}>
+              <input type="hidden" name="package" value={String(pack.gold_amount)} />
+              <button className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30">
+                <p className="font-black">{pack.name}</p>
+                <p className="mt-1 text-sm text-neutral-400">{pack.gold_amount} gold · ${pack.price_usd}</p>
+              </button>
+            </form>
           ))}
         </section>
 
@@ -68,6 +79,11 @@ export default async function WalletPage() {
           <p className="mt-2 text-sm text-neutral-400">
             {premiumResult.data ? `${premiumResult.data.plan_name} · ${premiumResult.data.status}` : "No active premium plan."}
           </p>
+          <form action={startPremiumCheckout} className="mt-4">
+            <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
+              Start $3/week placeholder checkout
+            </button>
+          </form>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {["Cheaper messages", "Profile boost", "Advanced filters", "Read insights"].map((perk) => (
               <div key={perk} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-300">{perk}</div>
@@ -76,6 +92,7 @@ export default async function WalletPage() {
         </section>
 
         <History title="Wallet transactions" rows={(walletTransactionsResult.data ?? []).map((row) => `${row.transaction_type} · ${row.gold_delta} gold`)} />
+        <History title="Payment orders" rows={(paymentOrdersResult.data ?? []).map((row) => `${row.order_type} · ${row.status} · $${row.amount_usd}`)} />
         <History title="Incoming gifts" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0} gold value`)} />
         <History title="Outgoing gifts" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0} gold`)} />
         <History title="Message charges" rows={(messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost} gold`)} />

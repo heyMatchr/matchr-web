@@ -275,6 +275,50 @@ export type WalletTransactionRow = {
   created_at: string;
 };
 
+export type PaymentOrderRow = {
+  id: string;
+  user_id: string;
+  order_type: string;
+  status: string;
+  amount_usd: number;
+  gold_amount: number | null;
+  plan_name: string | null;
+  stripe_checkout_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PremiumPlanRow = {
+  id: string;
+  plan_name: string;
+  price_usd: number;
+  interval: string;
+  description: string;
+  active: boolean;
+  created_at: string;
+};
+
+export type GoldPurchaseRow = {
+  id: string;
+  user_id: string;
+  payment_order_id: string | null;
+  gold_amount: number;
+  price_usd: number;
+  status: string;
+  created_at: string;
+};
+
+export type CallSessionRow = {
+  id: string;
+  caller_id: string;
+  receiver_id: string;
+  match_id: string;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  created_at: string;
+};
+
 export type MessageRow = {
   id: string;
   sender_id: string;
@@ -338,6 +382,25 @@ export type Database = {
           created_at?: string;
         };
         Update: never;
+        Relationships: [];
+      };
+      call_sessions: {
+        Row: CallSessionRow;
+        Insert: {
+          id?: string;
+          caller_id: string;
+          receiver_id: string;
+          match_id: string;
+          status?: string;
+          started_at?: string | null;
+          ended_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          status?: string;
+          started_at?: string | null;
+          ended_at?: string | null;
+        };
         Relationships: [];
       };
       blocked_users: {
@@ -435,6 +498,20 @@ export type Database = {
           name: string;
           gold_amount: number;
           price_usd: number;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      gold_purchases: {
+        Row: GoldPurchaseRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          payment_order_id?: string | null;
+          gold_amount: number;
+          price_usd: number;
+          status?: string;
           created_at?: string;
         };
         Update: never;
@@ -626,6 +703,41 @@ export type Database = {
           id?: string;
           passer_id: string;
           passed_profile_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      payment_orders: {
+        Row: PaymentOrderRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          order_type: string;
+          status?: string;
+          amount_usd: number;
+          gold_amount?: number | null;
+          plan_name?: string | null;
+          stripe_checkout_session_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: string;
+          stripe_checkout_session_id?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      premium_plans: {
+        Row: PremiumPlanRow;
+        Insert: {
+          id?: string;
+          plan_name: string;
+          price_usd: number;
+          interval: string;
+          description?: string;
+          active?: boolean;
           created_at?: string;
         };
         Update: never;
