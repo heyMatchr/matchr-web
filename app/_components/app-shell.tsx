@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AuthNav } from "@/app/_components/auth-nav";
+import { GlobalCallListener } from "@/app/calls/global-call-listener";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 
 type AppShellProps = {
@@ -25,12 +26,19 @@ export function AppShell({
     <main className={`relative min-h-screen overflow-hidden bg-black text-white ${hideNav ? "" : "md:pl-64"}`}>
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.10)_0%,_rgba(0,0,0,0)_58%)]" />
       {hideNav ? null : (
-        <AuthNav
-          anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
-          currentUserId={currentUserId}
-          profileId={profileId}
-          supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
-        />
+        <>
+          <AuthNav
+            anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+            currentUserId={currentUserId}
+            profileId={profileId}
+            supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
+          />
+          <GlobalCallListener
+            anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+            currentUserId={currentUserId}
+            supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
+          />
+        </>
       )}
       <section
         className={`relative z-10 mx-auto w-full ${maxWidth} ${

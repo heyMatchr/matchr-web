@@ -5,23 +5,22 @@ import { getLiveKitEnvDiagnostics } from "@/lib/livekit/env";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type CallPageProps = {
+type DebugCallPageProps = {
   params: Promise<{
     callId: string;
   }>;
 };
 
-export default async function CallRoomPage({ params }: CallPageProps) {
+export default async function DebugCallRoomPage({ params }: DebugCallPageProps) {
   const { callId } = await params;
-  console.log("[CallDebugPage] route loaded", { callId });
-  const liveKitEnv = getLiveKitEnvDiagnostics("app/calls/[callId]");
+  const liveKitEnv = getLiveKitEnvDiagnostics("app/calls/debug/[callId]");
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect(`/login?next=/calls/${callId}`);
+    redirect(`/login?next=/calls/debug/${callId}`);
   }
 
   const { data: currentProfile } = await supabase
@@ -36,7 +35,7 @@ export default async function CallRoomPage({ params }: CallPageProps) {
 
   const { data: call } = await supabase
     .from("call_sessions")
-    .select("id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at")
+    .select(CALL_SELECT)
     .eq("id", callId)
     .or(`caller_id.eq.${user.id},receiver_id.eq.${user.id}`)
     .maybeSingle();
@@ -53,7 +52,7 @@ export default async function CallRoomPage({ params }: CallPageProps) {
     .maybeSingle();
 
   return (
-    <AppShell currentUserId={user.id} hideHeader hideNav maxWidth="max-w-none" profileId={currentProfile.id} title="Call">
+    <AppShell currentUserId={user.id} hideHeader hideNav maxWidth="max-w-none" profileId={currentProfile.id} title="Debug Call">
       <LiveKitCallRoom
         anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
         currentUserId={user.id}
@@ -67,3 +66,6 @@ export default async function CallRoomPage({ params }: CallPageProps) {
     </AppShell>
   );
 }
+
+const CALL_SELECT =
+  "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";

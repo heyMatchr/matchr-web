@@ -326,6 +326,15 @@ export type CallSessionRow = {
   created_at: string;
 };
 
+export type CallSignalRow = {
+  id: string;
+  call_id: string;
+  sender_id: string;
+  type: string;
+  payload: unknown;
+  created_at: string;
+};
+
 export type MessageRow = {
   id: string;
   sender_id: string;
@@ -422,6 +431,19 @@ export type Database = {
           connection_state?: string | null;
           ended_reason?: string | null;
         };
+        Relationships: [];
+      };
+      call_signals: {
+        Row: CallSignalRow;
+        Insert: {
+          id?: string;
+          call_id: string;
+          sender_id: string;
+          type: string;
+          payload: unknown;
+          created_at?: string;
+        };
+        Update: never;
         Relationships: [];
       };
       blocked_users: {
@@ -1003,7 +1025,15 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      users_are_blocked: {
+        Args: {
+          first_user_id: string;
+          second_user_id: string;
+        };
+        Returns: boolean;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

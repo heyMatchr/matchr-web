@@ -2,7 +2,7 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import type { CallSessionRow, Database } from "@/lib/supabase/types";
 
 type CallType = "audio" | "video";
@@ -51,6 +51,21 @@ function CameraIcon() {
   );
 }
 
+function PhoneOffIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
+      <path d="M10.5 13.5 8 16a2 2 0 0 1-2.8 0l-.8-.8a2 2 0 0 1-.1-2.7 18 18 0 0 1 15.4 0 2 2 0 0 1-.1 2.7l-.8.8a2 2 0 0 1-2.8 0l-2.5-2.5a2 2 0 0 0-3 0Z" />
+    </svg>
+  );
+}
+
 function Avatar({
   avatarUrl,
   name,
@@ -76,20 +91,6 @@ function callLabel(callType: string) {
   return callType === "video" ? "Video" : "Audio";
 }
 
-function formatDuration(startedAt: string | null, currentTime: number) {
-  if (!startedAt || currentTime === 0) {
-    return "00:00";
-  }
-
-  const totalSeconds = Math.max(
-    0,
-    Math.floor((currentTime - new Date(startedAt).getTime()) / 1000),
-  );
-  const minutes = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
-  const seconds = (totalSeconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${seconds}`;
-}
-
 export function CallControls({
   anonKey,
   currentUserId,
@@ -100,66 +101,61 @@ export function CallControls({
   supabaseUrl,
 }: CallControlsProps) {
   const router = useRouter();
-  const [incomingCall, setIncomingCall] = useState<CallSessionRow | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<CallSessionRow | null>(null);
-  const [activeAudioCall, setActiveAudioCall] = useState<CallSessionRow | null>(null);
   const [lastCallStartedAt, setLastCallStartedAt] = useState(0);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(0);
   const [isPending, startTransition] = useTransition();
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const enterCallRoom = useCallback(
+    (callId: string) => {
+      console.log("[Matchr calls] redirecting to call room", callId);
+      router.push(`/calls/${callId}`);
+      window.setTimeout(() => {
+        if (window.location.pathname !== `/calls/${callId}`) {
+          window.location.assign(`/calls/${callId}`);
+        }
+      }, 900);
+    },
+    [router],
+  );
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const insertCallMessage = useCallback(
+    async (body: string) => {
+      await supabase.from("messages").insert({
+        content: body,
+        match_id: matchId,
+        message_type: "call_event",
+        receiver_id: receiverId,
+        sender_id: currentUserId,
+      });
+    },
+    [currentUserId, matchId, receiverId, supabase],
+  );
 
   useEffect(() => {
     function handleCallUpdate(call: CallSessionRow) {
+      console.log("[Matchr calls] status update", call.id, call.status);
+
       if (call.match_id !== matchId) {
         return;
       }
 
       if (call.status === "accepted") {
-        setIncomingCall(null);
         setOutgoingCall(null);
-
-        if (call.call_type === "video") {
-          router.push(`/calls/${call.id}`);
-          return;
-        }
-
-        setActiveAudioCall(call);
+        enterCallRoom(call.id);
         return;
       }
 
       if (call.status === "declined" || call.status === "ended" || call.status === "missed") {
-        setIncomingCall(null);
         setOutgoingCall(null);
-        setActiveAudioCall(null);
       }
     }
 
     const channel = supabase
       .channel(`calls:${matchId}:${currentUserId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "call_sessions",
-          filter: `receiver_id=eq.${currentUserId}`,
-        },
-        (payload) => {
-          const call = payload.new as CallSessionRow;
-          if (call.match_id === matchId && call.status === "ringing") {
-            setIncomingCall(call);
-          }
-        },
-      )
       .on(
         "postgres_changes",
         {
@@ -185,17 +181,95 @@ export function CallControls({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [currentUserId, matchId, router, supabase]);
+  }, [currentUserId, enterCallRoom, matchId, supabase]);
 
-  async function insertCallMessage(body: string) {
-    await supabase.from("messages").insert({
-      content: body,
-      match_id: matchId,
-      message_type: "call_event",
-      receiver_id: receiverId,
-      sender_id: currentUserId,
-    });
-  }
+  useEffect(() => {
+    if (!outgoingCall || outgoingCall.status !== "ringing") {
+      return;
+    }
+
+    let active = true;
+    const missedTimer = window.setTimeout(async () => {
+      const { data } = await supabase
+        .from("call_sessions")
+        .select(CALL_SELECT)
+        .eq("id", outgoingCall.id)
+        .maybeSingle();
+
+      if (!active || data?.status !== "ringing") {
+        return;
+      }
+
+      const { error: missedError } = await supabase
+        .from("call_sessions")
+        .update({
+          connection_state: "ended",
+          ended_at: new Date().toISOString(),
+          ended_reason: "missed_timeout",
+          status: "missed",
+        })
+        .eq("id", outgoingCall.id);
+      if (missedError) {
+        console.error("[CallLifecycle] missed update failed", {
+          callId: outgoingCall.id,
+          error: missedError,
+        });
+      } else {
+        console.log("[CallLifecycle] marked missed", { callId: outgoingCall.id });
+      }
+      await insertCallMessage(`Missed ${outgoingCall.call_type} call.`);
+      await supabase.from("notifications").insert({
+        actor_id: currentUserId,
+        body: `Missed ${outgoingCall.call_type} call.`,
+        metadata: {
+          call_id: outgoingCall.id,
+          call_type: outgoingCall.call_type,
+          match_id: matchId,
+        },
+        title: "Missed call",
+        type: "missed_call",
+        user_id: receiverId,
+      });
+      setOutgoingCall(null);
+    }, 45000);
+
+    const timer = window.setInterval(async () => {
+      const { data } = await supabase
+        .from("call_sessions")
+        .select(CALL_SELECT)
+        .eq("id", outgoingCall.id)
+        .maybeSingle();
+
+      if (!active || !data) {
+        return;
+      }
+
+      console.log("[Matchr calls] polling call status", data.id, data.status);
+
+      if (data.status === "accepted") {
+        setOutgoingCall(null);
+        enterCallRoom(data.id);
+      }
+
+      if (data.status === "declined" || data.status === "ended" || data.status === "missed") {
+        setOutgoingCall(null);
+      }
+    }, 1200);
+
+    return () => {
+      active = false;
+      window.clearTimeout(missedTimer);
+      window.clearInterval(timer);
+    };
+  }, [
+    currentUserId,
+    enterCallRoom,
+    insertCallMessage,
+    matchId,
+    outgoingCall,
+    receiverId,
+    supabase,
+  ]);
 
   function startCall(callType: CallType) {
     setError("");
@@ -217,11 +291,19 @@ export function CallControls({
         .select(CALL_SELECT)
         .single();
 
-      if (insertError || !data) {
-        setError(insertError?.message ?? "Could not start the call.");
+      if (insertError) {
+        console.error("[CallLifecycle] create failed", insertError);
+        setError(insertError.message);
         return;
       }
 
+      if (!data) {
+        console.error("[CallLifecycle] create failed", "No call row returned");
+        setError("Could not start the call.");
+        return;
+      }
+
+      console.log("[CallLifecycle] created row", data);
       setLastCallStartedAt(Date.now());
       setOutgoingCall(data);
       await insertCallMessage(`${callLabel(callType)} call started.`);
@@ -238,12 +320,18 @@ export function CallControls({
 
   async function updateCall(call: CallSessionRow, status: "accepted" | "declined" | "ended" | "missed") {
     const timestamp = new Date().toISOString();
+    if (status === "accepted") {
+      console.log("[CallLifecycle] accepted", { callId: call.id });
+    }
+    if (status === "ended") {
+      console.log("[CallLifecycle] ended", { callId: call.id });
+    }
     const { data } = await supabase
       .from("call_sessions")
       .update({
         accepted_at: status === "accepted" ? timestamp : call.accepted_at,
+        connection_state: status === "accepted" ? "connected" : status === "declined" || status === "ended" || status === "missed" ? "ended" : call.connection_state,
         ended_at: status === "declined" || status === "ended" || status === "missed" ? timestamp : null,
-        started_at: status === "accepted" ? timestamp : call.started_at,
         status,
       })
       .eq("id", call.id)
@@ -255,11 +343,8 @@ export function CallControls({
     }
 
     if (status === "accepted") {
-      if (data.call_type === "video") {
-        router.push(`/calls/${data.id}`);
-      } else {
-        setActiveAudioCall(data);
-      }
+      console.log("[Matchr calls] accepted", data.id);
+      enterCallRoom(data.id);
     }
 
     if (status === "ended") {
@@ -279,9 +364,7 @@ export function CallControls({
     }
 
     if (status === "declined" || status === "ended" || status === "missed") {
-      setIncomingCall(null);
       setOutgoingCall(null);
-      setActiveAudioCall(null);
     }
   }
 
@@ -318,32 +401,6 @@ export function CallControls({
         </div>
       ) : null}
 
-      {incomingCall ? (
-        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_70px_rgba(16,185,129,0.16)]">
-            <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">
-              Incoming {callLabel(incomingCall.call_type)} Call
-            </p>
-            <Avatar avatarUrl={receiverAvatarUrl} name={receiverName} />
-            <p className="mt-4 text-2xl font-black">{receiverName}</p>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button
-                onClick={() => void updateCall(incomingCall, "declined")}
-                className="rounded-full border border-neutral-700 px-4 py-3 text-neutral-300"
-              >
-                Decline
-              </button>
-              <button
-                onClick={() => void updateCall(incomingCall, "accepted")}
-                className="rounded-full bg-white px-4 py-3 font-medium text-black"
-              >
-                Accept
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {outgoingCall ? (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center">
@@ -354,43 +411,14 @@ export function CallControls({
             <p className="mt-4 text-2xl font-black">{receiverName}</p>
             <p className="mt-2 text-sm text-neutral-400">Ringing...</p>
             <button
+              type="button"
               onClick={() => void updateCall(outgoingCall, "missed")}
-              className="mt-6 rounded-full border border-neutral-700 px-5 py-3 text-neutral-300"
+              aria-label="End call"
+              title="End call"
+              className="mx-auto mt-6 grid h-14 w-14 place-items-center rounded-full border border-red-300/20 bg-red-500 text-white shadow-[0_0_45px_rgba(239,68,68,0.25)] transition hover:bg-red-400 active:scale-95"
             >
-              End call
+              <PhoneOffIcon />
             </button>
-          </div>
-        </div>
-      ) : null}
-
-      {activeAudioCall ? (
-        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/85 p-5 backdrop-blur-xl">
-          <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_80px_rgba(16,185,129,0.18)]">
-            <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">
-              Audio Call
-            </p>
-            <Avatar avatarUrl={receiverAvatarUrl} name={receiverName} />
-            <p className="mt-4 text-2xl font-black">{receiverName}</p>
-            <p className="mt-2 font-mono text-sm text-emerald-100">
-              {formatDuration(
-                activeAudioCall.accepted_at ?? activeAudioCall.started_at,
-                now,
-              )}
-            </p>
-            <div className="mt-6 grid grid-cols-3 gap-2">
-              <button className="rounded-2xl border border-neutral-800 px-3 py-3 text-sm text-neutral-300">
-                Mute
-              </button>
-              <button className="rounded-2xl border border-neutral-800 px-3 py-3 text-sm text-neutral-300">
-                Speaker
-              </button>
-              <button
-                onClick={() => void updateCall(activeAudioCall, "ended")}
-                className="rounded-2xl border border-red-300/30 bg-red-500/10 px-3 py-3 text-sm text-red-100"
-              >
-                End
-              </button>
-            </div>
           </div>
         </div>
       ) : null}
