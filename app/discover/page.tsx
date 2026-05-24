@@ -1,29 +1,18 @@
-import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { logPerf, startPerf } from "@/lib/perf";
+import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DiscoverClient, type DiscoverProfile } from "./discover-client";
 import { StoriesBar, type StoryGroup } from "./stories-bar";
 
 export default async function DiscoverPage() {
+  const perfStartedAt = startPerf();
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?next=/discover");
-  }
-
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("id, onboarding_completed")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!currentProfile?.onboarding_completed) {
-    redirect("/onboarding");
-  }
+  const { currentProfile, user } = await getCurrentUserProfile(
+    supabase,
+    "/discover",
+  );
 
   const [profilesResult, likesResult, passesResult, blocksResult] =
     await Promise.all([
@@ -34,7 +23,8 @@ export default async function DiscoverPage() {
       )
       .eq("onboarding_completed", true)
       .neq("id", user.id)
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(120),
     supabase.from("likes").select("liked_profile_id").eq("liker_id", user.id),
     supabase
       .from("passes")
@@ -150,8 +140,6 @@ export default async function DiscoverPage() {
     settingsResult,
     followersResult,
     momentsResult,
-    momentLikesResult,
-    momentCommentsResult,
     giftTransactionsResult,
   ] = await Promise.all([
     visibleProfileIds.length
@@ -165,14 +153,29 @@ export default async function DiscoverPage() {
       : { data: [] },
     visibleProfileIds.length
       ? supabase.from("moments").select("id, user_id").in("user_id", visibleProfileIds)
+          .order("created_at", { ascending: false })
+          .limit(240)
       : { data: [] },
-    supabase.from("moment_likes").select("moment_id"),
-    supabase.from("moment_comments").select("moment_id"),
     visibleProfileIds.length
       ? supabase
           .from("gift_transactions")
           .select("receiver_id")
           .in("receiver_id", visibleProfileIds)
+      : { data: [] },
+  ]);
+  const visibleMomentIds = momentsResult.data?.map((moment) => moment.id) ?? [];
+  const [momentLikesResult, momentCommentsResult] = await Promise.all([
+    visibleMomentIds.length
+      ? supabase
+          .from("moment_likes")
+          .select("moment_id")
+          .in("moment_id", visibleMomentIds)
+      : { data: [] },
+    visibleMomentIds.length
+      ? supabase
+          .from("moment_comments")
+          .select("moment_id")
+          .in("moment_id", visibleMomentIds)
       : { data: [] },
   ]);
   const settingsByUser = new Map(
@@ -235,6 +238,8 @@ export default async function DiscoverPage() {
   }).sort((a, b) => b.compatibility - a.compatibility);
   const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
   const trendingProfiles = [...discoverProfiles].sort((a, b) => b.trendingScore - a.trendingScore).slice(0, 10);
+
+  logPerf("Discover queries", perfStartedAt);
 
   return (
     <AppShell

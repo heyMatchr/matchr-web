@@ -341,7 +341,11 @@ export function MomentsClient({
       ) : null}
 
       {activeLikes ? (
-        <LikesSheet moment={activeLikes} onClose={() => setActiveLikes(null)} />
+        <LikesSheet
+          moment={activeLikes}
+          onClose={() => setActiveLikes(null)}
+          supabase={supabase}
+        />
       ) : null}
 
       {activeGifts ? (
@@ -517,10 +521,48 @@ function CommentsSheet({
 function LikesSheet({
   moment,
   onClose,
+  supabase,
 }: {
   moment: MomentCard;
   onClose: () => void;
+  supabase: ReturnType<typeof createBrowserClient<Database>>;
 }) {
+  const [likers, setLikers] = useState<MomentProfile[]>(moment.likers);
+  const [isLoading, setIsLoading] = useState(moment.likers.length === 0);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadLikers() {
+      setIsLoading(true);
+
+      const { data: likes } = await supabase
+        .from("moment_likes")
+        .select("user_id")
+        .eq("moment_id", moment.id);
+      const userIds = [...new Set(likes?.map((like) => like.user_id) ?? [])];
+      const { data: profiles } = userIds.length
+        ? await supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url, age, location")
+            .in("id", userIds)
+        : { data: [] };
+
+      if (!active) {
+        return;
+      }
+
+      setLikers(profiles ?? []);
+      setIsLoading(false);
+    }
+
+    void loadLikers();
+
+    return () => {
+      active = false;
+    };
+  }, [moment.id, supabase]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
       <div className="max-h-[82vh] w-full overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5">
@@ -531,8 +573,12 @@ function LikesSheet({
           </button>
         </div>
         <div className="mt-4 grid gap-2">
-          {moment.likers.length > 0 ? (
-            moment.likers.map((profile) => (
+          {isLoading ? (
+            <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-6 text-center text-sm text-neutral-500">
+              Loading likes...
+            </p>
+          ) : likers.length > 0 ? (
+            likers.map((profile) => (
               <Link
                 key={profile.id}
                 href={`/profile/${profile.id}`}

@@ -5,6 +5,8 @@ import { logOut } from "@/app/auth/actions";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
+import { logPerf, startPerf } from "@/lib/perf";
+import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type ProfilePageProps = {
@@ -14,85 +16,78 @@ type ProfilePageProps = {
 };
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
+  const perfStartedAt = startPerf();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(`/login?next=/profile/${id}`);
-  }
-
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("id, onboarding_completed")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!currentProfile?.onboarding_completed) {
-    redirect("/onboarding");
-  }
-
-  if (id !== user.id) {
-    const { data: block } = await supabase
-      .from("blocks")
-      .select("id")
-      .or(
-        `and(blocker_id.eq.${user.id},blocked_user_id.eq.${id}),and(blocker_id.eq.${id},blocked_user_id.eq.${user.id})`,
+  const { currentProfile, user } = await getCurrentUserProfile(
+    supabase,
+    `/profile/${id}`,
+  );
+  const [blockResult, profileResult] = await Promise.all([
+    id !== user.id
+      ? supabase
+          .from("blocks")
+          .select("id")
+          .or(
+            `and(blocker_id.eq.${user.id},blocked_user_id.eq.${id}),and(blocker_id.eq.${id},blocked_user_id.eq.${user.id})`,
+          )
+          .maybeSingle()
+      : { data: null },
+    supabase
+      .from("profiles")
+      .select(
+        "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
       )
-      .maybeSingle();
+      .eq("id", id)
+      .eq("onboarding_completed", true)
+      .maybeSingle(),
+  ]);
 
-    if (block) {
-      redirect("/discover");
-    }
+  if (blockResult.data) {
+    redirect("/discover");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select(
-      "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
-    )
-    .eq("id", id)
-    .eq("onboarding_completed", true)
-    .maybeSingle();
+  const { data: profile } = profileResult;
 
   if (!profile) {
     notFound();
   }
 
   if (profile.id !== user.id) {
-    const { data: viewerProfile } = await supabase
-      .from("profiles")
-      .select("display_name")
-      .eq("id", user.id)
-      .maybeSingle();
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const { data: existingViewToday } = await supabase
-      .from("profile_views")
-      .select("id")
-      .eq("viewer_id", user.id)
-      .eq("viewed_user_id", profile.id)
-      .gte("created_at", todayStart.toISOString())
-      .maybeSingle();
+    const [viewerProfileResult, existingViewTodayResult] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("profile_views")
+        .select("id")
+        .eq("viewer_id", user.id)
+        .eq("viewed_user_id", profile.id)
+        .gte("created_at", todayStart.toISOString())
+        .maybeSingle(),
+    ]);
 
-    if (!existingViewToday) {
-      await supabase.from("profile_views").insert({
-        viewed_user_id: profile.id,
-        viewer_id: user.id,
-      });
-
-      await supabase.from("notifications").insert({
-        actor_id: user.id,
-        body: `${viewerProfile?.display_name ?? "Someone"} viewed your profile.`,
-        metadata: {
-          profile_id: user.id,
-        },
-        title: "Profile view",
-        type: "profile_view",
-        user_id: profile.id,
-      });
+    if (!existingViewTodayResult.data) {
+      await Promise.all([
+        supabase.from("profile_views").insert({
+          viewed_user_id: profile.id,
+          viewer_id: user.id,
+        }),
+        supabase.from("notifications").insert({
+          actor_id: user.id,
+          body: `${viewerProfileResult.data?.display_name ?? "Someone"} viewed your profile.`,
+          metadata: {
+            profile_id: user.id,
+          },
+          title: "Profile view",
+          type: "profile_view",
+          user_id: profile.id,
+        }),
+      ]);
     }
   }
 
@@ -271,6 +266,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     (giftsReceivedResult.count ?? 0) >= 3 ? "Top gifted" : "",
     (followersResult.count ?? 0) >= 10 ? "Trending" : "",
   ].filter(Boolean);
+
+  logPerf("Profile queries", perfStartedAt);
 
   return (
     <AppShell

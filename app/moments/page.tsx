@@ -1,28 +1,17 @@
-import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { logPerf, startPerf } from "@/lib/perf";
+import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MomentsClient, type MomentCard } from "./moments-client";
 
 export default async function MomentsPage() {
+  const perfStartedAt = startPerf();
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?next=/moments");
-  }
-
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("id, onboarding_completed")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (!currentProfile?.onboarding_completed) {
-    redirect("/onboarding");
-  }
+  const { currentProfile, user } = await getCurrentUserProfile(
+    supabase,
+    "/moments",
+  );
 
   const { data: blocks } = await supabase
     .from("blocks")
@@ -62,7 +51,7 @@ export default async function MomentsPage() {
           .in("id", userIds)
       : { data: [] },
     momentIds.length
-      ? supabase.from("moment_likes").select("moment_id, user_id").in("moment_id", momentIds)
+      ? supabase.from("moment_likes").select("moment_id").in("moment_id", momentIds)
       : { data: [] },
     momentIds.length
       ? supabase
@@ -86,18 +75,6 @@ export default async function MomentsPage() {
       .eq("user_id", user.id)
       .maybeSingle(),
   ]);
-  const likerIds = [
-    ...new Set(likesResult.data?.map((like) => "user_id" in like ? like.user_id : "") ?? []),
-  ].filter(Boolean);
-  const { data: likerProfiles } = likerIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url, age, location")
-        .in("id", likerIds)
-    : { data: [] };
-  const likerProfilesById = new Map(
-    likerProfiles?.map((profile) => [profile.id, profile]) ?? [],
-  );
 
   const profilesById = new Map(
     profilesResult.data?.map((profile) => [profile.id, profile]) ?? [],
@@ -115,33 +92,7 @@ export default async function MomentsPage() {
   const likeCounts = countByMoment(likesResult.data);
   const commentCounts = countByMoment(commentsResult.data);
   const giftCounts = countByMoment(giftsResult.data);
-  const likesByMoment = new Map<
-    string,
-    {
-      age: number;
-      avatar_url: string | null;
-      display_name: string;
-      id: string;
-      location: string;
-    }[]
-  >();
-  likesResult.data?.forEach((like) => {
-    if (!("user_id" in like)) {
-      return;
-    }
-
-    const profile = likerProfilesById.get(like.user_id);
-
-    if (!profile) {
-      return;
-    }
-
-    likesByMoment.set(like.moment_id, [
-      ...(likesByMoment.get(like.moment_id) ?? []),
-      profile,
-    ]);
-  });
-  const momentCards: MomentCard[] = visibleMoments
+  const momentCards = visibleMoments
     .map((moment) => {
       const profile = profilesById.get(moment.user_id);
 
@@ -155,11 +106,13 @@ export default async function MomentsPage() {
         giftCount: giftCounts.get(moment.id) ?? 0,
         liked: likedMomentIds.has(moment.id),
         likeCount: likeCounts.get(moment.id) ?? 0,
-        likers: likesByMoment.get(moment.id) ?? [],
+        likers: [] as MomentCard["likers"],
         profile,
       };
     })
     .filter((moment): moment is MomentCard => Boolean(moment));
+
+  logPerf("Moments queries", perfStartedAt);
 
   return (
     <AppShell
