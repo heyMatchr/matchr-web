@@ -1110,12 +1110,19 @@ function CallExperience({
         {isVideoCall ? (
           <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-neutral-950">
             {remoteHasVideo && isTrackReference(remoteCameraTrack) ? (
-              <VideoTrack
-                trackRef={remoteCameraTrack}
-                autoPlay
-                playsInline
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+              <div
+                className="absolute inset-0 !scale-x-100 !transform-none"
+                style={{ transform: "none" }}
+              >
+                {/* Only mirror local preview. Remote participant video must remain true orientation. */}
+                <VideoTrack
+                  trackRef={remoteCameraTrack}
+                  autoPlay
+                  playsInline
+                  className="h-full w-full !scale-x-100 !transform-none object-cover"
+                  style={{ transform: "none" }}
+                />
+              </div>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center bg-neutral-950">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.16)_0%,_rgba(0,0,0,0)_58%)]" />
@@ -1151,12 +1158,13 @@ function CallExperience({
 
             <div className="absolute bottom-28 right-4 z-20 h-36 w-24 overflow-hidden rounded-[1.6rem] border border-white/15 bg-black/70 shadow-[0_0_45px_rgba(0,0,0,0.45)] backdrop-blur md:bottom-32 md:right-6 md:h-44 md:w-32">
               {localHasVideo && isTrackReference(localCameraTrack) ? (
+                // Only mirror local preview. Remote participant video must remain true orientation.
                 <VideoTrack
                   trackRef={localCameraTrack}
                   autoPlay
                   muted
                   playsInline
-                  className="h-full w-full object-cover"
+                  className="h-full w-full scale-x-[-1] object-cover"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
