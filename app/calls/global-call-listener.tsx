@@ -18,6 +18,19 @@ type GlobalCallListenerProps = {
 
 const CALL_SELECT =
   "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";
+const ENABLE_CALL_DEBUG = process.env.NODE_ENV === "development";
+
+function debugLog(...args: Parameters<typeof console.log>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.log(...args);
+  }
+}
+
+function debugError(...args: Parameters<typeof console.error>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.error(...args);
+  }
+}
 
 function callLabel(callType: string) {
   return callType === "video" ? "Video" : "Audio";
@@ -43,7 +56,7 @@ export function GlobalCallListener({
 
   const enterCallRoom = useCallback(
     (callId: string) => {
-      console.log("[Matchr calls] global redirect to call room", callId);
+      debugLog("[Matchr calls] global redirect to call room", callId);
       router.push(`/calls/${callId}`);
       window.setTimeout(() => {
         if (window.location.pathname !== `/calls/${callId}`) {
@@ -218,7 +231,7 @@ export function GlobalCallListener({
         },
         (payload) => {
           const call = payload.new as CallSessionRow;
-          console.log("[Matchr calls] incoming insert", call.id, call.status);
+          debugLog("[Matchr calls] incoming insert", call.id, call.status);
           void showIncomingCall(call);
         },
       )
@@ -232,7 +245,7 @@ export function GlobalCallListener({
         },
         (payload) => {
           const call = payload.new as CallSessionRow;
-          console.log("[Matchr calls] receiver update", call.id, call.status);
+          debugLog("[Matchr calls] receiver update", call.id, call.status);
 
           if (call.status === "ringing") {
             void showIncomingCall(call);
@@ -260,7 +273,7 @@ export function GlobalCallListener({
         },
         (payload) => {
           const call = payload.new as CallSessionRow;
-          console.log("[Matchr calls] caller update", call.id, call.status);
+          debugLog("[Matchr calls] caller update", call.id, call.status);
 
           if (call.status === "accepted") {
             enterCallRoom(call.id);
@@ -302,7 +315,7 @@ export function GlobalCallListener({
 
     const timestamp = new Date().toISOString();
     if (status === "accepted") {
-      console.log("[CallLifecycle] accepted", { callId: call.id });
+      debugLog("[CallLifecycle] accepted", { callId: call.id });
     }
     const { data, error } = await supabase
       .from("call_sessions")
@@ -317,7 +330,7 @@ export function GlobalCallListener({
       .single();
 
     if (error) {
-      console.error("[CallLifecycle] accept update failed", {
+      debugError("[CallLifecycle] accept update failed", {
         callId: call.id,
         error,
       });
@@ -325,7 +338,7 @@ export function GlobalCallListener({
     }
 
     if (!data) {
-      console.error("[CallLifecycle] accept update failed", {
+      debugError("[CallLifecycle] accept update failed", {
         callId: call.id,
         error: "No call row returned",
       });
@@ -333,7 +346,7 @@ export function GlobalCallListener({
     }
 
     if (status === "accepted") {
-      console.log("[CallLifecycle] accepted row", data);
+      debugLog("[CallLifecycle] accepted row", data);
     }
 
     setIncomingCall(null);

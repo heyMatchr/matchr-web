@@ -19,6 +19,19 @@ type CallControlsProps = {
 
 const CALL_SELECT =
   "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";
+const ENABLE_CALL_DEBUG = process.env.NODE_ENV === "development";
+
+function debugLog(...args: Parameters<typeof console.log>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.log(...args);
+  }
+}
+
+function debugError(...args: Parameters<typeof console.error>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.error(...args);
+  }
+}
 
 function PhoneIcon() {
   return (
@@ -111,7 +124,7 @@ export function CallControls({
   );
   const enterCallRoom = useCallback(
     (callId: string) => {
-      console.log("[Matchr calls] redirecting to call room", callId);
+      debugLog("[Matchr calls] redirecting to call room", callId);
       router.push(`/calls/${callId}`);
       window.setTimeout(() => {
         if (window.location.pathname !== `/calls/${callId}`) {
@@ -137,7 +150,7 @@ export function CallControls({
 
   useEffect(() => {
     function handleCallUpdate(call: CallSessionRow) {
-      console.log("[Matchr calls] status update", call.id, call.status);
+      debugLog("[Matchr calls] status update", call.id, call.status);
 
       if (call.match_id !== matchId) {
         return;
@@ -210,12 +223,12 @@ export function CallControls({
         })
         .eq("id", outgoingCall.id);
       if (missedError) {
-        console.error("[CallLifecycle] missed update failed", {
+        debugError("[CallLifecycle] missed update failed", {
           callId: outgoingCall.id,
           error: missedError,
         });
       } else {
-        console.log("[CallLifecycle] marked missed", { callId: outgoingCall.id });
+        debugLog("[CallLifecycle] marked missed", { callId: outgoingCall.id });
       }
       await insertCallMessage(`Missed ${outgoingCall.call_type} call.`);
       await supabase.from("notifications").insert({
@@ -244,7 +257,7 @@ export function CallControls({
         return;
       }
 
-      console.log("[Matchr calls] polling call status", data.id, data.status);
+      debugLog("[Matchr calls] polling call status", data.id, data.status);
 
       if (data.status === "accepted") {
         setOutgoingCall(null);
@@ -292,18 +305,18 @@ export function CallControls({
         .single();
 
       if (insertError) {
-        console.error("[CallLifecycle] create failed", insertError);
+        debugError("[CallLifecycle] create failed", insertError);
         setError(insertError.message);
         return;
       }
 
       if (!data) {
-        console.error("[CallLifecycle] create failed", "No call row returned");
+        debugError("[CallLifecycle] create failed", "No call row returned");
         setError("Could not start the call.");
         return;
       }
 
-      console.log("[CallLifecycle] created row", data);
+      debugLog("[CallLifecycle] created row", data);
       setLastCallStartedAt(Date.now());
       setOutgoingCall(data);
       await insertCallMessage(`${callLabel(callType)} call started.`);
@@ -321,10 +334,10 @@ export function CallControls({
   async function updateCall(call: CallSessionRow, status: "accepted" | "declined" | "ended" | "missed") {
     const timestamp = new Date().toISOString();
     if (status === "accepted") {
-      console.log("[CallLifecycle] accepted", { callId: call.id });
+      debugLog("[CallLifecycle] accepted", { callId: call.id });
     }
     if (status === "ended") {
-      console.log("[CallLifecycle] ended", { callId: call.id });
+      debugLog("[CallLifecycle] ended", { callId: call.id });
     }
     const { data } = await supabase
       .from("call_sessions")
@@ -343,7 +356,7 @@ export function CallControls({
     }
 
     if (status === "accepted") {
-      console.log("[Matchr calls] accepted", data.id);
+      debugLog("[Matchr calls] accepted", data.id);
       enterCallRoom(data.id);
     }
 

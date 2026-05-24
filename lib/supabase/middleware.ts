@@ -38,12 +38,19 @@ export async function updateSupabaseSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/calls") ||
     request.nextUrl.pathname.startsWith("/dashboard") ||
     request.nextUrl.pathname.startsWith("/chat") ||
     request.nextUrl.pathname.startsWith("/discover") ||
+    request.nextUrl.pathname.startsWith("/liked-you") ||
     request.nextUrl.pathname.startsWith("/matches") ||
+    request.nextUrl.pathname.startsWith("/messages") ||
+    request.nextUrl.pathname.startsWith("/moments") ||
+    request.nextUrl.pathname.startsWith("/notifications") ||
     request.nextUrl.pathname.startsWith("/onboarding") ||
-    request.nextUrl.pathname.startsWith("/profile");
+    request.nextUrl.pathname.startsWith("/profile") ||
+    request.nextUrl.pathname.startsWith("/settings") ||
+    request.nextUrl.pathname.startsWith("/wallet");
 
   if (!user && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone();

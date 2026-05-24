@@ -26,20 +26,22 @@ export function getLiveKitEnvDiagnostics(source: string): LiveKitEnvDiagnostics 
     url: Boolean(url),
   };
 
-  console.log(`[Matchr LiveKit env] ${source}`, {
-    LIVEKIT_API_KEY: {
-      exists: status.apiKey,
-      masked: maskValue(apiKey),
-    },
-    LIVEKIT_API_SECRET: {
-      exists: status.apiSecret,
-      masked: maskValue(apiSecret),
-    },
-    NEXT_PUBLIC_LIVEKIT_URL: {
-      exists: status.url,
-      masked: maskValue(url),
-    },
-  });
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[Matchr LiveKit env] ${source}`, {
+      LIVEKIT_API_KEY: {
+        exists: status.apiKey,
+        masked: maskValue(apiKey),
+      },
+      LIVEKIT_API_SECRET: {
+        exists: status.apiSecret,
+        masked: maskValue(apiSecret),
+      },
+      NEXT_PUBLIC_LIVEKIT_URL: {
+        exists: status.url,
+        masked: maskValue(url),
+      },
+    });
+  }
 
   return {
     apiKey,

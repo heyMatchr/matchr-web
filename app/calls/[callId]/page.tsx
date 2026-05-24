@@ -13,7 +13,9 @@ type CallPageProps = {
 
 export default async function CallRoomPage({ params }: CallPageProps) {
   const { callId } = await params;
-  console.log("[CallDebugPage] route loaded", { callId });
+  if (process.env.NODE_ENV === "development") {
+    console.log("[CallDebugPage] route loaded", { callId });
+  }
   const liveKitEnv = getLiveKitEnvDiagnostics("app/calls/[callId]");
   const supabase = await createSupabaseServerClient();
   const {

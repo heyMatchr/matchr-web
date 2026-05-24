@@ -51,6 +51,25 @@ type CallStage = "config-missing" | "error" | "loading" | "ready";
 
 const CALL_SELECT =
   "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";
+const ENABLE_CALL_DEBUG = process.env.NODE_ENV === "development";
+
+function debugLog(...args: Parameters<typeof console.log>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.log(...args);
+  }
+}
+
+function debugWarn(...args: Parameters<typeof console.warn>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.warn(...args);
+  }
+}
+
+function debugError(...args: Parameters<typeof console.error>) {
+  if (ENABLE_CALL_DEBUG) {
+    console.error(...args);
+  }
+}
 
 function formatDuration(startedAt: string | null, currentTime: number) {
   if (!startedAt) return "00:00";
@@ -167,7 +186,7 @@ export function LiveKitCallRoom({
 }: LiveKitCallRoomProps) {
   const router = useRouter();
   const [call, setCall] = useState(initialCall);
-  console.log("[CallDebugRoom] render", {
+  debugLog("[CallDebugRoom] render", {
     callType: call.call_type,
     initialCallId: initialCall.id,
     status: call.status,
@@ -193,7 +212,7 @@ export function LiveKitCallRoom({
   );
 
   useEffect(() => {
-    console.log("[CallLifecycle] mounted call room", {
+    debugLog("[CallLifecycle] mounted call room", {
       accepted_at: initialCall.accepted_at,
       callId: initialCall.id,
       connection_state: initialCall.connection_state,
@@ -218,11 +237,11 @@ export function LiveKitCallRoom({
   }, [initialCall.id, matchId, router]);
 
   const exitEndedCall = useCallback(() => {
-    console.log("[CallEndDebug] redirect fired", {
+    debugLog("[CallEndDebug] redirect fired", {
       callId: initialCall.id,
       destination: "/messages",
     });
-    console.log("[CallEndSync] redirecting to chat", {
+    debugLog("[CallEndSync] redirecting to chat", {
       callId: initialCall.id,
       destination: "/messages",
     });
@@ -252,7 +271,7 @@ export function LiveKitCallRoom({
 
     if (hasEndedRef.current && isTerminalCallStatus(call.status)) return;
 
-    console.log("[CallEnd] remote ended detected", {
+    debugLog("[CallEnd] remote ended detected", {
       callId: initialCall.id,
       status: nextCall.status,
     });
@@ -272,24 +291,24 @@ export function LiveKitCallRoom({
     hasEndedRef.current = true;
 
     const endedAt = new Date().toISOString();
-    console.log("[CallEndDebug] end clicked", {
+    debugLog("[CallEndDebug] end clicked", {
       callId: initialCall.id,
       currentUserId,
       localStatus: call.status,
       roomState: connectionState,
     });
-    console.log("[CallLifecycle] ended", { callId: initialCall.id });
-    console.log("[CallEndSync] end clicked", {
+    debugLog("[CallLifecycle] ended", { callId: initialCall.id });
+    debugLog("[CallEndSync] end clicked", {
       callId: initialCall.id,
       currentUserId,
       localStatus: call.status,
     });
-    console.log("[CallEnd] local end clicked", {
+    debugLog("[CallEnd] local end clicked", {
       callId: initialCall.id,
       currentUserId,
       localStatus: call.status,
     });
-    console.log("[CallControl] endCall clicked", {
+    debugLog("[CallControl] endCall clicked", {
       callId: initialCall.id,
       currentUserId,
       localStatus: call.status,
@@ -309,14 +328,14 @@ export function LiveKitCallRoom({
       .select(CALL_SELECT)
       .single();
 
-    console.log("[CallEndDebug] update result", {
+    debugLog("[CallEndDebug] update result", {
       callId: initialCall.id,
       data,
       error,
     });
 
     if (error) {
-      console.error("[CallLifecycle] ended update failed", {
+      debugError("[CallLifecycle] ended update failed", {
         callId: initialCall.id,
         error,
       });
@@ -324,8 +343,8 @@ export function LiveKitCallRoom({
       return;
     }
 
-    console.log("[CallLifecycle] ended row", data);
-    console.log("[CallEndSync] status updated to ended", {
+    debugLog("[CallLifecycle] ended row", data);
+    debugLog("[CallEndSync] status updated to ended", {
       callId: initialCall.id,
     });
     setCall((current) => ({
@@ -386,7 +405,7 @@ export function LiveKitCallRoom({
           return;
         }
 
-        console.log("[Matchr LiveKit] token fetched", {
+        debugLog("[Matchr LiveKit] token fetched", {
           currentUserId,
           roomName: payload.roomName,
           tokenIdentity: currentUserId,
@@ -420,13 +439,13 @@ export function LiveKitCallRoom({
         },
         (payload) => {
           const nextCall = payload.new as CallSessionRow;
-          console.log("[CallEndDebug] realtime update", {
+          debugLog("[CallEndDebug] realtime update", {
             callId: initialCall.id,
             status: nextCall.status,
           });
 
           if (isTerminalCallStatus(nextCall.status)) {
-            console.log("[CallEndSync] remote ended detected by realtime", {
+            debugLog("[CallEndSync] remote ended detected by realtime", {
               callId: initialCall.id,
               status: nextCall.status,
             });
@@ -465,40 +484,40 @@ export function LiveKitCallRoom({
       if (!active) return;
 
       if (error) {
-        console.log("[CallEndDebug] polling result", {
+        debugLog("[CallEndDebug] polling result", {
           callId: initialCall.id,
           ended_at: polledCall?.ended_at,
           status: polledCall?.status,
         });
-        console.log("[CallEndDebug] polling status result", {
+        debugLog("[CallEndDebug] polling status result", {
           callId: initialCall.id,
           data,
           error,
         });
-        console.warn("[Matchr LiveKit] call status polling failed", {
+        debugWarn("[Matchr LiveKit] call status polling failed", {
           callId: initialCall.id,
           error: error.message,
         });
         return;
       }
 
-      console.log("[CallEndDebug] polling result", {
+      debugLog("[CallEndDebug] polling result", {
         callId: initialCall.id,
         ended_at: polledCall?.ended_at,
         status: polledCall?.status,
       });
-      console.log("[CallEndDebug] polling status result", {
+      debugLog("[CallEndDebug] polling status result", {
         callId: initialCall.id,
         data,
         error: null,
       });
 
       if (polledCall && isTerminalCallStatus(polledCall.status)) {
-        console.log("[CallEndSync] remote ended detected by polling", {
+        debugLog("[CallEndSync] remote ended detected by polling", {
           callId: initialCall.id,
           status: polledCall.status,
         });
-        console.log("[Matchr LiveKit] polling detected terminal call status", {
+        debugLog("[Matchr LiveKit] polling detected terminal call status", {
           callId: initialCall.id,
           status: polledCall.status,
         });
@@ -566,7 +585,7 @@ export function LiveKitCallRoom({
       options={{ adaptiveStream: true, dynacast: true }}
       connectOptions={{ autoSubscribe: true }}
       onConnected={() => {
-        console.log("[Matchr LiveKit] room connected");
+        debugLog("[Matchr LiveKit] room connected");
         setConnectionState(ConnectionState.Connected);
         void (async () => {
           const { data: latestCall, error: fetchError } = await supabase
@@ -576,7 +595,7 @@ export function LiveKitCallRoom({
             .maybeSingle();
 
           if (fetchError) {
-            console.error("[CallLifecycle] started update failed", {
+            debugError("[CallLifecycle] started update failed", {
               callId: initialCall.id,
               error: fetchError,
             });
@@ -584,7 +603,7 @@ export function LiveKitCallRoom({
           }
 
           const startedAt = latestCall?.started_at ?? new Date().toISOString();
-          console.log("[CallLifecycle] started", { callId: initialCall.id });
+          debugLog("[CallLifecycle] started", { callId: initialCall.id });
           const { data, error } = await supabase
             .from("call_sessions")
             .update({
@@ -596,28 +615,28 @@ export function LiveKitCallRoom({
             .single();
 
           if (error) {
-            console.error("[CallLifecycle] started update failed", {
+            debugError("[CallLifecycle] started update failed", {
               callId: initialCall.id,
               error,
             });
             return;
           }
 
-          console.log("[CallLifecycle] started row", data);
+          debugLog("[CallLifecycle] started row", data);
         })();
       }}
       onDisconnected={() => {
-        console.log("[Matchr LiveKit] room disconnected");
+        debugLog("[Matchr LiveKit] room disconnected");
         if (endedRemotely || hasEndedRef.current) return;
         setConnectionState("ended");
       }}
       onError={(error) => {
-        console.error("[Matchr LiveKit] room error", error);
+        debugError("[Matchr LiveKit] room error", error);
         setTokenError(error.message);
         setStage("error");
       }}
       onMediaDeviceFailure={(failure, kind) => {
-        console.warn("[Matchr LiveKit] media device failure", kind, failure);
+        debugWarn("[Matchr LiveKit] media device failure", kind, failure);
       }}
       className="fixed inset-0 z-[100] min-h-screen overflow-hidden bg-black text-white"
     >
@@ -802,14 +821,14 @@ function CallExperience({
     if (isCallEnded) return;
 
     const debugTimer = window.setInterval(() => {
-      console.log("[CallDebug]", callDebugValues);
+      debugLog("[CallDebug]", callDebugValues);
     }, 2000);
 
     return () => window.clearInterval(debugTimer);
   }, [callDebugValues, isCallEnded]);
 
   useEffect(() => {
-    console.log("[Matchr LiveKit] call_type loaded", {
+    debugLog("[Matchr LiveKit] call_type loaded", {
       callId,
       callType: supabaseCallType,
       isVideoCall,
@@ -820,7 +839,7 @@ function CallExperience({
   useEffect(() => {
     if (supabaseCallStatus !== "accepted") return;
 
-    console.log("[Matchr LiveKit] accepted state received", {
+    debugLog("[Matchr LiveKit] accepted state received", {
       callId,
       callType: supabaseCallType,
       roomName,
@@ -828,7 +847,7 @@ function CallExperience({
   }, [callId, roomName, supabaseCallStatus, supabaseCallType]);
 
   useEffect(() => {
-    console.log("[Matchr LiveKit] selected video participants", {
+    debugLog("[Matchr LiveKit] selected video participants", {
       activeLocalVideoParticipantId,
       activeRemoteVideoParticipantId,
       isVideoCall,
@@ -851,25 +870,25 @@ function CallExperience({
     }
 
     function onParticipantConnected(participant: { identity: string }) {
-      console.log("[Matchr LiveKit] participant connected", {
+      debugLog("[Matchr LiveKit] participant connected", {
         identity: participant.identity,
         roomName,
       });
-      console.log("[Matchr LiveKit] remote participant joins", {
+      debugLog("[Matchr LiveKit] remote participant joins", {
         identity: participant.identity,
         roomName,
       });
     }
 
     function onParticipantDisconnected(participant: { identity: string }) {
-      console.log("[Matchr LiveKit] participant disconnected", {
+      debugLog("[Matchr LiveKit] participant disconnected", {
         identity: participant.identity,
         roomName,
       });
     }
 
     function onLocalTrackPublished(publication: { kind: Track.Kind; source: Track.Source }) {
-      console.log("[Matchr LiveKit] local track published", {
+      debugLog("[Matchr LiveKit] local track published", {
         identity: localParticipant.identity,
         kind: publication.kind,
         roomName,
@@ -877,7 +896,7 @@ function CallExperience({
       });
 
       if (publication.source === Track.Source.Camera) {
-        console.log("[Matchr LiveKit] local camera publishes", {
+        debugLog("[Matchr LiveKit] local camera publishes", {
           identity: localParticipant.identity,
           roomName,
         });
@@ -889,7 +908,7 @@ function CallExperience({
       publication: { isSubscribed: boolean; trackSid: string },
       participant: { identity: string },
     ) {
-      console.log("[Matchr LiveKit] remote track subscribed", {
+      debugLog("[Matchr LiveKit] remote track subscribed", {
         isSubscribed: publication.isSubscribed,
         kind: track.kind,
         participantIdentity: participant.identity,
@@ -899,14 +918,14 @@ function CallExperience({
       });
 
       if (track.kind === Track.Kind.Audio) {
-        console.log("[Matchr LiveKit] remote audio track subscribes", {
+        debugLog("[Matchr LiveKit] remote audio track subscribes", {
           participantIdentity: participant.identity,
           roomName,
         });
       }
 
       if (track.kind === Track.Kind.Video) {
-        console.log("[Matchr LiveKit] remote video track subscribes", {
+        debugLog("[Matchr LiveKit] remote video track subscribes", {
           participantIdentity: participant.identity,
           roomName,
         });
@@ -918,7 +937,7 @@ function CallExperience({
       publication: { trackSid: string },
       participant: { identity: string },
     ) {
-      console.log("[Matchr LiveKit] track unsubscribed", {
+      debugLog("[Matchr LiveKit] track unsubscribed", {
         kind: track.kind,
         participantIdentity: participant.identity,
         roomName,
@@ -983,7 +1002,7 @@ function CallExperience({
     cleanupEndedRef.current = true;
 
     async function cleanupEndedCall() {
-      console.log("[Matchr LiveKit] cleaning up ended call", {
+      debugLog("[Matchr LiveKit] cleaning up ended call", {
         roomName,
         status: supabaseCallStatus,
       });
@@ -993,7 +1012,7 @@ function CallExperience({
         room.localParticipant.setMicrophoneEnabled(false),
       ]);
       await room.disconnect(true);
-      console.log("[CallEndSync] redirecting to chat", {
+      debugLog("[CallEndSync] redirecting to chat", {
         callId,
         status: supabaseCallStatus,
       });
@@ -1005,7 +1024,7 @@ function CallExperience({
 
   async function toggleMic() {
     setControlNotice("Mic clicked");
-    console.log("[CallControl] toggleMic clicked", {
+    debugLog("[CallControl] toggleMic clicked", {
       callId,
       currentUserId,
       localStatus: supabaseCallStatus,
@@ -1017,7 +1036,7 @@ function CallExperience({
       await room.localParticipant.setMicrophoneEnabled(next);
       setControlNotice(next ? "Microphone on" : "Microphone muted");
     } catch (error) {
-      console.warn("[Matchr LiveKit] microphone toggle failed", {
+      debugWarn("[Matchr LiveKit] microphone toggle failed", {
         callId,
         error: error instanceof Error ? error.message : error,
       });
@@ -1073,7 +1092,7 @@ function CallExperience({
 
       setControlNotice("Camera switch unavailable.");
     } catch (error) {
-      console.warn("[Matchr LiveKit] camera switch failed", {
+      debugWarn("[Matchr LiveKit] camera switch failed", {
         callId,
         error: error instanceof Error ? error.message : error,
       });
@@ -1083,12 +1102,12 @@ function CallExperience({
 
   function handleEndClick() {
     setControlNotice("End clicked");
-    console.log("[CallEndSync] end clicked", {
+    debugLog("[CallEndSync] end clicked", {
       callId,
       currentUserId,
       localStatus: supabaseCallStatus,
     });
-    console.log("[CallControl] endCall clicked", {
+    debugLog("[CallControl] endCall clicked", {
       callId,
       currentUserId,
       localStatus: supabaseCallStatus,

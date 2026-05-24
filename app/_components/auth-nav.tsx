@@ -3,7 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { logOut } from "@/app/auth/actions";
 import type { Database, MatchRow } from "@/lib/supabase/types";
@@ -147,6 +147,7 @@ export function AuthNav({
   const [hasNewMatches, setHasNewMatches] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
+  const pathnameRef = useRef(pathname);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -211,6 +212,41 @@ export function AuthNav({
   const seenMatchesKey = `matchr_seen_matches_${currentUserId}`;
 
   useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!pathname.startsWith("/matches")) {
+      return;
+    }
+
+    let active = true;
+
+    async function markMatchesSeen() {
+      const { data } = await supabase
+        .from("matches")
+        .select("id")
+        .or(`user_one_id.eq.${currentUserId},user_two_id.eq.${currentUserId}`);
+
+      if (!active) {
+        return;
+      }
+
+      localStorage.setItem(
+        seenMatchesKey,
+        JSON.stringify(data?.map((match) => match.id) ?? []),
+      );
+      setHasNewMatches(false);
+    }
+
+    void markMatchesSeen();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, pathname, seenMatchesKey, supabase]);
+
+  useEffect(() => {
     let active = true;
 
     async function refreshUnreadCount() {
@@ -252,7 +288,7 @@ export function AuthNav({
         JSON.parse(localStorage.getItem(seenMatchesKey) ?? "[]") as string[],
       );
 
-      if (pathname.startsWith("/matches")) {
+      if (pathnameRef.current.startsWith("/matches")) {
         localStorage.setItem(seenMatchesKey, JSON.stringify(matchIds));
         setHasNewMatches(false);
         return;
@@ -326,7 +362,7 @@ export function AuthNav({
         (payload) => {
           const match = payload.new as MatchRow;
 
-          if (pathname.startsWith("/matches")) {
+          if (pathnameRef.current.startsWith("/matches")) {
             const seenIds = new Set(
               JSON.parse(localStorage.getItem(seenMatchesKey) ?? "[]") as string[],
             );
@@ -350,7 +386,7 @@ export function AuthNav({
         (payload) => {
           const match = payload.new as MatchRow;
 
-          if (pathname.startsWith("/matches")) {
+          if (pathnameRef.current.startsWith("/matches")) {
             const seenIds = new Set(
               JSON.parse(localStorage.getItem(seenMatchesKey) ?? "[]") as string[],
             );
@@ -369,7 +405,7 @@ export function AuthNav({
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, [currentUserId, pathname, seenMatchesKey, supabase]);
+  }, [currentUserId, seenMatchesKey, supabase]);
 
   function renderNotification(item: NavItem) {
     if (item.notification === "notifications" && notificationCount > 0) {
