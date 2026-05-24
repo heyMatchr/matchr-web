@@ -117,14 +117,14 @@ export function MomentsClient({
 
   return (
     <>
-      <div className="mt-6 flex items-center justify-between gap-4 md:mt-8">
-        <p className="text-sm leading-6 text-neutral-400">
+      <div className="mt-6 flex min-w-0 items-center justify-between gap-3 md:mt-8">
+        <p className="min-w-0 text-sm leading-6 text-neutral-400">
           Share moments with your Matchr circle.
         </p>
         <button
           type="button"
           onClick={() => setIsCreateOpen(true)}
-          className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
+          className="shrink-0 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
         >
           Post
         </button>
@@ -139,7 +139,7 @@ export function MomentsClient({
             return (
             <article
               key={moment.id}
-              className="overflow-hidden rounded-lg border border-neutral-800 bg-black/50"
+              className="min-w-0 overflow-hidden rounded-lg border border-neutral-800 bg-black/50"
             >
               <div className="flex items-center gap-3 p-4">
                 <Link
@@ -233,7 +233,7 @@ export function MomentsClient({
               </div>
 
               <div className="p-4">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <form action={async () => {
                     await toggleMomentLike(moment.id, moment.user_id);
                   }}>
@@ -251,14 +251,14 @@ export function MomentsClient({
                   <button
                     type="button"
                     onClick={() => setActiveComments(moment)}
-                    className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+                    className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
                   >
                     {moment.commentCount} comments
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveGifts(moment)}
-                    className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+                    className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
                   >
                     Gift
                   </button>

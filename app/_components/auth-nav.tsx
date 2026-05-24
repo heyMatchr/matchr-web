@@ -204,7 +204,7 @@ export function AuthNav({
     }`;
 
   const mobileLinkClass = (active: boolean) =>
-    `relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] transition-all duration-300 ${
+    `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-2xl px-1 py-2 text-[10px] transition-all duration-300 min-[390px]:gap-1 min-[390px]:px-2 min-[390px]:text-[11px] ${
       active
         ? "scale-[1.02] bg-emerald-300/10 text-emerald-100 shadow-[0_0_22px_rgba(74,222,128,0.10)]"
         : "text-neutral-500 hover:text-neutral-200"
@@ -490,8 +490,8 @@ export function AuthNav({
         </form>
       </aside>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-black/75 px-3 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 shadow-[0_-16px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
-        <div className="mx-auto flex max-w-md items-center gap-1.5">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-full overflow-hidden border-t border-white/10 bg-black/75 px-2 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 shadow-[0_-16px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
+        <div className="mx-auto flex max-w-md items-center gap-1 min-[390px]:gap-1.5">
           {navItems.map((item) => (
             <Link
               key={item.href}

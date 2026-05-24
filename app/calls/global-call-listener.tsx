@@ -375,7 +375,7 @@ export function GlobalCallListener({
   const isVideoCall = incomingCall.call_type === "video";
 
   return (
-    <div className="fixed inset-0 z-[90] flex min-h-screen items-center justify-center bg-black/90 p-5 text-white backdrop-blur-2xl">
+    <div className="fixed inset-0 z-[90] flex min-h-[100dvh] items-center justify-center bg-black/90 p-5 text-white backdrop-blur-2xl">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.20)_0%,_rgba(0,0,0,0)_48%)]" />
       <div className="relative w-full max-w-sm text-center">
         <div className="mx-auto grid h-28 w-28 place-items-center overflow-hidden rounded-full border border-emerald-300/25 bg-neutral-950 shadow-[0_0_80px_rgba(16,185,129,0.18)]">

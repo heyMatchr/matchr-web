@@ -415,7 +415,7 @@ export function CallControls({
       ) : null}
 
       {outgoingCall ? (
-        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[80] grid min-h-[100dvh] place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center">
             <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">
               {callLabel(outgoingCall.call_type)} Calling

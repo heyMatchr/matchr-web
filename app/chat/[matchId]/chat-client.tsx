@@ -710,7 +710,7 @@ export function ChatClient({
             : "Opened";
 
         return (
-          <div className="flex min-h-12 w-44 items-center gap-3 rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-2 text-left sm:w-48">
+          <div className="flex min-h-12 w-40 max-w-full items-center gap-3 rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-2 text-left sm:w-48">
             <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-300/25 bg-emerald-300/10 text-sm text-emerald-100">
               ◇
             </div>
@@ -741,7 +741,7 @@ export function ChatClient({
             event.preventDefault();
             showPrivacyWarning();
           }}
-          className="group relative h-36 w-40 overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
+          className="group relative h-36 w-40 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
         >
           {message.media_type === "video" ? (
             <video
@@ -805,7 +805,7 @@ export function ChatClient({
           controls
           playsInline
           preload="metadata"
-          className="max-h-72 rounded-2xl object-contain"
+          className="max-h-72 max-w-full rounded-2xl object-contain"
         />
       ) : (
         <Image
@@ -814,7 +814,7 @@ export function ChatClient({
           width={640}
           height={640}
           sizes="(min-width: 640px) 70vw, 82vw"
-          className="h-auto max-h-72 rounded-2xl object-contain"
+          className="h-auto max-h-72 max-w-full rounded-2xl object-contain"
         />
       );
     }
@@ -827,11 +827,11 @@ export function ChatClient({
   }
 
   return (
-    <div className="mt-2 flex h-[calc(100dvh-9.25rem)] min-h-[540px] flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
-      <div className="flex min-h-16 items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-6">
+    <div className="mt-2 flex h-[calc(100dvh-10.75rem)] min-h-0 w-full max-w-full flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
+      <div className="flex min-h-16 items-center justify-between gap-2 border-b border-neutral-800 px-3 py-3 sm:px-6">
         <Link
           href={`/profile/${receiverId}`}
-          className="flex min-w-0 items-center gap-3 rounded-full pr-3 transition-colors hover:bg-white/[0.03]"
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-full pr-2 transition-colors hover:bg-white/[0.03]"
         >
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950">
             {receiverAvatarUrl ? (
@@ -862,7 +862,7 @@ export function ChatClient({
             </p>
           </div>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div
             aria-hidden="true"
             className={`h-2.5 w-2.5 rounded-full transition-colors ${
@@ -873,7 +873,7 @@ export function ChatClient({
         </div>
       </div>
 
-      <div className="flex-1 space-y-2.5 overflow-y-auto p-3 pb-8 sm:space-y-3 sm:p-6 sm:pb-8">
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3 pb-8 sm:space-y-3 sm:p-6 sm:pb-8">
         {messages.length > 0 ? (
           messages.map((message) => {
             const isMine = message.sender_id === currentUserId;
@@ -884,7 +884,7 @@ export function ChatClient({
                 className={`flex ${isMine ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[82%] rounded-3xl px-4 py-3 sm:max-w-[70%] ${
+                  className={`max-w-[88%] overflow-hidden rounded-3xl px-4 py-3 sm:max-w-[70%] ${
                     isMine
                       ? "bg-white text-black"
                       : "border border-neutral-800 bg-neutral-950 text-white"
@@ -927,19 +927,19 @@ export function ChatClient({
 
       <form
         onSubmit={sendMessage}
-        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-3 pb-[calc(env(safe-area-inset-bottom)+0.9rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
+        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-2.5 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
-        <div className="relative flex gap-3">
+        <div className="relative flex min-w-0 gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setIsMediaMenuOpen((current) => !current)}
             aria-label="Open media options"
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15 sm:h-12 sm:w-12"
           >
             +
           </button>
           {isMediaMenuOpen ? (
-            <div className="absolute bottom-16 left-0 z-20 grid w-56 gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+            <div className="absolute bottom-16 left-0 z-20 grid w-56 max-w-[calc(100vw-2rem)] gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
               <p className="px-3 py-2 text-xs text-neutral-500">
                 {goldBalance} gold · Gold wallet coming soon
               </p>
@@ -1023,12 +1023,12 @@ export function ChatClient({
             disabled={sending}
             maxLength={1000}
             placeholder="Write a message"
-            className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-5 py-3 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60"
+            className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60 sm:px-5"
           />
           <button
             type="submit"
             disabled={sending}
-            className="rounded-full bg-white px-6 py-3 font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-60"
+            className="shrink-0 rounded-full bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-60 sm:px-6 sm:text-base"
           >
             {sending ? "..." : "Send"}
           </button>
@@ -1067,8 +1067,8 @@ export function ChatClient({
       ) : null}
 
       {activePrivateMessage?.media_url && activePrivateSeconds > 0 ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 p-4 text-white backdrop-blur-xl">
-          <div className="relative flex h-full max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)]">
+        <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
+          <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
             <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
               <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs uppercase tracking-[0.24em] text-emerald-100 backdrop-blur">
                 Private

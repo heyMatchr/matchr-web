@@ -638,7 +638,7 @@ export function LiveKitCallRoom({
       onMediaDeviceFailure={(failure, kind) => {
         debugWarn("[Matchr LiveKit] media device failure", kind, failure);
       }}
-      className="fixed inset-0 z-[100] min-h-screen overflow-hidden bg-black text-white"
+      className="fixed inset-0 z-[100] h-[100dvh] min-h-[100dvh] overflow-hidden bg-black text-white"
     >
       <CallExperience
         callId={initialCall.id}
@@ -1121,11 +1121,11 @@ function CallExperience({
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-black text-white">
+    <main className="relative h-[100dvh] min-h-[100dvh] overflow-hidden bg-black text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.20)_0%,_rgba(0,0,0,0)_45%)]" />
       <RoomAudioRenderer muted={false} />
 
-      <section className="relative flex min-h-screen flex-col">
+      <section className="relative flex h-[100dvh] min-h-0 flex-col">
         {isVideoCall ? (
           <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-neutral-950">
             {remoteHasVideo && isTrackReference(remoteCameraTrack) ? (
@@ -1163,7 +1163,7 @@ function CallExperience({
               />
             ) : null}
 
-            <div className="absolute left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-20 flex items-center justify-between rounded-full border border-white/10 bg-black/35 px-4 py-3 shadow-2xl backdrop-blur-xl md:left-6 md:right-6">
+            <div className="absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between rounded-full border border-white/10 bg-black/35 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:left-4 sm:right-4 sm:px-4 sm:py-3 md:left-6 md:right-6">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{otherName}</p>
                 <p className="mt-0.5 text-xs text-emerald-100/75">
@@ -1175,7 +1175,7 @@ function CallExperience({
               </span>
             </div>
 
-            <div className="absolute bottom-28 right-4 z-20 h-36 w-24 overflow-hidden rounded-[1.6rem] border border-white/15 bg-black/70 shadow-[0_0_45px_rgba(0,0,0,0.45)] backdrop-blur md:bottom-32 md:right-6 md:h-44 md:w-32">
+            <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+6.25rem)] right-3 z-20 h-28 w-20 overflow-hidden rounded-[1.35rem] border border-white/15 bg-black/70 shadow-[0_0_45px_rgba(0,0,0,0.45)] backdrop-blur sm:right-4 sm:h-36 sm:w-24 md:bottom-32 md:right-6 md:h-44 md:w-32">
               {localHasVideo && isTrackReference(localCameraTrack) ? (
                 // Only mirror local preview. Remote participant video must remain true orientation.
                 <VideoTrack
@@ -1202,7 +1202,7 @@ function CallExperience({
               </p>
             </div>
 
-            <div className="absolute left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-20 flex items-center justify-between rounded-full border border-white/10 bg-black/35 px-4 py-3 shadow-2xl backdrop-blur-xl md:left-6 md:right-6">
+            <div className="absolute left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex items-center justify-between rounded-full border border-white/10 bg-black/35 px-3 py-2.5 shadow-2xl backdrop-blur-xl sm:left-4 sm:right-4 sm:px-4 sm:py-3 md:left-6 md:right-6">
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{otherName}</p>
                 <p className="mt-0.5 text-xs text-emerald-100/75">
@@ -1250,8 +1250,8 @@ function CallSetupScreen({
   ];
 
   return (
-    <main className="min-h-screen bg-black px-5 py-10 text-white">
-      <div className="mx-auto flex min-h-[80vh] max-w-md flex-col items-center justify-center text-center">
+    <main className="min-h-[100dvh] bg-black px-5 py-10 text-white">
+      <div className="mx-auto flex min-h-[80dvh] max-w-md flex-col items-center justify-center text-center">
         <div className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-emerald-100">
           Calls
         </div>
@@ -1306,13 +1306,13 @@ function CallControlsBar({
   controlNotice: string;
 }) {
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-30 px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5">
+    <div className="absolute bottom-0 left-0 right-0 z-30 px-3 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-4 sm:px-5 sm:pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pt-5">
       {controlNotice ? (
         <p className="mx-auto mb-3 w-fit rounded-full border border-emerald-300/15 bg-black/55 px-3 py-1 text-center text-xs text-emerald-100/80 backdrop-blur">
           {controlNotice}
         </p>
       ) : null}
-      <div className="mx-auto flex w-fit items-center justify-center gap-3 rounded-full border border-white/10 bg-black/70 p-3 shadow-[0_0_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
+      <div className="mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 rounded-full border border-white/10 bg-black/70 p-2.5 shadow-[0_0_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:gap-3 sm:p-3">
         {isVideoCall ? (
           <IconButton
             active={!isCameraEnabled}
@@ -1342,7 +1342,7 @@ function CallControlsBar({
           type="button"
           onClick={onEnd}
           aria-label="End call"
-          className="grid h-14 w-14 place-items-center rounded-full border border-red-300/20 bg-red-500 text-white shadow-[0_0_45px_rgba(239,68,68,0.25)] transition hover:bg-red-400 active:scale-95"
+          className="grid h-12 w-12 place-items-center rounded-full border border-red-300/20 bg-red-500 text-white shadow-[0_0_45px_rgba(239,68,68,0.25)] transition hover:bg-red-400 active:scale-95 sm:h-14 sm:w-14"
         >
           <PhoneOffIcon />
         </button>
@@ -1367,7 +1367,7 @@ function IconButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`grid h-14 w-14 place-items-center rounded-full border transition active:scale-95 ${
+      className={`grid h-12 w-12 place-items-center rounded-full border transition active:scale-95 sm:h-14 sm:w-14 ${
         active
           ? "border-emerald-300/35 bg-emerald-300/15 text-emerald-100 shadow-[0_0_26px_rgba(16,185,129,0.14)]"
           : "border-white/10 bg-white/10 text-white hover:border-emerald-300/25 hover:text-emerald-100"
