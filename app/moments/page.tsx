@@ -1,31 +1,35 @@
 import { AppShell } from "@/app/_components/app-shell";
-import { logPerf, startPerf } from "@/lib/perf";
+import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { MomentsClient, type MomentCard } from "./moments-client";
 
 export default async function MomentsPage() {
-  const perfStartedAt = startPerf();
+  const perfStartedAt = startPerfTimer();
   const supabase = await createSupabaseServerClient();
-  const { currentProfile, user } = await getCurrentUserProfile(
-    supabase,
-    "/moments",
+  const { currentProfile, user } = await timeAsync(
+    "[Perf] Moments auth/profile",
+    () => getCurrentUserProfile(supabase, "/moments"),
   );
 
-  const { data: blocks } = await supabase
-    .from("blocks")
-    .select("blocked_user_id")
-    .eq("blocker_id", user.id);
+  const { data: blocks } = await timeAsync("[Perf] Moments blocks", () =>
+    supabase
+      .from("blocks")
+      .select("blocked_user_id")
+      .eq("blocker_id", user.id),
+  );
   const blockedUserIds = new Set(
     blocks?.map((block) => block.blocked_user_id) ?? [],
   );
 
-  const { data: moments, error } = await supabase
-    .from("moments")
-    .select("id, user_id, media_url, media_type, caption, hide_likes, created_at")
-    .order("created_at", { ascending: false })
-    .limit(40);
+  const { data: moments, error } = await timeAsync("[Perf] Moments feed", () =>
+    supabase
+      .from("moments")
+      .select("id, user_id, media_url, media_type, caption, hide_likes, created_at")
+      .order("created_at", { ascending: false })
+      .limit(40),
+  );
 
   if (error) {
     throw new Error(error.message);
@@ -43,38 +47,40 @@ export default async function MomentsPage() {
     giftsResult,
     myLikesResult,
     walletResult,
-  ] = await Promise.all([
-    userIds.length
-      ? supabase
-          .from("profiles")
-          .select("id, display_name, avatar_url, age, location")
-          .in("id", userIds)
-      : { data: [] },
-    momentIds.length
-      ? supabase.from("moment_likes").select("moment_id").in("moment_id", momentIds)
-      : { data: [] },
-    momentIds.length
-      ? supabase
-          .from("moment_comments")
-          .select("moment_id")
-          .in("moment_id", momentIds)
-      : { data: [] },
-    momentIds.length
-      ? supabase.from("moment_gifts").select("moment_id").in("moment_id", momentIds)
-      : { data: [] },
-    momentIds.length
-      ? supabase
-          .from("moment_likes")
-          .select("moment_id")
-          .eq("user_id", user.id)
-          .in("moment_id", momentIds)
-      : { data: [] },
-    supabase
-      .from("user_wallets")
-      .select("gold_balance")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-  ]);
+  ] = await timeAsync("[Perf] Moments media/profile enrichment", () =>
+    Promise.all([
+      userIds.length
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, avatar_url, age, location")
+            .in("id", userIds)
+        : Promise.resolve({ data: [] }),
+      momentIds.length
+        ? supabase.from("moment_likes").select("moment_id").in("moment_id", momentIds)
+        : Promise.resolve({ data: [] }),
+      momentIds.length
+        ? supabase
+            .from("moment_comments")
+            .select("moment_id")
+            .in("moment_id", momentIds)
+        : Promise.resolve({ data: [] }),
+      momentIds.length
+        ? supabase.from("moment_gifts").select("moment_id").in("moment_id", momentIds)
+        : Promise.resolve({ data: [] }),
+      momentIds.length
+        ? supabase
+            .from("moment_likes")
+            .select("moment_id")
+            .eq("user_id", user.id)
+            .in("moment_id", momentIds)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("user_wallets")
+        .select("gold_balance")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]),
+  );
 
   const profilesById = new Map(
     profilesResult.data?.map((profile) => [profile.id, profile]) ?? [],
@@ -112,7 +118,7 @@ export default async function MomentsPage() {
     })
     .filter((moment): moment is MomentCard => Boolean(moment));
 
-  logPerf("Moments queries", perfStartedAt);
+  finishPerfTimer("[Perf] Moments queries", perfStartedAt);
 
   return (
     <AppShell

@@ -2,9 +2,11 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import Image from "next/image";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { GIFT_CATALOG } from "@/lib/gifts";
+import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database } from "@/lib/supabase/types";
 import {
   commentOnMoment,
@@ -88,6 +90,11 @@ export function MomentsClient({
     [anonKey, supabaseUrl],
   );
 
+  useEffect(() => {
+    const perfStartedAt = startPerfTimer();
+    finishPerfTimer("[Perf] Moments client hydration", perfStartedAt);
+  }, []);
+
   function validateMedia(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     setMediaError("");
@@ -125,7 +132,7 @@ export function MomentsClient({
 
       <div className="mt-6 grid gap-5">
         {moments.length > 0 ? (
-          moments.map((moment) => {
+          moments.map((moment, index) => {
             const isOwner = moment.user_id === currentUserId;
             const canShowLikes = isOwner || !moment.hide_likes;
 
@@ -140,10 +147,12 @@ export function MomentsClient({
                   className="h-11 w-11 overflow-hidden rounded-full bg-neutral-950"
                 >
                   {moment.profile.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={moment.profile.avatar_url}
                       alt={moment.profile.display_name}
+                      width={44}
+                      height={44}
+                      sizes="44px"
                       className="h-full w-full object-cover"
                     />
                   ) : null}
@@ -207,14 +216,18 @@ export function MomentsClient({
                     src={moment.media_url}
                     controls
                     playsInline
+                    preload="metadata"
                     className="max-h-[70vh] w-full object-contain"
                   />
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={moment.media_url}
                     alt=""
-                    className="max-h-[70vh] w-full object-contain"
+                    width={900}
+                    height={1125}
+                    priority={index === 0}
+                    sizes="(min-width: 768px) 768px, 100vw"
+                    className="h-auto max-h-[70vh] w-full object-contain"
                   />
                 )}
               </div>
@@ -465,10 +478,12 @@ function CommentsSheet({
                   className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-900"
                 >
                   {comment.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={comment.avatar_url}
                       alt={comment.display_name}
+                      width={40}
+                      height={40}
+                      sizes="40px"
                       className="h-full w-full object-cover"
                     />
                   ) : null}
@@ -586,10 +601,12 @@ function LikesSheet({
               >
                 <span className="h-11 w-11 overflow-hidden rounded-full bg-neutral-900">
                   {profile.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={profile.avatar_url}
                       alt={profile.display_name}
+                      width={44}
+                      height={44}
+                      sizes="44px"
                       className="h-full w-full object-cover"
                     />
                   ) : null}

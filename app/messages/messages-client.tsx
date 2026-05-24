@@ -2,7 +2,9 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
 
 type ConversationProfile = {
@@ -81,6 +83,8 @@ export function MessagesClient({
   );
 
   useEffect(() => {
+    const perfStartedAt = startPerfTimer();
+
     async function addConversation(nextMatch: MatchRow) {
       if (
         nextMatch.user_one_id !== currentUserId &&
@@ -230,6 +234,8 @@ export function MessagesClient({
       )
       .subscribe();
 
+    finishPerfTimer("[Perf] Messages realtime setup", perfStartedAt);
+
     return () => {
       void supabase.removeChannel(channel);
     };
@@ -253,10 +259,12 @@ export function MessagesClient({
             >
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-20 sm:w-20">
                 {conversation.profile.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={conversation.profile.avatar_url}
                     alt={conversation.profile.display_name}
+                    width={80}
+                    height={80}
+                    sizes="(min-width: 640px) 80px, 64px"
                     className="h-full w-full object-cover"
                   />
                 ) : (

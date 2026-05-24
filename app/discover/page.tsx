@@ -1,40 +1,43 @@
 import { AppShell } from "@/app/_components/app-shell";
-import { logPerf, startPerf } from "@/lib/perf";
+import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DiscoverClient, type DiscoverProfile } from "./discover-client";
-import { StoriesBar, type StoryGroup } from "./stories-bar";
+import { StoriesBarLazy } from "./stories-bar-lazy";
+import type { StoryGroup } from "./stories-bar";
 
 export default async function DiscoverPage() {
-  const perfStartedAt = startPerf();
+  const perfStartedAt = startPerfTimer();
   const supabase = await createSupabaseServerClient();
-  const { currentProfile, user } = await getCurrentUserProfile(
-    supabase,
-    "/discover",
+  const { currentProfile, user } = await timeAsync(
+    "[Perf] Discover auth/profile",
+    () => getCurrentUserProfile(supabase, "/discover"),
   );
 
   const [profilesResult, likesResult, passesResult, blocksResult] =
-    await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, created_at",
-      )
-      .eq("onboarding_completed", true)
-      .neq("id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase.from("likes").select("liked_profile_id").eq("liker_id", user.id),
-    supabase
-      .from("passes")
-      .select("passed_profile_id")
-      .eq("passer_id", user.id),
-    supabase
-      .from("blocks")
-      .select("blocked_user_id")
-      .eq("blocker_id", user.id),
-  ]);
+    await timeAsync("[Perf] Discover base profile filters", () =>
+      Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, created_at",
+          )
+          .eq("onboarding_completed", true)
+          .neq("id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(120),
+        supabase.from("likes").select("liked_profile_id").eq("liker_id", user.id),
+        supabase
+          .from("passes")
+          .select("passed_profile_id")
+          .eq("passer_id", user.id),
+        supabase
+          .from("blocks")
+          .select("blocked_user_id")
+          .eq("blocker_id", user.id),
+      ]),
+    );
 
   if (profilesResult.error) {
     throw new Error(profilesResult.error.message);
@@ -60,11 +63,15 @@ export default async function DiscoverPage() {
   const visibleProfiles =
     profilesResult.data.filter((profile) => !excludedUserIds.has(profile.id)) ??
     [];
-  const { data: stories, error: storiesError } = await supabase
-    .from("stories")
-    .select("id, user_id, media_url, text, background_style, expires_at, created_at")
-    .gt("expires_at", new Date().toISOString())
-    .order("created_at", { ascending: false });
+  const { data: stories, error: storiesError } = await timeAsync(
+    "[Perf] Discover stories",
+    () =>
+      supabase
+        .from("stories")
+        .select("id, user_id, media_url, text, background_style, expires_at, created_at")
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false }),
+  );
 
   if (storiesError) {
     throw new Error(storiesError.message);
@@ -72,19 +79,25 @@ export default async function DiscoverPage() {
 
   const storyUserIds = [...new Set(stories?.map((story) => story.user_id) ?? [])];
   const storyIds = stories?.map((story) => story.id) ?? [];
-  const { data: storyProfiles } = storyUserIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url")
-        .in("id", storyUserIds)
-    : { data: [] };
-  const { data: storyViews } = storyIds.length
-    ? await supabase
-        .from("story_views")
-        .select("story_id")
-        .eq("viewer_id", user.id)
-        .in("story_id", storyIds)
-    : { data: [] };
+  const [{ data: storyProfiles }, { data: storyViews }] = await timeAsync(
+    "[Perf] Discover story enrichment",
+    () =>
+      Promise.all([
+        storyUserIds.length
+          ? supabase
+              .from("profiles")
+              .select("id, display_name, avatar_url")
+              .in("id", storyUserIds)
+          : Promise.resolve({ data: [] }),
+        storyIds.length
+          ? supabase
+              .from("story_views")
+              .select("story_id")
+              .eq("viewer_id", user.id)
+              .in("story_id", storyIds)
+          : Promise.resolve({ data: [] }),
+      ]),
+  );
   const viewedStoryIds = new Set(
     storyViews?.map((storyView) => storyView.story_id) ?? [],
   );
@@ -141,43 +154,49 @@ export default async function DiscoverPage() {
     followersResult,
     momentsResult,
     giftTransactionsResult,
-  ] = await Promise.all([
-    visibleProfileIds.length
-      ? supabase
-          .from("user_settings")
-          .select("user_id, private_profile, show_in_discover")
-          .in("user_id", visibleProfileIds)
-      : { data: [] },
-    visibleProfileIds.length
-      ? supabase.from("follows").select("following_id").in("following_id", visibleProfileIds)
-      : { data: [] },
-    visibleProfileIds.length
-      ? supabase.from("moments").select("id, user_id").in("user_id", visibleProfileIds)
-          .order("created_at", { ascending: false })
-          .limit(240)
-      : { data: [] },
-    visibleProfileIds.length
-      ? supabase
-          .from("gift_transactions")
-          .select("receiver_id")
-          .in("receiver_id", visibleProfileIds)
-      : { data: [] },
-  ]);
+  ] = await timeAsync("[Perf] Discover profile enrichment", () =>
+    Promise.all([
+      visibleProfileIds.length
+        ? supabase
+            .from("user_settings")
+            .select("user_id, private_profile, show_in_discover")
+            .in("user_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase.from("follows").select("following_id").in("following_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase.from("moments").select("id, user_id").in("user_id", visibleProfileIds)
+            .order("created_at", { ascending: false })
+            .limit(240)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase
+            .from("gift_transactions")
+            .select("receiver_id")
+            .in("receiver_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+    ]),
+  );
   const visibleMomentIds = momentsResult.data?.map((moment) => moment.id) ?? [];
-  const [momentLikesResult, momentCommentsResult] = await Promise.all([
-    visibleMomentIds.length
-      ? supabase
-          .from("moment_likes")
-          .select("moment_id")
-          .in("moment_id", visibleMomentIds)
-      : { data: [] },
-    visibleMomentIds.length
-      ? supabase
-          .from("moment_comments")
-          .select("moment_id")
-          .in("moment_id", visibleMomentIds)
-      : { data: [] },
-  ]);
+  const [momentLikesResult, momentCommentsResult] = await timeAsync(
+    "[Perf] Discover moment engagement",
+    () =>
+      Promise.all([
+        visibleMomentIds.length
+          ? supabase
+              .from("moment_likes")
+              .select("moment_id")
+              .in("moment_id", visibleMomentIds)
+          : Promise.resolve({ data: [] }),
+        visibleMomentIds.length
+          ? supabase
+              .from("moment_comments")
+              .select("moment_id")
+              .in("moment_id", visibleMomentIds)
+          : Promise.resolve({ data: [] }),
+      ]),
+  );
   const settingsByUser = new Map(
     settingsResult.data?.map((setting) => [setting.user_id, setting]) ?? [],
   );
@@ -239,7 +258,7 @@ export default async function DiscoverPage() {
   const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
   const trendingProfiles = [...discoverProfiles].sort((a, b) => b.trendingScore - a.trendingScore).slice(0, 10);
 
-  logPerf("Discover queries", perfStartedAt);
+  finishPerfTimer("[Perf] Discover queries", perfStartedAt);
 
   return (
     <AppShell
@@ -248,7 +267,7 @@ export default async function DiscoverPage() {
       profileId={currentProfile.id}
       title="Discover"
     >
-        <StoriesBar
+        <StoriesBarLazy
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
           initialGroups={storyGroups}

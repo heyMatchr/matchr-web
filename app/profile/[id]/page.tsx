@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
 import { logOut } from "@/app/auth/actions";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
-import { logPerf, startPerf } from "@/lib/perf";
+import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -16,32 +17,36 @@ type ProfilePageProps = {
 };
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
-  const perfStartedAt = startPerf();
+  const perfStartedAt = startPerfTimer();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
-  const { currentProfile, user } = await getCurrentUserProfile(
-    supabase,
-    `/profile/${id}`,
+  const { currentProfile, user } = await timeAsync(
+    "[Perf] Profile auth/profile",
+    () => getCurrentUserProfile(supabase, `/profile/${id}`),
   );
-  const [blockResult, profileResult] = await Promise.all([
-    id !== user.id
-      ? supabase
-          .from("blocks")
-          .select("id")
-          .or(
-            `and(blocker_id.eq.${user.id},blocked_user_id.eq.${id}),and(blocker_id.eq.${id},blocked_user_id.eq.${user.id})`,
+  const [blockResult, profileResult] = await timeAsync(
+    "[Perf] Profile block/profile",
+    () =>
+      Promise.all([
+        id !== user.id
+          ? supabase
+              .from("blocks")
+              .select("id")
+              .or(
+                `and(blocker_id.eq.${user.id},blocked_user_id.eq.${id}),and(blocker_id.eq.${id},blocked_user_id.eq.${user.id})`,
+              )
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase
+          .from("profiles")
+          .select(
+            "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
           )
-          .maybeSingle()
-      : { data: null },
-    supabase
-      .from("profiles")
-      .select(
-        "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
-      )
-      .eq("id", id)
-      .eq("onboarding_completed", true)
-      .maybeSingle(),
-  ]);
+          .eq("id", id)
+          .eq("onboarding_completed", true)
+          .maybeSingle(),
+      ]),
+  );
 
   if (blockResult.data) {
     redirect("/discover");
@@ -56,38 +61,44 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   if (profile.id !== user.id) {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const [viewerProfileResult, existingViewTodayResult] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("id", user.id)
-        .maybeSingle(),
-      supabase
-        .from("profile_views")
-        .select("id")
-        .eq("viewer_id", user.id)
-        .eq("viewed_user_id", profile.id)
-        .gte("created_at", todayStart.toISOString())
-        .maybeSingle(),
-    ]);
+    const [viewerProfileResult, existingViewTodayResult] = await timeAsync(
+      "[Perf] Profile view guard",
+      () =>
+        Promise.all([
+          supabase
+            .from("profiles")
+            .select("display_name")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("profile_views")
+            .select("id")
+            .eq("viewer_id", user.id)
+            .eq("viewed_user_id", profile.id)
+            .gte("created_at", todayStart.toISOString())
+            .maybeSingle(),
+        ]),
+    );
 
     if (!existingViewTodayResult.data) {
-      await Promise.all([
-        supabase.from("profile_views").insert({
-          viewed_user_id: profile.id,
-          viewer_id: user.id,
-        }),
-        supabase.from("notifications").insert({
-          actor_id: user.id,
-          body: `${viewerProfileResult.data?.display_name ?? "Someone"} viewed your profile.`,
-          metadata: {
-            profile_id: user.id,
-          },
-          title: "Profile view",
-          type: "profile_view",
-          user_id: profile.id,
-        }),
-      ]);
+      await timeAsync("[Perf] Profile view write", () =>
+        Promise.all([
+          supabase.from("profile_views").insert({
+            viewed_user_id: profile.id,
+            viewer_id: user.id,
+          }),
+          supabase.from("notifications").insert({
+            actor_id: user.id,
+            body: `${viewerProfileResult.data?.display_name ?? "Someone"} viewed your profile.`,
+            metadata: {
+              profile_id: user.id,
+            },
+            title: "Profile view",
+            type: "profile_view",
+            user_id: profile.id,
+          }),
+        ]),
+      );
     }
   }
 
@@ -107,90 +118,92 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     premiumResult,
     giftsReceivedResult,
     viewedSettingsResult,
-  ] = await Promise.all([
-    supabase
-      .from("follows")
-      .select("id", { count: "exact", head: true })
-      .eq("following_id", profile.id),
-    supabase
-      .from("follows")
-      .select("id", { count: "exact", head: true })
-      .eq("follower_id", profile.id),
-    supabase
-      .from("profile_views")
-      .select("id", { count: "exact", head: true })
-      .eq("viewed_user_id", profile.id),
-    supabase
-      .from("follows")
-      .select("id")
-      .eq("follower_id", user.id)
-      .eq("following_id", profile.id)
-      .maybeSingle(),
-    supabase
-      .from("profile_views")
-      .select("viewer_id, created_at")
-      .eq("viewed_user_id", profile.id)
-      .neq("viewer_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("follows")
-      .select("follower_id, created_at")
-      .eq("following_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("follows")
-      .select("following_id, created_at")
-      .eq("follower_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("matches")
-      .select("id")
-      .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
-      .or(`user_one_id.eq.${profile.id},user_two_id.eq.${profile.id}`)
-      .maybeSingle(),
-    supabase
-      .from("likes")
-      .select("id")
-      .eq("liker_id", user.id)
-      .eq("liked_profile_id", profile.id)
-      .maybeSingle(),
-    supabase
-      .from("stories")
-      .select("id")
-      .eq("user_id", profile.id)
-      .gt("expires_at", new Date().toISOString())
-      .limit(1),
-    supabase
-      .from("moments")
-      .select("id, media_url, media_type")
-      .eq("user_id", profile.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
-    supabase
-      .from("user_wallets")
-      .select("gold_balance")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("subscriptions")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("plan_name", "Matchr Premium")
-      .eq("status", "active")
-      .maybeSingle(),
-    supabase
-      .from("gift_transactions")
-      .select("id", { count: "exact", head: true })
-      .eq("receiver_id", profile.id),
-    supabase
-      .from("user_settings")
-      .select("private_profile, hide_followers_count, hide_following_count, allow_profile_views")
-      .eq("user_id", profile.id)
-      .maybeSingle(),
-  ]);
+  ] = await timeAsync("[Perf] Profile detail query group", () =>
+    Promise.all([
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("following_id", profile.id),
+      supabase
+        .from("follows")
+        .select("id", { count: "exact", head: true })
+        .eq("follower_id", profile.id),
+      supabase
+        .from("profile_views")
+        .select("id", { count: "exact", head: true })
+        .eq("viewed_user_id", profile.id),
+      supabase
+        .from("follows")
+        .select("id")
+        .eq("follower_id", user.id)
+        .eq("following_id", profile.id)
+        .maybeSingle(),
+      supabase
+        .from("profile_views")
+        .select("viewer_id, created_at")
+        .eq("viewed_user_id", profile.id)
+        .neq("viewer_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(6),
+      supabase
+        .from("follows")
+        .select("follower_id, created_at")
+        .eq("following_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(6),
+      supabase
+        .from("follows")
+        .select("following_id, created_at")
+        .eq("follower_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(6),
+      supabase
+        .from("matches")
+        .select("id")
+        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .or(`user_one_id.eq.${profile.id},user_two_id.eq.${profile.id}`)
+        .maybeSingle(),
+      supabase
+        .from("likes")
+        .select("id")
+        .eq("liker_id", user.id)
+        .eq("liked_profile_id", profile.id)
+        .maybeSingle(),
+      supabase
+        .from("stories")
+        .select("id")
+        .eq("user_id", profile.id)
+        .gt("expires_at", new Date().toISOString())
+        .limit(1),
+      supabase
+        .from("moments")
+        .select("id, media_url, media_type")
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(6),
+      supabase
+        .from("user_wallets")
+        .select("gold_balance")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("subscriptions")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("plan_name", "Matchr Premium")
+        .eq("status", "active")
+        .maybeSingle(),
+      supabase
+        .from("gift_transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("receiver_id", profile.id),
+      supabase
+        .from("user_settings")
+        .select("private_profile, hide_followers_count, hide_following_count, allow_profile_views")
+        .eq("user_id", profile.id)
+        .maybeSingle(),
+    ]),
+  );
   if (
     profile.id !== user.id &&
     viewedSettingsResult.data?.private_profile &&
@@ -209,19 +222,24 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const socialProfileIds = [
     ...new Set([...recentViewerIds, ...followerIds, ...followingIds]),
   ];
-  const { data: socialProfiles } = socialProfileIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id, display_name, age, avatar_url, location")
-        .in("id", socialProfileIds)
-    : { data: [] };
-  const { data: currentUserFollows } = socialProfileIds.length
-    ? await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id)
-        .in("following_id", socialProfileIds)
-    : { data: [] };
+  const [{ data: socialProfiles }, { data: currentUserFollows }] =
+    await timeAsync("[Perf] Profile media/profile enrichment", () =>
+      Promise.all([
+        socialProfileIds.length
+          ? supabase
+              .from("profiles")
+              .select("id, display_name, age, avatar_url, location")
+              .in("id", socialProfileIds)
+          : Promise.resolve({ data: [] }),
+        socialProfileIds.length
+          ? supabase
+              .from("follows")
+              .select("following_id")
+              .eq("follower_id", user.id)
+              .in("following_id", socialProfileIds)
+          : Promise.resolve({ data: [] }),
+      ]),
+    );
   const currentUserFollowingIds = new Set(
     currentUserFollows?.map((follow) => follow.following_id) ?? [],
   );
@@ -267,7 +285,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     (followersResult.count ?? 0) >= 10 ? "Trending" : "",
   ].filter(Boolean);
 
-  logPerf("Profile queries", perfStartedAt);
+  finishPerfTimer("[Perf] Profile queries", perfStartedAt);
 
   return (
     <AppShell
@@ -282,10 +300,13 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             }`}
           >
             {profile.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={profile.avatar_url}
                 alt={profile.display_name}
+                width={900}
+                height={1200}
+                priority
+                sizes="(min-width: 768px) 45vw, 100vw"
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -586,10 +607,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       >
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-950">
                           {visitor?.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
+                            <Image
                               src={visitor.avatar_url}
                               alt={visitor.display_name}
+                              width={48}
+                              height={48}
+                              sizes="48px"
                               className="h-full w-full object-cover"
                             />
                           ) : (
@@ -708,13 +731,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                           src={moment.media_url}
                           muted
                           playsInline
+                          preload="metadata"
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
+                        <Image
                           src={moment.media_url}
                           alt=""
+                          width={220}
+                          height={220}
+                          sizes="(min-width: 640px) 160px, 33vw"
                           className="h-full w-full object-cover"
                         />
                       )}

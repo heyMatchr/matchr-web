@@ -1,5 +1,5 @@
 import { AppShell } from "@/app/_components/app-shell";
-import { logPerf, startPerf } from "@/lib/perf";
+import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -10,18 +10,22 @@ import {
 } from "./messages-client";
 
 export default async function MessagesPage() {
-  const perfStartedAt = startPerf();
+  const perfStartedAt = startPerfTimer();
   const supabase = await createSupabaseServerClient();
-  const { currentProfile, user } = await getCurrentUserProfile(
-    supabase,
-    "/messages",
+  const { currentProfile, user } = await timeAsync(
+    "[Perf] Messages auth/profile",
+    () => getCurrentUserProfile(supabase, "/messages"),
   );
 
-  const { data: matches, error: matchesError } = await supabase
-    .from("matches")
-    .select("id, user_one_id, user_two_id, created_at")
-    .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
-    .order("created_at", { ascending: false });
+  const { data: matches, error: matchesError } = await timeAsync(
+    "[Perf] Messages matches",
+    () =>
+      supabase
+        .from("matches")
+        .select("id, user_one_id, user_two_id, created_at")
+        .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`)
+        .order("created_at", { ascending: false }),
+  );
 
   if (matchesError) {
     throw new Error(matchesError.message);
@@ -32,10 +36,14 @@ export default async function MessagesPage() {
   );
   const matchIds = matches.map((match) => match.id);
 
-  const { data: blocks, error: blocksError } = await supabase
-    .from("blocks")
-    .select("blocked_user_id")
-    .eq("blocker_id", user.id);
+  const { data: blocks, error: blocksError } = await timeAsync(
+    "[Perf] Messages blocks",
+    () =>
+      supabase
+        .from("blocks")
+        .select("blocked_user_id")
+        .eq("blocker_id", user.id),
+  );
 
   if (blocksError) {
     throw new Error(blocksError.message);
@@ -55,30 +63,32 @@ export default async function MessagesPage() {
     profilesResult,
     recentMessagesResult,
     unreadMessagesResult,
-  ] = await Promise.all([
-    matchedUserIds.length
-      ? supabase
-          .from("profiles")
-          .select("id, display_name, age, avatar_url")
-          .in("id", matchedUserIds)
-      : { data: [], error: null },
-    matchIds.length
-      ? supabase
-          .from("messages")
-          .select(messageSelect)
-          .in("match_id", matchIds)
-          .order("created_at", { ascending: false })
-          .limit(recentMessageLimit)
-      : { data: [], error: null },
-    matchIds.length
-      ? supabase
-          .from("messages")
-          .select("match_id, read_at, receiver_id")
-          .eq("receiver_id", user.id)
-          .is("read_at", null)
-          .in("match_id", matchIds)
-      : { data: [], error: null },
-  ]);
+  ] = await timeAsync("[Perf] Messages inbox summary", () =>
+    Promise.all([
+      matchedUserIds.length
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, age, avatar_url")
+            .in("id", matchedUserIds)
+        : Promise.resolve({ data: [], error: null }),
+      matchIds.length
+        ? supabase
+            .from("messages")
+            .select(messageSelect)
+            .in("match_id", matchIds)
+            .order("created_at", { ascending: false })
+            .limit(recentMessageLimit)
+        : Promise.resolve({ data: [], error: null }),
+      matchIds.length
+        ? supabase
+            .from("messages")
+            .select("match_id, read_at, receiver_id")
+            .eq("receiver_id", user.id)
+            .is("read_at", null)
+            .in("match_id", matchIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]),
+  );
 
   if (profilesResult.error) {
     throw new Error(profilesResult.error.message);
@@ -124,16 +134,20 @@ export default async function MessagesPage() {
     (matchId) => !latestMessageByMatchId.has(matchId),
   );
   const fallbackLatestMessages = missingLatestMatchIds.length
-    ? await Promise.all(
-        missingLatestMatchIds.map((matchId) =>
-          supabase
-            .from("messages")
-            .select(messageSelect)
-            .eq("match_id", matchId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-        ),
+    ? await timeAsync(
+        "[Perf] Messages latest-message fallback",
+        () =>
+          Promise.all(
+            missingLatestMatchIds.map((matchId) =>
+              supabase
+                .from("messages")
+                .select(messageSelect)
+                .eq("match_id", matchId)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+            ),
+          ),
       )
     : [];
 
@@ -172,7 +186,7 @@ export default async function MessagesPage() {
       Boolean(conversation),
     );
 
-  logPerf("Messages queries", perfStartedAt);
+  finishPerfTimer("[Perf] Messages queries", perfStartedAt);
 
   return (
     <AppShell

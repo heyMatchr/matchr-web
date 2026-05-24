@@ -2,6 +2,7 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { ReactNode } from "react";
@@ -747,6 +748,7 @@ export function ChatClient({
               src={message.media_url}
               playsInline
               muted
+              preload="metadata"
               disablePictureInPicture
               controlsList="nodownload noplaybackrate"
               onContextMenu={(event) => {
@@ -756,16 +758,17 @@ export function ChatClient({
               className="absolute inset-0 h-full w-full scale-105 object-cover blur-xl brightness-50"
             />
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={message.media_url}
               alt=""
+              fill
+              sizes="192px"
               draggable={false}
               onContextMenu={(event) => {
                 event.preventDefault();
                 showPrivacyWarning();
               }}
-              className="absolute inset-0 h-full w-full scale-105 object-cover blur-xl brightness-50"
+              className="scale-105 object-cover blur-xl brightness-50"
             />
           )}
           <span className="absolute inset-0 bg-black/30" />
@@ -801,14 +804,17 @@ export function ChatClient({
           src={message.media_url}
           controls
           playsInline
+          preload="metadata"
           className="max-h-72 rounded-2xl object-contain"
         />
       ) : (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={message.media_url}
           alt=""
-          className="max-h-72 rounded-2xl object-contain"
+          width={640}
+          height={640}
+          sizes="(min-width: 640px) 70vw, 82vw"
+          className="h-auto max-h-72 rounded-2xl object-contain"
         />
       );
     }
@@ -829,10 +835,12 @@ export function ChatClient({
         >
           <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950">
             {receiverAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 src={receiverAvatarUrl}
                 alt={receiverName}
+                width={40}
+                height={40}
+                sizes="40px"
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -1082,6 +1090,7 @@ export function ChatClient({
                   autoPlay
                   muted
                   playsInline
+                  preload="metadata"
                   disablePictureInPicture
                   controlsList="nodownload noplaybackrate"
                   onContextMenu={(event) => {
@@ -1091,16 +1100,18 @@ export function ChatClient({
                   className="max-h-full w-full object-contain"
                 />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={activePrivateMessage.media_url}
                   alt=""
+                  width={900}
+                  height={1200}
+                  sizes="(min-width: 640px) 448px, 100vw"
                   draggable={false}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     showPrivacyWarning();
                   }}
-                  className="max-h-full w-full object-contain"
+                  className="h-auto max-h-full w-full object-contain"
                 />
               )}
             </div>

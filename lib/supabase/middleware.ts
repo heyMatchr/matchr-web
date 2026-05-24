@@ -3,10 +3,32 @@ import { type NextRequest, NextResponse } from "next/server";
 import { requiredSupabaseEnv } from "./env";
 import type { Database } from "./types";
 
+const PROTECTED_ROUTE_PREFIXES = [
+  "/calls",
+  "/chat",
+  "/discover",
+  "/matches",
+  "/messages",
+  "/moments",
+  "/profile",
+  "/settings",
+  "/wallet",
+];
+
+function isProtectedPath(pathname: string) {
+  return PROTECTED_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
 export async function updateSupabaseSession(request: NextRequest) {
   let response = NextResponse.next({
     request,
   });
+
+  if (!isProtectedPath(request.nextUrl.pathname)) {
+    return response;
+  }
 
   const supabase = createServerClient<Database>(
     requiredSupabaseEnv("SUPABASE_URL"),
@@ -37,32 +59,10 @@ export async function updateSupabaseSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/calls") ||
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/chat") ||
-    request.nextUrl.pathname.startsWith("/discover") ||
-    request.nextUrl.pathname.startsWith("/liked-you") ||
-    request.nextUrl.pathname.startsWith("/matches") ||
-    request.nextUrl.pathname.startsWith("/messages") ||
-    request.nextUrl.pathname.startsWith("/moments") ||
-    request.nextUrl.pathname.startsWith("/notifications") ||
-    request.nextUrl.pathname.startsWith("/onboarding") ||
-    request.nextUrl.pathname.startsWith("/profile") ||
-    request.nextUrl.pathname.startsWith("/settings") ||
-    request.nextUrl.pathname.startsWith("/wallet");
-
-  if (!user && isProtectedRoute) {
+  if (!user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  if (user && ["/login", "/signup"].includes(request.nextUrl.pathname)) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
-    redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }
 

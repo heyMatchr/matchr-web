@@ -1,9 +1,11 @@
 "use client";
 
 import { createBrowserClient } from "@supabase/ssr";
+import Image from "next/image";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
+import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database } from "@/lib/supabase/types";
 import {
   STORY_ALLOWED_TYPES,
@@ -30,7 +32,7 @@ export type StoryGroup = {
   user_id: string;
 };
 
-type StoriesBarProps = {
+export type StoriesBarProps = {
   anonKey: string;
   currentUserId: string;
   initialGroups: StoryGroup[];
@@ -118,6 +120,11 @@ export function StoriesBar({
   const activeGroup =
     activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
   const activeStory = activeGroup?.stories[activeStoryIndex] ?? null;
+
+  useEffect(() => {
+    const perfStartedAt = startPerfTimer();
+    finishPerfTimer("[Perf] Stories bar hydration", perfStartedAt);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -576,10 +583,12 @@ export function StoriesBar({
               >
                 <span className="h-full w-full overflow-hidden rounded-full bg-neutral-950">
                   {group.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
+                    <Image
                       src={group.avatar_url}
                       alt={group.display_name}
+                      width={64}
+                      height={64}
+                      sizes="64px"
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -709,10 +718,12 @@ export function StoriesBar({
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="h-10 w-10 overflow-hidden rounded-full bg-neutral-950">
                     {activeGroup.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={activeGroup.avatar_url}
                         alt={activeGroup.display_name}
+                        width={40}
+                        height={40}
+                        sizes="40px"
                         className="h-full w-full object-cover"
                       />
                     ) : null}
@@ -751,10 +762,12 @@ export function StoriesBar({
 
             <div className="flex flex-1 items-center justify-center px-5 pt-24">
               {activeStory.media_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={activeStory.media_url}
                   alt=""
+                  width={720}
+                  height={1280}
+                  sizes="(min-width: 640px) 448px, 100vw"
                   className="max-h-full w-full rounded-2xl object-contain"
                 />
               ) : null}
@@ -781,10 +794,12 @@ export function StoriesBar({
                         >
                           <div className="h-8 w-8 overflow-hidden rounded-full bg-neutral-900">
                             {item.avatar_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
+                              <Image
                                 src={item.avatar_url}
                                 alt={item.display_name}
+                                width={32}
+                                height={32}
+                                sizes="32px"
                                 className="h-full w-full object-cover"
                               />
                             ) : null}

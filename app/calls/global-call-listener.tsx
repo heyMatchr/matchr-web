@@ -3,6 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { CallSessionRow, Database } from "@/lib/supabase/types";
 
 type CallerProfile = {
@@ -49,6 +50,7 @@ export function GlobalCallListener({
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringtoneTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const missedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pathnameRef = useRef(pathname);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -112,7 +114,7 @@ export function GlobalCallListener({
 
   const showIncomingCall = useCallback(
     async (call: CallSessionRow) => {
-      if (pathname.startsWith("/calls") || call.status !== "ringing") {
+      if (pathnameRef.current.startsWith("/calls") || call.status !== "ringing") {
         return;
       }
 
@@ -179,8 +181,12 @@ export function GlobalCallListener({
         });
       }, 45000);
     },
-    [alertsEnabled, currentUserId, pathname, playRingtone, supabase],
+    [alertsEnabled, currentUserId, playRingtone, supabase],
   );
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -200,6 +206,7 @@ export function GlobalCallListener({
   }, [pathname, stopRingtone]);
 
   useEffect(() => {
+    const perfStartedAt = startPerfTimer();
     let active = true;
 
     async function loadRingingCall() {
@@ -214,6 +221,10 @@ export function GlobalCallListener({
 
       if (active && data) {
         await showIncomingCall(data);
+      }
+
+      if (active) {
+        finishPerfTimer("[Perf] GlobalCallListener loading", perfStartedAt);
       }
     }
 

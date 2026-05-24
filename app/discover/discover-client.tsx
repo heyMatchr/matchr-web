@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useMemo, useState, useTransition } from "react";
 import { likeProfile, passProfile } from "./actions";
 
@@ -106,12 +107,13 @@ export function DiscoverClient({
 
       {visibleProfiles.length > 0 ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8 md:gap-5 lg:grid-cols-3">
-          {visibleProfiles.map((profile) => (
+          {visibleProfiles.map((profile, index) => (
             <SwipeCard
               key={profile.id}
               disabled={isPending}
               onLike={() => act(profile.id, "like")}
               onPass={() => act(profile.id, "pass")}
+              priority={index === 0}
               profile={profile}
             />
           ))}
@@ -220,8 +222,14 @@ function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: 
           >
             <div className={`aspect-square overflow-hidden rounded-xl bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
               {profile.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatar_url} alt={profile.display_name} className="h-full w-full object-cover" />
+                <Image
+                  src={profile.avatar_url}
+                  alt={profile.display_name}
+                  width={144}
+                  height={144}
+                  sizes="144px"
+                  className="h-full w-full object-cover"
+                />
               ) : null}
             </div>
             <p className="mt-2 truncate text-sm font-black">{profile.display_name}</p>
@@ -237,11 +245,13 @@ function SwipeCard({
   disabled,
   onLike,
   onPass,
+  priority = false,
   profile,
 }: {
   disabled: boolean;
   onLike: () => void;
   onPass: () => void;
+  priority?: boolean;
   profile: DiscoverProfile;
 }) {
   const [dragStart, setDragStart] = useState<number | null>(null);
@@ -261,8 +271,14 @@ function SwipeCard({
     >
       <div className={`relative aspect-[4/5] overflow-hidden bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
         {profile.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={profile.avatar_url} alt={profile.display_name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          <Image
+            src={profile.avatar_url}
+            alt={profile.display_name}
+            fill
+            priority={priority}
+            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+          />
         ) : (
           <div className="grid h-full place-items-center text-6xl font-black text-neutral-700">
             {profile.display_name.charAt(0)}

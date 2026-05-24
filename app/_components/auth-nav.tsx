@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { logOut } from "@/app/auth/actions";
+import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database, MatchRow } from "@/lib/supabase/types";
 
 type AuthNavProps = {
@@ -247,6 +248,7 @@ export function AuthNav({
   }, [currentUserId, pathname, seenMatchesKey, supabase]);
 
   useEffect(() => {
+    const perfStartedAt = startPerfTimer();
     let active = true;
 
     async function refreshUnreadCount() {
@@ -297,9 +299,15 @@ export function AuthNav({
       setHasNewMatches(matchIds.some((matchId) => !seenIds.has(matchId)));
     }
 
-    void refreshUnreadCount();
-    void refreshNotificationCount();
-    void refreshMatchDot();
+    void Promise.all([
+      refreshUnreadCount(),
+      refreshNotificationCount(),
+      refreshMatchDot(),
+    ]).then(() => {
+      if (active) {
+        finishPerfTimer("[Perf] AuthNav loading", perfStartedAt);
+      }
+    });
 
     const channel = supabase
       .channel(`nav-notifications:${currentUserId}`)
