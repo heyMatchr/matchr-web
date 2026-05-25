@@ -19,6 +19,7 @@ type GlobalCallListenerProps = {
 
 const CALL_SELECT =
   "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";
+const MISSED_CALL_TIMEOUT_MS = 30000;
 const ENABLE_CALL_DEBUG = process.env.NODE_ENV === "development";
 
 function debugLog(...args: Parameters<typeof console.log>) {
@@ -171,15 +172,25 @@ export function GlobalCallListener({
           receiver_id: call.caller_id,
           sender_id: currentUserId,
         });
-        await supabase.from("notifications").insert({
-          actor_id: currentUserId,
-          body: `Missed ${call.call_type} call.`,
-          metadata: { call_id: call.id, call_type: call.call_type, match_id: call.match_id },
-          title: "Missed call",
-          type: "missed_call",
-          user_id: call.caller_id,
-        });
-      }, 45000);
+        await supabase.from("notifications").insert([
+          {
+            actor_id: currentUserId,
+            body: `Missed ${call.call_type} call.`,
+            metadata: { call_id: call.id, call_type: call.call_type, match_id: call.match_id },
+            title: "Missed call",
+            type: "missed_call",
+            user_id: call.caller_id,
+          },
+          {
+            actor_id: call.caller_id,
+            body: `${callLabel(call.call_type)} call was not answered.`,
+            metadata: { call_id: call.id, call_type: call.call_type, match_id: call.match_id },
+            title: "Call not answered",
+            type: "missed_call",
+            user_id: currentUserId,
+          },
+        ]);
+      }, MISSED_CALL_TIMEOUT_MS);
     },
     [alertsEnabled, currentUserId, playRingtone, supabase],
   );

@@ -19,6 +19,7 @@ type CallControlsProps = {
 
 const CALL_SELECT =
   "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";
+const MISSED_CALL_TIMEOUT_MS = 30000;
 const ENABLE_CALL_DEBUG = process.env.NODE_ENV === "development";
 
 function debugLog(...args: Parameters<typeof console.log>) {
@@ -231,20 +232,34 @@ export function CallControls({
         debugLog("[CallLifecycle] marked missed", { callId: outgoingCall.id });
       }
       await insertCallMessage(`Missed ${outgoingCall.call_type} call.`);
-      await supabase.from("notifications").insert({
-        actor_id: currentUserId,
-        body: `Missed ${outgoingCall.call_type} call.`,
-        metadata: {
-          call_id: outgoingCall.id,
-          call_type: outgoingCall.call_type,
-          match_id: matchId,
+      await supabase.from("notifications").insert([
+        {
+          actor_id: currentUserId,
+          body: `Missed ${outgoingCall.call_type} call.`,
+          metadata: {
+            call_id: outgoingCall.id,
+            call_type: outgoingCall.call_type,
+            match_id: matchId,
+          },
+          title: "Missed call",
+          type: "missed_call",
+          user_id: receiverId,
         },
-        title: "Missed call",
-        type: "missed_call",
-        user_id: receiverId,
-      });
+        {
+          actor_id: receiverId,
+          body: `${callLabel(outgoingCall.call_type)} call was not answered.`,
+          metadata: {
+            call_id: outgoingCall.id,
+            call_type: outgoingCall.call_type,
+            match_id: matchId,
+          },
+          title: "Call not answered",
+          type: "missed_call",
+          user_id: currentUserId,
+        },
+      ]);
       setOutgoingCall(null);
-    }, 45000);
+    }, MISSED_CALL_TIMEOUT_MS);
 
     const timer = window.setInterval(async () => {
       const { data } = await supabase
@@ -293,6 +308,26 @@ export function CallControls({
     }
 
     startTransition(async () => {
+      const { data: existingCall } = await supabase
+        .from("call_sessions")
+        .select(CALL_SELECT)
+        .eq("match_id", matchId)
+        .in("status", ["ringing", "accepted"])
+        .or(`caller_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingCall) {
+        if (existingCall.status === "accepted") {
+          enterCallRoom(existingCall.id);
+          return;
+        }
+
+        setOutgoingCall(existingCall);
+        return;
+      }
+
       const { data, error: insertError } = await supabase
         .from("call_sessions")
         .insert({
@@ -361,19 +396,29 @@ export function CallControls({
     }
 
     if (status === "ended") {
-      await insertCallMessage("Call ended.");
+      await insertCallMessage(`${callLabel(data.call_type)} call ended.`);
     }
 
     if (status === "missed") {
       await insertCallMessage(`Missed ${data.call_type} call.`);
-      await supabase.from("notifications").insert({
-        actor_id: currentUserId,
-        body: `Missed ${data.call_type} call.`,
-        metadata: { call_id: data.id, call_type: data.call_type, match_id: matchId },
-        title: "Missed call",
-        type: "missed_call",
-        user_id: receiverId,
-      });
+      await supabase.from("notifications").insert([
+        {
+          actor_id: currentUserId,
+          body: `Missed ${data.call_type} call.`,
+          metadata: { call_id: data.id, call_type: data.call_type, match_id: matchId },
+          title: "Missed call",
+          type: "missed_call",
+          user_id: receiverId,
+        },
+        {
+          actor_id: receiverId,
+          body: `${callLabel(data.call_type)} call was not answered.`,
+          metadata: { call_id: data.id, call_type: data.call_type, match_id: matchId },
+          title: "Call not answered",
+          type: "missed_call",
+          user_id: currentUserId,
+        },
+      ]);
     }
 
     if (status === "declined" || status === "ended" || status === "missed") {

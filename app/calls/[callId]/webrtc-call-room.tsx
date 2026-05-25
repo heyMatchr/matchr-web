@@ -13,6 +13,7 @@ import {
 } from "@livekit/components-react";
 import { createBrowserClient } from "@supabase/ssr";
 import {
+  ConnectionQuality,
   ConnectionState,
   createLocalVideoTrack,
   RoomEvent,
@@ -91,16 +92,39 @@ function formatDuration(startedAt: string | null, currentTime: number) {
 
 function callStatusLabel(state: ConnectionState | string) {
   if (state === ConnectionState.Connected) return "Connected";
-  if (state === ConnectionState.Reconnecting) return "Reconnecting";
-  if (state === ConnectionState.Connecting) return "Connecting";
-  if (state === "ended") return "Ended";
-  if (state === "declined") return "Ended";
+  if (state === ConnectionState.Reconnecting || state === "reconnecting") return "Reconnecting...";
+  if (state === ConnectionState.Connecting || state === "connecting") return "Connecting...";
+  if (state === "poor") return "Poor connection";
+  if (state === "ended") return "Call ended";
+  if (state === "declined") return "Call ended";
   if (state === "missed") return "Missed";
-  return "Connecting";
+  return "Connecting...";
 }
 
 function isTerminalCallStatus(status: string) {
   return status === "ended" || status === "declined" || status === "missed";
+}
+
+function mediaDeviceErrorMessage(
+  error: { name?: string } | string | undefined,
+  kind?: MediaDeviceKind,
+) {
+  const device = kind === "audioinput" ? "microphone" : "camera";
+  const errorName = typeof error === "string" ? error : error?.name;
+
+  if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
+    return `Matchr cannot access your ${device}. Allow permission and try again.`;
+  }
+
+  if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+    return `No ${device} was found on this device.`;
+  }
+
+  if (errorName === "NotReadableError" || errorName === "TrackStartError") {
+    return `Your ${device} is already in use or unavailable.`;
+  }
+
+  return `Could not start your ${device}.`;
 }
 
 function hasUsableVideo(trackRef?: TrackReferenceOrPlaceholder) {
@@ -634,15 +658,17 @@ export function LiveKitCallRoom({
       onDisconnected={() => {
         debugLog("[Matchr LiveKit] room disconnected");
         if (endedRemotely || hasEndedRef.current) return;
-        setConnectionState("ended");
+        setConnectionState("reconnecting");
       }}
       onError={(error) => {
         debugError("[Matchr LiveKit] room error", error);
-        setTokenError(error.message);
+        setTokenError(error.message || "The call connection was interrupted.");
         setStage("error");
       }}
       onMediaDeviceFailure={(failure, kind) => {
         debugWarn("[Matchr LiveKit] media device failure", kind, failure);
+        setTokenError(mediaDeviceErrorMessage(failure, kind));
+        setStage("error");
       }}
       className="fixed inset-0 z-[100] h-[100dvh] min-h-[100dvh] overflow-hidden bg-black text-white"
     >
@@ -883,6 +909,9 @@ function CallExperience({
         identity: participant.identity,
         roomName,
       });
+      if (participant.identity === peerUserId) {
+        onCallStateChange(ConnectionState.Connected);
+      }
     }
 
     function onParticipantDisconnected(participant: { identity: string }) {
@@ -890,6 +919,36 @@ function CallExperience({
         identity: participant.identity,
         roomName,
       });
+      if (participant.identity === peerUserId) {
+        onCallStateChange("reconnecting");
+      }
+    }
+
+    function onConnectionQualityChanged(
+      quality: ConnectionQuality,
+      participant: { identity: string },
+    ) {
+      debugLog("[Matchr LiveKit] connection quality changed", {
+        identity: participant.identity,
+        quality,
+        roomName,
+      });
+
+      if (participant.identity !== currentUserId && participant.identity !== peerUserId) {
+        return;
+      }
+
+      if (quality === ConnectionQuality.Poor || quality === ConnectionQuality.Lost) {
+        onCallStateChange("poor");
+        return;
+      }
+
+      if (
+        quality === ConnectionQuality.Good ||
+        quality === ConnectionQuality.Excellent
+      ) {
+        onCallStateChange(ConnectionState.Connected);
+      }
     }
 
     function onLocalTrackPublished(publication: { kind: Track.Kind; source: Track.Source }) {
@@ -955,6 +1014,7 @@ function CallExperience({
       .on(RoomEvent.ConnectionStateChanged, onConnectionStateChanged)
       .on(RoomEvent.ParticipantConnected, onParticipantConnected)
       .on(RoomEvent.ParticipantDisconnected, onParticipantDisconnected)
+      .on(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged)
       .on(RoomEvent.LocalTrackPublished, onLocalTrackPublished)
       .on(RoomEvent.TrackSubscribed, onTrackSubscribed)
       .on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
@@ -964,11 +1024,23 @@ function CallExperience({
         .off(RoomEvent.ConnectionStateChanged, onConnectionStateChanged)
         .off(RoomEvent.ParticipantConnected, onParticipantConnected)
         .off(RoomEvent.ParticipantDisconnected, onParticipantDisconnected)
+        .off(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged)
         .off(RoomEvent.LocalTrackPublished, onLocalTrackPublished)
         .off(RoomEvent.TrackSubscribed, onTrackSubscribed)
         .off(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed);
     };
-  }, [localParticipant.identity, onCallStateChange, room, roomName]);
+  }, [currentUserId, localParticipant.identity, onCallStateChange, peerUserId, room, roomName]);
+
+  useEffect(() => {
+    return () => {
+      void Promise.allSettled([
+        room.localParticipant.setCameraEnabled(false),
+        room.localParticipant.setMicrophoneEnabled(false),
+      ]).finally(() => {
+        void room.disconnect(true);
+      });
+    };
+  }, [room]);
 
   useEffect(() => {
     if (!isVideoCall || typeof navigator === "undefined") return;
