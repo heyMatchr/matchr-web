@@ -106,6 +106,30 @@ function hasUsableVideo(trackRef?: TrackReferenceOrPlaceholder) {
   );
 }
 
+function isMobileCameraDevice() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  const userAgent = navigator.userAgent || "";
+  const maxTouchPoints = navigator.maxTouchPoints ?? 0;
+  const isMobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+  const isIpadDesktopMode = /Macintosh/i.test(userAgent) && maxTouchPoints > 1;
+  const hasCoarseTouch =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(pointer: coarse)").matches &&
+    maxTouchPoints > 0;
+  const isPocketViewport =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(max-width: 820px)").matches;
+
+  return Boolean(
+    isMobileUserAgent ||
+      isIpadDesktopMode ||
+      (hasCoarseTouch && isPocketViewport),
+  );
+}
+
 function MicIcon({ off = false }: { off?: boolean }) {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.9">
@@ -767,8 +791,7 @@ function CallExperience({
     supabaseCallStatus === "ended" ||
     supabaseCallStatus === "declined" ||
     supabaseCallStatus === "missed";
-  const showSwitchCamera =
-    isVideoCall && (mobileDevice || videoInputs.filter((device) => device.deviceId).length > 1);
+  const showSwitchCamera = isVideoCall;
   const callDebugValues = useMemo(
     () => ({
       urlCallId: callId,
@@ -968,13 +991,12 @@ function CallExperience({
   useEffect(() => {
     if (!isVideoCall || typeof navigator === "undefined") return;
 
-    const mobileTimer = window.setTimeout(() => {
-      const userAgent = navigator.userAgent || "";
-      setMobileDevice(/Android|iPhone|iPad|iPod|Mobile/i.test(userAgent));
-    }, 0);
-
     async function loadVideoInputs() {
-      if (!navigator.mediaDevices?.enumerateDevices) return;
+      setMobileDevice(isMobileCameraDevice());
+
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        return;
+      }
 
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -985,9 +1007,12 @@ function CallExperience({
     }
 
     void loadVideoInputs();
+    navigator.mediaDevices?.addEventListener?.("devicechange", loadVideoInputs);
 
-    return () => window.clearTimeout(mobileTimer);
-  }, [isVideoCall]);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", loadVideoInputs);
+    };
+  }, [isCameraEnabled, isVideoCall]);
 
   useEffect(() => {
     if (
@@ -1312,7 +1337,7 @@ function CallControlsBar({
           {controlNotice}
         </p>
       ) : null}
-      <div className="mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 rounded-full border border-white/10 bg-black/70 p-2.5 shadow-[0_0_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:gap-3 sm:p-3">
+      <div className="mx-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center justify-center gap-1.5 rounded-full border border-white/10 bg-black/70 p-2 shadow-[0_0_60px_rgba(0,0,0,0.45)] backdrop-blur-2xl min-[390px]:gap-2 min-[390px]:p-2.5 sm:gap-3 sm:p-3">
         {isVideoCall ? (
           <IconButton
             active={!isCameraEnabled}
@@ -1342,7 +1367,7 @@ function CallControlsBar({
           type="button"
           onClick={onEnd}
           aria-label="End call"
-          className="grid h-12 w-12 place-items-center rounded-full border border-red-300/20 bg-red-500 text-white shadow-[0_0_45px_rgba(239,68,68,0.25)] transition hover:bg-red-400 active:scale-95 sm:h-14 sm:w-14"
+          className="grid h-11 w-11 place-items-center rounded-full border border-red-300/20 bg-red-500 text-white shadow-[0_0_45px_rgba(239,68,68,0.25)] transition hover:bg-red-400 active:scale-95 min-[390px]:h-12 min-[390px]:w-12 sm:h-14 sm:w-14"
         >
           <PhoneOffIcon />
         </button>
@@ -1367,7 +1392,7 @@ function IconButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`grid h-12 w-12 place-items-center rounded-full border transition active:scale-95 sm:h-14 sm:w-14 ${
+      className={`grid h-11 w-11 place-items-center rounded-full border transition active:scale-95 min-[390px]:h-12 min-[390px]:w-12 sm:h-14 sm:w-14 ${
         active
           ? "border-emerald-300/35 bg-emerald-300/15 text-emerald-100 shadow-[0_0_26px_rgba(16,185,129,0.14)]"
           : "border-white/10 bg-white/10 text-white hover:border-emerald-300/25 hover:text-emerald-100"
