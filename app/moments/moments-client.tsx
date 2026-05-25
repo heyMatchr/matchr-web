@@ -457,15 +457,19 @@ function CommentsSheet({
   }, [moment.id, supabase]);
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm">
-      <div className="fixed inset-x-0 bottom-0 z-[80] flex max-h-[75dvh] flex-col overflow-hidden rounded-t-[2rem] border border-b-0 border-neutral-800 bg-black shadow-[0_0_45px_rgba(74,222,128,0.08)]">
-        <div className="flex shrink-0 items-center justify-between border-b border-neutral-900 px-4 py-3 sm:px-5">
-          <h2 className="text-lg font-black">Comments</h2>
-          <button type="button" onClick={onClose} className="text-sm text-neutral-400">
+    <div className="fixed inset-0 z-[100] bg-black text-white">
+      <div className="flex h-[100dvh] flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <div className="flex shrink-0 items-center justify-between">
+          <h2 className="text-xl font-black">Comments</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-neutral-800 px-3 py-1.5 text-sm text-neutral-300"
+          >
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3 pr-3 sm:px-5">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain py-4">
           {isLoading ? (
             <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-500">
               Loading comments...
@@ -514,7 +518,7 @@ function CommentsSheet({
             await commentOnMoment(moment.id, moment.user_id, formData);
             setDraft("");
           }}
-          className="sticky bottom-0 flex shrink-0 gap-2 border-t border-neutral-900 bg-black/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:px-5"
+          className="flex shrink-0 gap-2 border-t border-white/10 pt-3"
         >
           <input
             name="content"
@@ -528,7 +532,7 @@ function CommentsSheet({
             Send
           </button>
         </form>
-      </div>
+    </div>
     </div>
   );
 }
