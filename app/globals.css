@@ -6,7 +6,11 @@
   --matchr-safe-top: env(safe-area-inset-top);
   --matchr-safe-bottom: env(safe-area-inset-bottom);
   --matchr-mobile-header-height: 4rem;
-  --matchr-bottom-nav-height: 5.65rem;
+  --matchr-bottom-nav-height: 4.75rem;
+  --matchr-bottom-nav-space: calc(var(--matchr-bottom-nav-height) + var(--matchr-safe-bottom));
+  --matchr-page-bottom-padding: calc(var(--matchr-bottom-nav-space) + 1rem);
+  --matchr-page-top-padding: calc(var(--matchr-mobile-header-height) + 0.75rem);
+  --matchr-modal-max-height: calc(100dvh - var(--matchr-safe-top) - var(--matchr-safe-bottom) - 1.5rem);
   color-scheme: dark;
 }
 
@@ -25,6 +29,7 @@ body {
 
 html,
 body {
+  width: 100%;
   min-height: 100%;
   max-width: 100%;
   overflow-x: hidden;
@@ -34,8 +39,22 @@ body {
 }
 
 body {
+  display: flex;
+  flex-direction: column;
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+  font: inherit;
 }
 
 img,
@@ -71,12 +90,13 @@ body::before {
 }
 
 .matchr-bottom-nav {
-  padding-bottom: max(calc(env(safe-area-inset-bottom) + 0.65rem), 0.9rem);
+  min-height: var(--matchr-bottom-nav-space);
+  padding-bottom: max(calc(var(--matchr-safe-bottom) + 0.65rem), 0.9rem);
 }
 
 html[data-matchr-standalone="true"] {
-  --matchr-mobile-header-height: 3.45rem;
-  --matchr-bottom-nav-height: 5.2rem;
+  --matchr-mobile-header-height: 3.75rem;
+  --matchr-bottom-nav-height: 4.55rem;
 }
 
 html[data-matchr-standalone="true"] .matchr-mobile-header {
@@ -84,11 +104,35 @@ html[data-matchr-standalone="true"] .matchr-mobile-header {
 }
 
 html[data-matchr-standalone="true"] .matchr-app-section[data-hide-header="true"] {
-  padding-top: max(calc(env(safe-area-inset-top) + 0.75rem), 1.2rem);
+  padding-top: max(var(--matchr-page-top-padding), 4.35rem);
 }
 
 html[data-matchr-standalone="true"] .matchr-app-section:not([data-hide-header="true"]) {
-  padding-top: max(calc(env(safe-area-inset-top) + 4.2rem), 4.8rem);
+  padding-top: max(var(--matchr-page-top-padding), 4.8rem);
+}
+
+.matchr-modal-overlay {
+  inset: 0;
+  min-height: 100dvh;
+  padding: max(var(--matchr-safe-top), 0.75rem) 0.75rem max(var(--matchr-safe-bottom), 0.75rem);
+}
+
+.matchr-modal-card {
+  max-height: var(--matchr-modal-max-height);
+}
+
+.matchr-bottom-sheet {
+  max-height: min(78dvh, var(--matchr-modal-max-height));
+}
+
+.matchr-bottom-sheet-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.matchr-sheet-composer {
+  padding-bottom: max(var(--matchr-safe-bottom), 0.75rem);
 }
 
 @keyframes matchr-page-enter {

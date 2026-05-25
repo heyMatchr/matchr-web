@@ -59,8 +59,8 @@ export function AppShell({
             data-hide-header={hideHeader ? "true" : undefined}
             className={`matchr-app-section relative z-10 mx-auto w-full ${maxWidth} ${
               hideHeader
-                ? "min-w-0 px-3 pb-[calc(env(safe-area-inset-bottom)+6.75rem)] pt-16 sm:px-5 md:px-6 md:py-6"
-                : "min-w-0 px-4 pb-[calc(env(safe-area-inset-bottom)+7.5rem)] pt-20 sm:px-6 md:px-8 md:py-8"
+                ? "min-w-0 px-3 pb-[var(--matchr-page-bottom-padding)] pt-[var(--matchr-page-top-padding)] sm:px-5 md:px-6 md:py-6"
+                : "min-w-0 px-4 pb-[var(--matchr-page-bottom-padding)] pt-[var(--matchr-page-top-padding)] sm:px-6 md:px-8 md:py-8"
             }`}
           >
             {hideHeader ? null : (

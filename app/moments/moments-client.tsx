@@ -300,10 +300,10 @@ export function MomentsClient({
       </div>
 
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex min-h-[100dvh] items-end overflow-hidden bg-black/80 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:items-center sm:justify-center sm:px-4">
+        <div className="matchr-modal-overlay fixed z-50 flex items-end overflow-hidden bg-black/80 backdrop-blur-sm sm:items-center sm:justify-center sm:px-4">
           <form
             action={formAction}
-            className="max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1.5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-neutral-800 bg-black p-4 shadow-[0_0_45px_rgba(74,222,128,0.10)] sm:p-5"
+            className="matchr-modal-card w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-neutral-800 bg-black p-4 shadow-[0_0_45px_rgba(74,222,128,0.10)] sm:p-5"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-black">Post moment</h2>
@@ -457,15 +457,15 @@ function CommentsSheet({
   }, [moment.id, supabase]);
 
   return (
-    <div className="fixed inset-0 z-50 flex min-h-[100dvh] items-end bg-black/70 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:px-4">
-      <div className="flex max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1.5rem)] w-full flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-[0_0_45px_rgba(74,222,128,0.08)] sm:max-h-[78dvh]">
+    <div className="matchr-modal-overlay fixed z-50 flex items-end bg-black/70 backdrop-blur-sm sm:px-4">
+      <div className="matchr-bottom-sheet flex w-full flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-[0_0_45px_rgba(74,222,128,0.08)]">
         <div className="flex shrink-0 items-center justify-between border-b border-neutral-900 px-4 py-3 sm:px-5">
           <h2 className="text-lg font-black">Comments</h2>
           <button type="button" onClick={onClose} className="text-sm text-neutral-400">
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3 pr-3 sm:px-5">
+        <div className="matchr-bottom-sheet-scroll flex-1 space-y-3 px-4 py-3 pr-3 sm:px-5">
           {isLoading ? (
             <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-500">
               Loading comments...
@@ -514,7 +514,7 @@ function CommentsSheet({
             await commentOnMoment(moment.id, moment.user_id, formData);
             setDraft("");
           }}
-          className="sticky bottom-0 flex shrink-0 gap-2 border-t border-neutral-900 bg-black/95 px-4 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur-xl sm:px-5"
+          className="matchr-sheet-composer sticky bottom-0 flex shrink-0 gap-2 border-t border-neutral-900 bg-black/95 px-4 py-3 backdrop-blur-xl sm:px-5"
         >
           <input
             name="content"
