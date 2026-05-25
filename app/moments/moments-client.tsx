@@ -3,7 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import Image from "next/image";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { GIFT_CATALOG } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
@@ -392,6 +392,30 @@ function CommentsSheet({
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [draft, setDraft] = useState("");
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    function syncViewportHeight() {
+      setViewportHeight(window.visualViewport?.height ?? window.innerHeight);
+    }
+
+    syncViewportHeight();
+    window.visualViewport?.addEventListener("resize", syncViewportHeight);
+    window.visualViewport?.addEventListener("scroll", syncViewportHeight);
+    window.addEventListener("resize", syncViewportHeight);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.visualViewport?.removeEventListener("resize", syncViewportHeight);
+      window.visualViewport?.removeEventListener("scroll", syncViewportHeight);
+      window.removeEventListener("resize", syncViewportHeight);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -457,19 +481,34 @@ function CommentsSheet({
   }, [moment.id, supabase]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black text-white">
-      <div className="flex h-[100dvh] flex-col px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-[calc(env(safe-area-inset-top)+1rem)]">
-        <div className="flex shrink-0 items-center justify-between">
-          <h2 className="text-xl font-black">Comments</h2>
+    <div
+      className="fixed inset-0 z-[100] overflow-hidden bg-black text-white [touch-action:pan-y]"
+      onTouchMove={(event) => event.stopPropagation()}
+      onTouchStart={(event) => event.stopPropagation()}
+      style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+    >
+      <div className="flex h-full min-h-0 max-w-full flex-col overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 pb-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-neutral-800 px-3 py-1.5 text-sm text-neutral-300"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-neutral-800 bg-white/[0.03] text-xl text-neutral-200"
+            aria-label="Close comments"
+          >
+            ‹
+          </button>
+          <h2 className="min-w-0 flex-1 text-center text-xl font-black">
+            Comments
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-full border border-neutral-800 px-3 py-1.5 text-sm text-neutral-300"
           >
             Close
           </button>
         </div>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain py-4">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain py-4">
           {isLoading ? (
             <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-500">
               Loading comments...
@@ -514,16 +553,25 @@ function CommentsSheet({
           )}
         </div>
         <form
+          ref={composerRef}
           action={async (formData) => {
             await commentOnMoment(moment.id, moment.user_id, formData);
             setDraft("");
           }}
-          className="flex shrink-0 gap-2 border-t border-white/10 pt-3"
+          className="flex shrink-0 gap-2 border-t border-white/10 bg-black pt-3"
         >
           <input
             name="content"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onFocus={() => {
+              window.setTimeout(() => {
+                composerRef.current?.scrollIntoView({
+                  block: "end",
+                  behavior: "smooth",
+                });
+              }, 80);
+            }}
             required
             placeholder="Write a comment"
             className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white"
