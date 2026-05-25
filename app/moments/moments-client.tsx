@@ -457,7 +457,8 @@ function CommentsSheet({
   }, [moment.id, supabase]);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 flex max-h-[calc(100dvh-5rem)] flex-col overflow-hidden rounded-t-2xl border border-b-0 border-neutral-800 bg-black shadow-[0_0_45px_rgba(74,222,128,0.08)]">
+    <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm">
+      <div className="fixed inset-x-0 bottom-0 z-[80] flex max-h-[75dvh] flex-col overflow-hidden rounded-t-[2rem] border border-b-0 border-neutral-800 bg-black shadow-[0_0_45px_rgba(74,222,128,0.08)]">
         <div className="flex shrink-0 items-center justify-between border-b border-neutral-900 px-4 py-3 sm:px-5">
           <h2 className="text-lg font-black">Comments</h2>
           <button type="button" onClick={onClose} className="text-sm text-neutral-400">
@@ -527,6 +528,7 @@ function CommentsSheet({
             Send
           </button>
         </form>
+      </div>
     </div>
   );
 }

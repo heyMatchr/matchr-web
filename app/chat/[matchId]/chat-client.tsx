@@ -863,8 +863,8 @@ export function ChatClient({
   }
 
   return (
-    <div className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.75rem)] min-h-[24rem] w-full max-w-full flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
-      <div className="flex min-h-12 shrink-0 items-center justify-between gap-1 overflow-visible border-b border-neutral-800 px-2 py-1.5 sm:min-h-16 sm:gap-2 sm:px-6 sm:py-3">
+    <div className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.75rem)] min-h-[24rem] w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
+      <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
         <Link
           href={`/profile/${receiverId}`}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-full pr-1 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:pr-2"
@@ -898,7 +898,7 @@ export function ChatClient({
             </p>
           </div>
         </Link>
-        <div className="flex min-w-fit shrink-0 items-center gap-1 overflow-visible sm:gap-2">
+        <div className="flex min-w-fit shrink-0 items-center gap-2 overflow-visible">
           <div
             aria-hidden="true"
             className={`hidden h-2.5 w-2.5 rounded-full transition-colors min-[360px]:block ${

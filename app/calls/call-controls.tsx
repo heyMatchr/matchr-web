@@ -428,14 +428,14 @@ export function CallControls({
 
   return (
     <>
-      <div className="flex min-w-fit shrink-0 items-center gap-1 sm:gap-1.5">
+      <div className="flex min-w-fit shrink-0 items-center gap-2">
         <button
           type="button"
           onClick={() => startCall("audio")}
           disabled={isPending}
           aria-label="Start audio call"
           title="Audio call"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full border border-emerald-300/30 text-emerald-100 transition-colors hover:bg-emerald-300/10 disabled:opacity-60 sm:h-10 sm:w-10 md:w-auto md:px-3"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full border border-emerald-300/30 text-emerald-100 transition-colors hover:bg-emerald-300/10 disabled:opacity-60 md:w-auto md:px-3"
         >
           <PhoneIcon />
           <span className="hidden text-sm font-medium md:inline">Audio</span>
@@ -446,7 +446,7 @@ export function CallControls({
           disabled={isPending}
           aria-label="Start video call"
           title="Video call"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-full border border-emerald-300/30 text-emerald-100 transition-colors hover:bg-emerald-300/10 disabled:opacity-60 sm:h-10 sm:w-10 md:w-auto md:px-3"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full border border-emerald-300/30 text-emerald-100 transition-colors hover:bg-emerald-300/10 disabled:opacity-60 md:w-auto md:px-3"
         >
           <CameraIcon />
           <span className="hidden text-sm font-medium md:inline">Video</span>
