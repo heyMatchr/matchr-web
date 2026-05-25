@@ -106,30 +106,6 @@ function hasUsableVideo(trackRef?: TrackReferenceOrPlaceholder) {
   );
 }
 
-function isMobileCameraDevice() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  const userAgent = navigator.userAgent || "";
-  const maxTouchPoints = navigator.maxTouchPoints ?? 0;
-  const isMobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
-  const isIpadDesktopMode = /Macintosh/i.test(userAgent) && maxTouchPoints > 1;
-  const hasCoarseTouch =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(pointer: coarse)").matches &&
-    maxTouchPoints > 0;
-  const isPocketViewport =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(max-width: 820px)").matches;
-
-  return Boolean(
-    isMobileUserAgent ||
-      isIpadDesktopMode ||
-      (hasCoarseTouch && isPocketViewport),
-  );
-}
-
 function MicIcon({ off = false }: { off?: boolean }) {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.9">
@@ -782,7 +758,7 @@ function CallExperience({
   ).length;
   const [controlNotice, setControlNotice] = useState("");
   const [videoInputs, setVideoInputs] = useState<MediaDeviceInfo[]>([]);
-  const [mobileDevice, setMobileDevice] = useState(false);
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<"user" | "environment">("user");
   const timerNow = supabaseCallEndedAt
     ? new Date(supabaseCallEndedAt).getTime()
@@ -992,8 +968,6 @@ function CallExperience({
     if (!isVideoCall || typeof navigator === "undefined") return;
 
     async function loadVideoInputs() {
-      setMobileDevice(isMobileCameraDevice());
-
       if (!navigator.mediaDevices?.enumerateDevices) {
         return;
       }
@@ -1074,11 +1048,37 @@ function CallExperience({
   }
 
   async function switchCamera() {
+    if (isSwitchingCamera) {
+      return;
+    }
+
     setControlNotice("Camera switch clicked");
 
     if (!isVideoCall) return;
 
+    setIsSwitchingCamera(true);
+
     try {
+      const nextFacingMode = cameraFacingMode === "user" ? "environment" : "user";
+
+      try {
+        await room.localParticipant.setCameraEnabled(true, {
+          facingMode: nextFacingMode,
+        });
+        setCameraFacingMode(nextFacingMode);
+        setControlNotice(nextFacingMode === "user" ? "Front camera" : "Back camera");
+        return;
+      } catch (facingModeError) {
+        debugWarn("[Matchr LiveKit] facing mode switch failed", {
+          callId,
+          error:
+            facingModeError instanceof Error
+              ? facingModeError.message
+              : facingModeError,
+          nextFacingMode,
+        });
+      }
+
       const devices =
         navigator.mediaDevices?.enumerateDevices
           ? (await navigator.mediaDevices.enumerateDevices()).filter(
@@ -1088,40 +1088,38 @@ function CallExperience({
       const usableDevices = devices.filter((device) => device.deviceId);
       setVideoInputs(devices);
 
-      if (usableDevices.length > 1) {
-        const currentDeviceId = room.getActiveDevice("videoinput");
-        const currentIndex = usableDevices.findIndex(
-          (device) => device.deviceId === currentDeviceId,
-        );
-        const nextDevice = usableDevices[(currentIndex + 1) % usableDevices.length];
-        const switched = await room.switchActiveDevice("videoinput", nextDevice.deviceId);
+      const preferredDevice = usableDevices.find((device) => {
+        const label = device.label.toLowerCase();
+        return nextFacingMode === "environment"
+          ? /back|rear|environment/i.test(label)
+          : /front|user|face/i.test(label);
+      });
 
-        if (!switched) {
-          setControlNotice("Camera switch unavailable.");
-          return;
-        }
-
-        setControlNotice("Camera switched.");
+      if (!preferredDevice) {
+        setControlNotice("Camera switch unavailable.");
         return;
       }
 
-      if (mobileDevice) {
-        const nextFacingMode = cameraFacingMode === "user" ? "environment" : "user";
-        await room.localParticipant.setCameraEnabled(true, {
-          facingMode: nextFacingMode,
-        });
-        setCameraFacingMode(nextFacingMode);
-        setControlNotice("Camera switched.");
+      const switched = await room.switchActiveDevice(
+        "videoinput",
+        preferredDevice.deviceId,
+      );
+
+      if (!switched) {
+        setControlNotice("Camera switch unavailable.");
         return;
       }
 
-      setControlNotice("Camera switch unavailable.");
+      setCameraFacingMode(nextFacingMode);
+      setControlNotice(nextFacingMode === "user" ? "Front camera" : "Back camera");
     } catch (error) {
       debugWarn("[Matchr LiveKit] camera switch failed", {
         callId,
         error: error instanceof Error ? error.message : error,
       });
       setControlNotice("Camera switch unavailable.");
+    } finally {
+      setIsSwitchingCamera(false);
     }
   }
 
@@ -1249,6 +1247,7 @@ function CallExperience({
           onSwitchCamera={() => void switchCamera()}
           onToggleCamera={() => void toggleCamera()}
           onToggleMic={() => void toggleMic()}
+          isSwitchingCamera={isSwitchingCamera}
           showSwitchCamera={showSwitchCamera}
           controlNotice={controlNotice}
         />
@@ -1317,6 +1316,7 @@ function CallControlsBar({
   onSwitchCamera,
   onToggleCamera,
   onToggleMic,
+  isSwitchingCamera,
   showSwitchCamera,
   controlNotice,
 }: {
@@ -1327,6 +1327,7 @@ function CallControlsBar({
   onSwitchCamera: () => void;
   onToggleCamera: () => void;
   onToggleMic: () => void;
+  isSwitchingCamera: boolean;
   showSwitchCamera: boolean;
   controlNotice: string;
 }) {
@@ -1351,6 +1352,7 @@ function CallControlsBar({
           <IconButton
             active={false}
             ariaLabel="Switch camera"
+            disabled={isSwitchingCamera}
             onClick={onSwitchCamera}
           >
             <SwitchCameraIcon />
@@ -1380,11 +1382,13 @@ function IconButton({
   active,
   ariaLabel,
   children,
+  disabled = false,
   onClick,
 }: {
   active: boolean;
   ariaLabel: string;
   children: React.ReactNode;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -1392,10 +1396,11 @@ function IconButton({
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
+      disabled={disabled}
       className={`grid h-11 w-11 place-items-center rounded-full border transition active:scale-95 min-[390px]:h-12 min-[390px]:w-12 sm:h-14 sm:w-14 ${
         active
           ? "border-emerald-300/35 bg-emerald-300/15 text-emerald-100 shadow-[0_0_26px_rgba(16,185,129,0.14)]"
-          : "border-white/10 bg-white/10 text-white hover:border-emerald-300/25 hover:text-emerald-100"
+          : "border-white/10 bg-white/10 text-white hover:border-emerald-300/25 hover:text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
       }`}
     >
       {children}
