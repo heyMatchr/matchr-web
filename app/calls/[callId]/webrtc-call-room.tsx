@@ -12,8 +12,14 @@ import {
   VideoTrack,
 } from "@livekit/components-react";
 import { createBrowserClient } from "@supabase/ssr";
-import { ConnectionState, RoomEvent, Track } from "livekit-client";
+import {
+  ConnectionState,
+  createLocalVideoTrack,
+  RoomEvent,
+  Track,
+} from "livekit-client";
 import type { TrackReferenceOrPlaceholder } from "@livekit/components-core";
+import type { LocalVideoTrack, TrackPublishOptions } from "livekit-client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveKitEnvStatus } from "@/lib/livekit/env";
@@ -1049,6 +1055,10 @@ function CallExperience({
 
   async function switchCamera() {
     if (isSwitchingCamera) {
+      debugLog("[CameraSwitch] ignored while switching", {
+        callId,
+        currentFacingMode: cameraFacingMode,
+      });
       return;
     }
 
@@ -1056,20 +1066,59 @@ function CallExperience({
 
     if (!isVideoCall) return;
 
+    const nextFacingMode = cameraFacingMode === "user" ? "environment" : "user";
+    debugLog("[CameraSwitch] clicked", { callId });
+    debugLog("[CameraSwitch] currentFacingMode", {
+      callId,
+      currentFacingMode: cameraFacingMode,
+    });
+    debugLog("[CameraSwitch] targetFacingMode", {
+      callId,
+      targetFacingMode: nextFacingMode,
+    });
+
     setIsSwitchingCamera(true);
 
     try {
-      const nextFacingMode = cameraFacingMode === "user" ? "environment" : "user";
+      const currentPublication = cameraTrack;
+      const currentTrack = currentPublication?.track;
+      const currentLocalVideoTrack = (
+        currentPublication as { videoTrack?: LocalVideoTrack } | undefined
+      )?.videoTrack;
+      const publishOptions: TrackPublishOptions = {
+        ...(((currentPublication as { options?: TrackPublishOptions } | undefined)
+          ?.options) ?? {}),
+        source: Track.Source.Camera,
+      };
+
+      if (currentLocalVideoTrack) {
+        await room.localParticipant.unpublishTrack(currentLocalVideoTrack, true);
+      } else if (currentTrack?.mediaStreamTrack) {
+        await room.localParticipant.unpublishTrack(currentTrack.mediaStreamTrack, true);
+      } else if (isCameraEnabled) {
+        await room.localParticipant.setCameraEnabled(false);
+      }
 
       try {
-        await room.localParticipant.setCameraEnabled(true, {
+        const freshTrack = await createLocalVideoTrack({
           facingMode: nextFacingMode,
         });
+        await room.localParticipant.publishTrack(freshTrack, publishOptions);
         setCameraFacingMode(nextFacingMode);
         setControlNotice(nextFacingMode === "user" ? "Front camera" : "Back camera");
+        debugLog("[CameraSwitch] success/failure reason", {
+          callId,
+          reason: "fresh facingMode track published",
+          targetFacingMode: nextFacingMode,
+        });
         return;
       } catch (facingModeError) {
-        debugWarn("[Matchr LiveKit] facing mode switch failed", {
+        debugLog("[CameraSwitch] success/failure reason", {
+          callId,
+          reason: "fresh facingMode publish failed, trying deviceId fallback",
+          targetFacingMode: nextFacingMode,
+        });
+        debugWarn("[Matchr LiveKit] facing mode publish failed", {
           callId,
           error:
             facingModeError instanceof Error
@@ -1079,47 +1128,104 @@ function CallExperience({
         });
       }
 
-      const devices =
-        navigator.mediaDevices?.enumerateDevices
-          ? (await navigator.mediaDevices.enumerateDevices()).filter(
-              (device) => device.kind === "videoinput",
-            )
-          : videoInputs;
-      const usableDevices = devices.filter((device) => device.deviceId);
-      setVideoInputs(devices);
-
-      const preferredDevice = usableDevices.find((device) => {
-        const label = device.label.toLowerCase();
-        return nextFacingMode === "environment"
-          ? /back|rear|environment/i.test(label)
-          : /front|user|face/i.test(label);
-      });
-
-      if (!preferredDevice) {
-        setControlNotice("Camera switch unavailable.");
-        return;
-      }
-
-      const switched = await room.switchActiveDevice(
-        "videoinput",
-        preferredDevice.deviceId,
+      const fallbackPublished = await publishFallbackCamera(
+        nextFacingMode,
+        publishOptions,
       );
 
-      if (!switched) {
-        setControlNotice("Camera switch unavailable.");
+      if (fallbackPublished) {
+        setCameraFacingMode(nextFacingMode);
+        setControlNotice(nextFacingMode === "user" ? "Front camera" : "Back camera");
+        debugLog("[CameraSwitch] success/failure reason", {
+          callId,
+          reason: "deviceId fallback published",
+          targetFacingMode: nextFacingMode,
+        });
         return;
       }
 
-      setCameraFacingMode(nextFacingMode);
-      setControlNotice(nextFacingMode === "user" ? "Front camera" : "Back camera");
+      await restorePreviousCamera(cameraFacingMode, publishOptions);
+      setControlNotice("Camera switch unavailable.");
+      debugLog("[CameraSwitch] success/failure reason", {
+        callId,
+        reason: "switch failed and previous camera restored",
+        targetFacingMode: nextFacingMode,
+      });
     } catch (error) {
       debugWarn("[Matchr LiveKit] camera switch failed", {
         callId,
         error: error instanceof Error ? error.message : error,
       });
+      await restorePreviousCamera(cameraFacingMode, { source: Track.Source.Camera });
       setControlNotice("Camera switch unavailable.");
+      debugLog("[CameraSwitch] success/failure reason", {
+        callId,
+        reason: error instanceof Error ? error.message : "unknown failure",
+        targetFacingMode: nextFacingMode,
+      });
     } finally {
       setIsSwitchingCamera(false);
+    }
+  }
+
+  async function publishFallbackCamera(
+    targetFacingMode: "user" | "environment",
+    publishOptions: TrackPublishOptions,
+  ) {
+    const devices =
+      navigator.mediaDevices?.enumerateDevices
+        ? (await navigator.mediaDevices.enumerateDevices()).filter(
+            (device) => device.kind === "videoinput",
+          )
+        : videoInputs;
+    const usableDevices = devices.filter((device) => device.deviceId);
+    setVideoInputs(devices);
+
+    const preferredDevice = usableDevices.find((device) => {
+      const label = device.label.toLowerCase();
+      return targetFacingMode === "environment"
+        ? /back|rear|environment/i.test(label)
+        : /front|user|face/i.test(label);
+    });
+
+    if (!preferredDevice) {
+      return false;
+    }
+
+    try {
+      const freshTrack = await createLocalVideoTrack({
+        deviceId: preferredDevice.deviceId,
+      });
+      await room.localParticipant.publishTrack(freshTrack, publishOptions);
+      return true;
+    } catch (error) {
+      debugWarn("[Matchr LiveKit] deviceId fallback publish failed", {
+        callId,
+        error: error instanceof Error ? error.message : error,
+        targetFacingMode,
+      });
+      return false;
+    }
+  }
+
+  async function restorePreviousCamera(
+    previousFacingMode: "user" | "environment",
+    publishOptions: TrackPublishOptions,
+  ) {
+    try {
+      const restoredTrack = await createLocalVideoTrack({
+        facingMode: previousFacingMode,
+      });
+      await room.localParticipant.publishTrack(restoredTrack, publishOptions);
+    } catch (restoreError) {
+      debugWarn("[Matchr LiveKit] camera restore failed", {
+        callId,
+        error:
+          restoreError instanceof Error
+            ? restoreError.message
+            : restoreError,
+        previousFacingMode,
+      });
     }
   }
 
