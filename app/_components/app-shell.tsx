@@ -28,7 +28,7 @@ export function AppShell({
   const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
 
   return (
-    <main className={`relative min-h-[100dvh] overflow-x-hidden bg-black text-white ${hideNav ? "" : "md:pl-64"}`}>
+    <main className={`matchr-app-shell relative min-h-[100dvh] overflow-x-hidden bg-black text-white ${hideNav ? "" : "md:pl-64"}`}>
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.10)_0%,_rgba(0,0,0,0)_58%)]" />
       <GlobalPresenceProvider
         anonKey={supabaseAnonKey}
@@ -56,7 +56,8 @@ export function AppShell({
             </>
           )}
           <section
-            className={`relative z-10 mx-auto w-full ${maxWidth} ${
+            data-hide-header={hideHeader ? "true" : undefined}
+            className={`matchr-app-section relative z-10 mx-auto w-full ${maxWidth} ${
               hideHeader
                 ? "min-w-0 px-3 pb-[calc(env(safe-area-inset-bottom)+6.75rem)] pt-16 sm:px-5 md:px-6 md:py-6"
                 : "min-w-0 px-4 pb-[calc(env(safe-area-inset-bottom)+7.5rem)] pt-20 sm:px-6 md:px-8 md:py-8"

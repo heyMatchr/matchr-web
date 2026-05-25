@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
+import { triggerMatchrHaptic } from "@/lib/haptics";
 import type { Database, MessageRow } from "@/lib/supabase/types";
 import {
   MEDIA_ALLOWED_TYPES,
@@ -444,6 +445,7 @@ export function ChatClient({
       );
     } else {
       mergeConfirmedMessage(savedMessage);
+      triggerMatchrHaptic(10);
       if (messageGoldCost > 0) {
         await supabase.from("message_charges").insert({
           gold_cost: messageGoldCost,

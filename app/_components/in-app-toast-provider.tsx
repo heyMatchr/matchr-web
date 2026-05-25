@@ -15,6 +15,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
+import { triggerMatchrHaptic } from "@/lib/haptics";
 import type {
   Database,
   MessageRow,
@@ -140,6 +141,7 @@ export function InAppToastProvider({
       });
 
       rememberShownId(toast.id);
+      triggerMatchrHaptic(12);
       window.setTimeout(() => dismissToast(toast.id), TOAST_LIFETIME_MS);
     },
     [dismissToast, rememberShownId],

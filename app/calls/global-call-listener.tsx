@@ -8,6 +8,7 @@ import {
   requestBrowserNotificationPermission,
   showBrowserNotification,
 } from "@/lib/browser-notifications";
+import { triggerMatchrHaptic } from "@/lib/haptics";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { CallSessionRow, Database } from "@/lib/supabase/types";
 
@@ -365,6 +366,7 @@ export function GlobalCallListener({
 
     if (status === "accepted") {
       debugLog("[CallLifecycle] accepted row", data);
+      triggerMatchrHaptic([24, 40, 24]);
     }
 
     setIncomingCall(null);

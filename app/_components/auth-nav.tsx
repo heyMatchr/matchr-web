@@ -10,6 +10,7 @@ import {
   sanitizeNotificationPreview,
   showBrowserNotification,
 } from "@/lib/browser-notifications";
+import { triggerMatchrHaptic } from "@/lib/haptics";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type {
   Database,
@@ -551,6 +552,7 @@ export function AuthNav({
           }
 
           setHasNewMatches(true);
+          triggerMatchrHaptic([18, 40, 18]);
           void notifyNewMatch(match);
         },
       )
@@ -576,6 +578,7 @@ export function AuthNav({
           }
 
           setHasNewMatches(true);
+          triggerMatchrHaptic([18, 40, 18]);
           void notifyNewMatch(match);
         },
       )
@@ -615,7 +618,7 @@ export function AuthNav({
 
   return (
     <>
-      <header className="fixed left-0 right-0 top-0 z-40 border-b border-white/5 bg-black/70 px-4 py-3 backdrop-blur-xl md:hidden">
+      <header className="matchr-mobile-header fixed left-0 right-0 top-0 z-40 border-b border-white/5 bg-black/70 px-4 pb-3 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -662,7 +665,7 @@ export function AuthNav({
         </form>
       </aside>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 max-w-full overflow-hidden border-t border-white/10 bg-black/75 px-2 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 shadow-[0_-16px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
+      <nav className="matchr-bottom-nav fixed bottom-0 left-0 right-0 z-40 max-w-full overflow-hidden border-t border-white/10 bg-black/75 px-2 pt-2 shadow-[0_-16px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
         <div className="mx-auto flex max-w-md items-center gap-1 min-[390px]:gap-1.5">
           {navItems.map((item) => (
             <Link
