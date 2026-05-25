@@ -6,8 +6,17 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { logOut } from "@/app/auth/actions";
+import {
+  sanitizeNotificationPreview,
+  showBrowserNotification,
+} from "@/lib/browser-notifications";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
-import type { Database, MatchRow } from "@/lib/supabase/types";
+import type {
+  Database,
+  MatchRow,
+  MessageRow,
+  NotificationRow,
+} from "@/lib/supabase/types";
 
 type AuthNavProps = {
   anonKey: string;
@@ -22,6 +31,11 @@ type NavItem = {
   label: string;
   match: (pathname: string) => boolean;
   notification?: "matches" | "messages" | "notifications";
+};
+
+type ProfilePreview = {
+  avatar_url: string | null;
+  display_name: string | null;
 };
 
 function DiscoverIcon() {
@@ -149,6 +163,9 @@ export function AuthNav({
   const [notificationCount, setNotificationCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const pathnameRef = useRef(pathname);
+  const notifiedMatchIdsRef = useRef(new Set<string>());
+  const notifiedNotificationIdsRef = useRef(new Set<string>());
+  const profilePreviewCacheRef = useRef(new Map<string, ProfilePreview>());
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -299,6 +316,103 @@ export function AuthNav({
       setHasNewMatches(matchIds.some((matchId) => !seenIds.has(matchId)));
     }
 
+    async function loadProfilePreview(profileIdToLoad: string) {
+      const cached = profilePreviewCacheRef.current.get(profileIdToLoad);
+
+      if (cached) {
+        return cached;
+      }
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, avatar_url")
+        .eq("id", profileIdToLoad)
+        .maybeSingle();
+
+      const preview = data ?? { avatar_url: null, display_name: null };
+      profilePreviewCacheRef.current.set(profileIdToLoad, preview);
+
+      return preview;
+    }
+
+    async function notifyIncomingMessage(message: MessageRow) {
+      if (message.sender_id === currentUserId) {
+        return;
+      }
+
+      if (pathnameRef.current === `/chat/${message.match_id}`) {
+        return;
+      }
+
+      if (message.message_type === "gift") {
+        return;
+      }
+
+      const sender = await loadProfilePreview(message.sender_id);
+      showBrowserNotification({
+        body: sanitizeNotificationPreview({
+          content: message.content,
+          mediaType: message.media_type,
+          messageType: message.message_type,
+        }),
+        icon: sender.avatar_url,
+        requireHidden: false,
+        tag: `matchr-message-${message.id}`,
+        title: sender.display_name ?? "New Matchr message",
+      });
+    }
+
+    async function notifyGiftReceived(notification: NotificationRow) {
+      if (notification.type !== "gift_received") {
+        return;
+      }
+
+      if (notifiedNotificationIdsRef.current.has(notification.id)) {
+        return;
+      }
+
+      notifiedNotificationIdsRef.current.add(notification.id);
+      const actor = notification.actor_id
+        ? await loadProfilePreview(notification.actor_id)
+        : null;
+
+      showBrowserNotification({
+        body:
+          notification.body ||
+          `${actor?.display_name ?? "Someone"} sent you a gift.`,
+        icon: actor?.avatar_url,
+        requireHidden: false,
+        tag: `matchr-notification-${notification.id}`,
+        title: notification.title || "Gift received",
+      });
+    }
+
+    async function notifyNewMatch(match: MatchRow) {
+      if (notifiedMatchIdsRef.current.has(match.id)) {
+        return;
+      }
+
+      notifiedMatchIdsRef.current.add(match.id);
+
+      if (pathnameRef.current.startsWith("/matches")) {
+        return;
+      }
+
+      const otherUserId =
+        match.user_one_id === currentUserId ? match.user_two_id : match.user_one_id;
+      const otherProfile = await loadProfilePreview(otherUserId);
+
+      showBrowserNotification({
+        body: otherProfile.display_name
+          ? `You and ${otherProfile.display_name} matched.`
+          : "You have a new match.",
+        icon: otherProfile.avatar_url,
+        requireHidden: false,
+        tag: `matchr-match-${match.id}`,
+        title: "New Matchr match",
+      });
+    }
+
     void Promise.all([
       refreshUnreadCount(),
       refreshNotificationCount(),
@@ -319,8 +433,9 @@ export function AuthNav({
           table: "notifications",
           filter: `user_id=eq.${currentUserId}`,
         },
-        () => {
+        (payload) => {
           void refreshNotificationCount();
+          void notifyGiftReceived(payload.new as NotificationRow);
         },
       )
       .on(
@@ -343,8 +458,9 @@ export function AuthNav({
           table: "messages",
           filter: `receiver_id=eq.${currentUserId}`,
         },
-        () => {
+        (payload) => {
           void refreshUnreadCount();
+          void notifyIncomingMessage(payload.new as MessageRow);
         },
       )
       .on(
@@ -381,6 +497,7 @@ export function AuthNav({
           }
 
           setHasNewMatches(true);
+          void notifyNewMatch(match);
         },
       )
       .on(
@@ -405,6 +522,7 @@ export function AuthNav({
           }
 
           setHasNewMatches(true);
+          void notifyNewMatch(match);
         },
       )
       .subscribe();

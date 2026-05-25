@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings } from "./actions";
+import { BrowserNotificationSettings } from "./browser-notification-settings";
 
 const defaults = {
   allow_gifts: true,
@@ -112,6 +113,7 @@ export default async function SettingsPage() {
         </SettingsSection>
 
         <SettingsSection title="Notifications">
+          <BrowserNotificationSettings />
           <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Push notifications placeholder" />
           <Toggle defaultChecked={settings.story_notifications} name="story_notifications" title="Story notifications" />
           <Toggle defaultChecked={settings.message_notifications} name="message_notifications" title="Message notifications" />

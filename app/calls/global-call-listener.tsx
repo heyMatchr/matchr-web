@@ -3,6 +3,11 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  areBrowserNotificationsEnabled,
+  requestBrowserNotificationPermission,
+  showBrowserNotification,
+} from "@/lib/browser-notifications";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { CallSessionRow, Database } from "@/lib/supabase/types";
 
@@ -128,16 +133,12 @@ export function GlobalCallListener({
       setCallerProfile(profile ?? null);
       playRingtone();
 
-      if (
-        alertsEnabled &&
-        document.visibilityState === "hidden" &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-      ) {
-        new Notification(`Matchr ${callLabel(call.call_type)} Call`, {
+      if (alertsEnabled || areBrowserNotificationsEnabled()) {
+        showBrowserNotification({
           body: `${profile?.display_name ?? "Someone"} is calling you.`,
-          icon: profile?.avatar_url ?? "/matchr-logo.png",
+          icon: profile?.avatar_url,
           tag: `matchr-call-${call.id}`,
+          title: `Incoming Matchr ${call.call_type === "video" ? "video" : "audio"} call`,
         });
       }
 
@@ -201,7 +202,7 @@ export function GlobalCallListener({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setAlertsEnabled(localStorage.getItem("matchr_call_alerts") === "enabled");
+      setAlertsEnabled(areBrowserNotificationsEnabled());
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -317,13 +318,8 @@ export function GlobalCallListener({
   }, [currentUserId, enterCallRoom, showIncomingCall, stopRingtone, supabase]);
 
   async function enableCallAlerts() {
-    if (!("Notification" in window)) {
-      return;
-    }
-
-    const permission = await Notification.requestPermission();
-    if (permission === "granted") {
-      localStorage.setItem("matchr_call_alerts", "enabled");
+    const status = await requestBrowserNotificationPermission();
+    if (status === "enabled") {
       setAlertsEnabled(true);
     }
   }

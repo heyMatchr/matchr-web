@@ -4,6 +4,7 @@ import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
 import { logOut } from "@/app/auth/actions";
 import { SafetyActions } from "@/app/safety/safety-actions";
+import { BrowserNotificationSettings } from "@/app/settings/browser-notification-settings";
 import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
@@ -480,6 +481,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 <p className="mt-3 text-xs text-neutral-500">
                   Gold wallet coming soon.
                 </p>
+              </div>
+            ) : null}
+
+            {profile.id === user.id ? (
+              <div className="mt-4">
+                <BrowserNotificationSettings compact />
               </div>
             ) : null}
 

@@ -89,6 +89,7 @@ export function ChatClient({
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const messagesViewportRef = useRef<HTMLDivElement>(null);
   const privateMediaInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -209,18 +210,50 @@ export function ChatClient({
     }
   }, [receiverId]);
 
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = "smooth") => {
+    scrollRef.current?.scrollIntoView({ behavior, block: "end" });
     const scrollTimer = window.setTimeout(() => {
-      scrollRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      scrollRef.current?.scrollIntoView({ behavior, block: "end" });
     }, 80);
 
+    return scrollTimer;
+  }, []);
+
+  useEffect(() => {
+    const scrollTimer = scrollToLatest("smooth");
+
     return () => window.clearTimeout(scrollTimer);
-  }, [messages]);
+  }, [messages, scrollToLatest]);
 
   useEffect(() => {
     inputRef.current?.focus({ preventScroll: true });
-  }, []);
+    const scrollTimer = window.setTimeout(() => scrollToLatest("auto"), 120);
+
+    return () => window.clearTimeout(scrollTimer);
+  }, [scrollToLatest]);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+
+    if (!viewport) {
+      return undefined;
+    }
+
+    function handleViewportChange() {
+      window.requestAnimationFrame(() => {
+        inputRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        scrollToLatest("auto");
+      });
+    }
+
+    viewport.addEventListener("resize", handleViewportChange);
+    viewport.addEventListener("scroll", handleViewportChange);
+
+    return () => {
+      viewport.removeEventListener("resize", handleViewportChange);
+      viewport.removeEventListener("scroll", handleViewportChange);
+    };
+  }, [scrollToLatest]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -672,7 +705,7 @@ export function ChatClient({
               : "Activity";
 
       return (
-        <div className="rounded-2xl border border-neutral-800 bg-black/25 px-4 py-3 text-center">
+        <div className="rounded-2xl border border-neutral-800 bg-black/25 px-3 py-2.5 text-center sm:px-4 sm:py-3">
           <p className="text-xs font-medium uppercase tracking-[0.22em] text-neutral-500">
             {label}
           </p>
@@ -689,8 +722,8 @@ export function ChatClient({
       const gift = getGiftOption(message.gift_type);
 
       return (
-        <div className="min-w-40 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-center shadow-[0_0_26px_rgba(16,185,129,0.08)]">
-          <p className="text-3xl">{gift?.icon ?? "✦"}</p>
+        <div className="min-w-36 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2.5 text-center shadow-[0_0_26px_rgba(16,185,129,0.08)] sm:min-w-40 sm:px-4 sm:py-3">
+          <p className="text-2xl sm:text-3xl">{gift?.icon ?? "✦"}</p>
           <p className="mt-2 text-sm font-black">
             {gift?.name ?? message.gift_type ?? "Gift"}
           </p>
@@ -741,7 +774,7 @@ export function ChatClient({
             event.preventDefault();
             showPrivacyWarning();
           }}
-          className="group relative h-36 w-40 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
+          className="group relative h-32 w-36 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
         >
           {message.media_type === "video" ? (
             <video
@@ -805,7 +838,7 @@ export function ChatClient({
           controls
           playsInline
           preload="metadata"
-          className="max-h-72 max-w-full rounded-2xl object-contain"
+          className="max-h-[42dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
         />
       ) : (
         <Image
@@ -814,21 +847,21 @@ export function ChatClient({
           width={640}
           height={640}
           sizes="(min-width: 640px) 70vw, 82vw"
-          className="h-auto max-h-72 max-w-full rounded-2xl object-contain"
+          className="h-auto max-h-[42dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
         />
       );
     }
 
     return (
-      <p className="whitespace-pre-wrap break-words text-sm leading-6">
+      <p className="whitespace-pre-wrap break-words text-sm leading-5 sm:leading-6">
         {message.content}
       </p>
     );
   }
 
   return (
-    <div className="mt-2 flex h-[calc(100dvh-10.75rem)] min-h-0 w-full max-w-full flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
-      <div className="flex min-h-16 items-center justify-between gap-2 border-b border-neutral-800 px-3 py-3 sm:px-6">
+    <div className="mt-1 flex h-[calc(100dvh-10rem)] min-h-0 w-full max-w-full flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
+      <div className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2.5 sm:min-h-16 sm:px-6 sm:py-3">
         <Link
           href={`/profile/${receiverId}`}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-full pr-2 transition-colors hover:bg-white/[0.03]"
@@ -853,7 +886,7 @@ export function ChatClient({
             <p className="truncate text-sm font-medium text-white">
               {receiverName}
             </p>
-            <p className="mt-1 min-h-5 text-sm text-neutral-500 transition-colors">
+              <p className="mt-0.5 min-h-4 text-xs text-neutral-500 transition-colors sm:mt-1 sm:min-h-5 sm:text-sm">
               {isReceiverOnline ? (
                 <span className="text-emerald-200">Online now</span>
               ) : (
@@ -873,7 +906,10 @@ export function ChatClient({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3 pb-8 sm:space-y-3 sm:p-6 sm:pb-8">
+      <div
+        ref={messagesViewportRef}
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5 pb-5 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
+      >
         {messages.length > 0 ? (
           messages.map((message) => {
             const isMine = message.sender_id === currentUserId;
@@ -884,7 +920,7 @@ export function ChatClient({
                 className={`flex ${isMine ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[88%] overflow-hidden rounded-3xl px-4 py-3 sm:max-w-[70%] ${
+                  className={`max-w-[88%] overflow-hidden rounded-3xl px-3 py-2.5 sm:max-w-[70%] sm:px-4 sm:py-3 ${
                     isMine
                       ? "bg-white text-black"
                       : "border border-neutral-800 bg-neutral-950 text-white"
@@ -927,14 +963,14 @@ export function ChatClient({
 
       <form
         onSubmit={sendMessage}
-        className="sticky bottom-0 border-t border-neutral-800 bg-black/85 p-2.5 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
+        className="sticky bottom-0 shrink-0 border-t border-neutral-800 bg-black/90 p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
         <div className="relative flex min-w-0 gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setIsMediaMenuOpen((current) => !current)}
             aria-label="Open media options"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15 sm:h-12 sm:w-12"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15 sm:h-12 sm:w-12"
           >
             +
           </button>
@@ -1023,12 +1059,12 @@ export function ChatClient({
             disabled={sending}
             maxLength={1000}
             placeholder="Write a message"
-            className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60 sm:px-5"
+            className="min-h-10 min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60 sm:px-5 sm:py-3"
           />
           <button
             type="submit"
             disabled={sending}
-            className="shrink-0 rounded-full bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-60 sm:px-6 sm:text-base"
+            className="min-h-10 shrink-0 rounded-full bg-white px-3.5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-60 sm:px-6 sm:py-3 sm:text-base"
           >
             {sending ? "..." : "Send"}
           </button>
