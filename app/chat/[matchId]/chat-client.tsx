@@ -863,13 +863,13 @@ export function ChatClient({
   }
 
   return (
-    <div className="mt-1 flex h-[calc(100dvh-10rem)] min-h-0 w-full max-w-full flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
-      <div className="flex min-h-14 shrink-0 items-center justify-between gap-2 border-b border-neutral-800 px-3 py-2.5 sm:min-h-16 sm:px-6 sm:py-3">
+    <div className="mt-1 flex h-[calc(100dvh-9.5rem)] min-h-0 w-full max-w-full flex-col overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
+      <div className="flex min-h-14 shrink-0 items-center justify-between gap-1.5 border-b border-neutral-800 px-2.5 py-2 sm:min-h-16 sm:gap-2 sm:px-6 sm:py-3">
         <Link
           href={`/profile/${receiverId}`}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-full pr-2 transition-colors hover:bg-white/[0.03]"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-full pr-1 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:pr-2"
         >
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950">
+          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-10 sm:w-10">
             {receiverAvatarUrl ? (
               <Image
                 src={receiverAvatarUrl}
@@ -885,11 +885,11 @@ export function ChatClient({
               </div>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-white">
+          <div className="min-w-0 flex-1">
+            <p className="max-w-[7rem] truncate text-sm font-medium text-white min-[390px]:max-w-[9rem] sm:max-w-none">
               {receiverName}
             </p>
-              <p className="mt-0.5 min-h-4 text-xs text-neutral-500 transition-colors sm:mt-1 sm:min-h-5 sm:text-sm">
+              <p className="mt-0.5 min-h-4 truncate text-[11px] text-neutral-500 transition-colors sm:mt-1 sm:min-h-5 sm:text-sm">
               {receiverOnlineForDisplay ? (
                 <span className="text-emerald-200">Online now</span>
               ) : (
@@ -898,10 +898,10 @@ export function ChatClient({
             </p>
           </div>
         </Link>
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="flex min-w-fit shrink-0 items-center gap-1 sm:gap-2">
           <div
             aria-hidden="true"
-            className={`h-2.5 w-2.5 rounded-full transition-colors ${
+            className={`hidden h-2.5 w-2.5 rounded-full transition-colors min-[360px]:block ${
               receiverOnlineForDisplay ? "bg-emerald-300" : "bg-neutral-700"
             }`}
           />

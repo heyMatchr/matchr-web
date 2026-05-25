@@ -123,7 +123,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           goldBalance={wallet?.gold_balance ?? 0}
           hasPremium={Boolean(premium)}
           headerActions={
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-fit shrink-0 items-center gap-1 sm:gap-2">
               <CallControls
                 anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
                 currentUserId={user.id}

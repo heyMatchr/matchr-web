@@ -300,10 +300,10 @@ export function MomentsClient({
       </div>
 
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end overflow-y-auto bg-black/80 px-4 pb-4 pt-10 backdrop-blur-sm sm:items-center sm:justify-center sm:pb-10">
+        <div className="fixed inset-0 z-50 flex min-h-[100dvh] items-end overflow-hidden bg-black/80 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:items-center sm:justify-center sm:px-4">
           <form
             action={formAction}
-            className="my-auto w-full max-w-lg rounded-2xl border border-neutral-800 bg-black p-5 shadow-[0_0_45px_rgba(74,222,128,0.10)]"
+            className="max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1.5rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-neutral-800 bg-black p-4 shadow-[0_0_45px_rgba(74,222,128,0.10)] sm:p-5"
           >
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-black">Post moment</h2>
@@ -322,14 +322,14 @@ export function MomentsClient({
               required
               disabled={pending}
               onChange={validateMedia}
-              className="mt-5 w-full rounded-2xl border border-neutral-700 bg-black/60 px-4 py-4 text-sm text-neutral-300 file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-black"
+              className="mt-4 w-full rounded-2xl border border-neutral-700 bg-black/60 px-4 py-3 text-sm text-neutral-300 file:mr-4 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-black sm:mt-5 sm:py-4"
             />
             <textarea
               name="caption"
               maxLength={500}
               disabled={pending}
               placeholder="Caption"
-              className="mt-4 min-h-28 w-full rounded-3xl border border-neutral-700 bg-black/60 px-5 py-4 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none"
+              className="mt-3 min-h-24 w-full rounded-3xl border border-neutral-700 bg-black/60 px-5 py-3 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none sm:mt-4 sm:min-h-28 sm:py-4"
             />
             <p className="mt-3 min-h-5 text-sm text-red-300">
               {mediaError || state.message}
@@ -457,15 +457,15 @@ function CommentsSheet({
   }, [moment.id, supabase]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
-      <div className="flex max-h-[82vh] w-full flex-col rounded-2xl border border-neutral-800 bg-black p-5">
-        <div className="flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex min-h-[100dvh] items-end bg-black/70 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:px-4">
+      <div className="flex max-h-[calc(100dvh_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom)_-_1.5rem)] w-full flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-black shadow-[0_0_45px_rgba(74,222,128,0.08)] sm:max-h-[78dvh]">
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-900 px-4 py-3 sm:px-5">
           <h2 className="text-lg font-black">Comments</h2>
           <button type="button" onClick={onClose} className="text-sm text-neutral-400">
             Close
           </button>
         </div>
-        <div className="mt-4 min-h-40 flex-1 space-y-3 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3 pr-3 sm:px-5">
           {isLoading ? (
             <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-500">
               Loading comments...
@@ -514,7 +514,7 @@ function CommentsSheet({
             await commentOnMoment(moment.id, moment.user_id, formData);
             setDraft("");
           }}
-          className="mt-4 flex gap-2"
+          className="sticky bottom-0 flex shrink-0 gap-2 border-t border-neutral-900 bg-black/95 px-4 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] backdrop-blur-xl sm:px-5"
         >
           <input
             name="content"
@@ -524,7 +524,7 @@ function CommentsSheet({
             placeholder="Write a comment"
             className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white"
           />
-          <button className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black">
+          <button className="shrink-0 rounded-full bg-white px-4 py-3 text-sm font-medium text-black">
             Send
           </button>
         </form>
