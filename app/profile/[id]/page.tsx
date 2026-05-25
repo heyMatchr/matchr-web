@@ -10,6 +10,7 @@ import { likeProfile } from "@/app/discover/actions";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ProfileOnlineStatus } from "./profile-online-status";
 
 type ProfilePageProps = {
   params: Promise<{
@@ -444,9 +445,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   {badge}
                 </span>
               ))}
-              <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
-                Last active recently
-              </span>
+              <ProfileOnlineStatus userId={profile.id} />
               <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
                 Email verified
               </span>

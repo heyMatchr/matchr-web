@@ -3,7 +3,10 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useGlobalPresence } from "@/app/_components/global-presence";
+import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
 
@@ -20,6 +23,8 @@ type ConversationMessage = Pick<
   | "created_at"
   | "id"
   | "match_id"
+  | "media_type"
+  | "message_type"
   | "read_at"
   | "receiver_id"
   | "sender_id"
@@ -42,6 +47,20 @@ type MessagesClientProps = {
   initialConversations: Conversation[];
   supabaseUrl: string;
 };
+
+type MatchrNewMessageEventDetail = {
+  contentPreview: string;
+  created_at: string;
+  id: string;
+  match_id: string;
+  media_type: string | null;
+  message_type: string;
+  read_at: string | null;
+  receiver_id: string;
+  sender_id: string;
+};
+
+const MESSAGE_PREVIEW_STORAGE_PREFIX = "matchr_latest_message_preview_";
 
 function formatMessageTime(timestamp?: string) {
   if (!timestamp) {
@@ -73,14 +92,109 @@ export function MessagesClient({
     sortConversations(initialConversations),
   );
   const [error, setError] = useState("");
+  const router = useRouter();
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const { isUserOnline } = useGlobalPresence();
   const blockedUserIdSet = useMemo(
     () => new Set(blockedUserIds),
     [blockedUserIds],
   );
+
+  const updateLatestMessage = useCallback((nextMessage: MessageRow) => {
+    setConversations((current) =>
+      sortConversations(
+        current.map((conversation) =>
+          conversation.id === nextMessage.match_id
+            ? conversation.latestMessage?.id === nextMessage.id
+              ? conversation
+              : {
+                  ...conversation,
+                  latestMessage: nextMessage,
+                  unreadCount:
+                    nextMessage.receiver_id === currentUserId &&
+                    !nextMessage.read_at
+                      ? conversation.unreadCount + 1
+                      : conversation.unreadCount,
+                }
+            : conversation,
+        ),
+      ),
+    );
+  }, [currentUserId]);
+
+  const applyMessagePreview = useCallback(
+    (detail: MatchrNewMessageEventDetail) => {
+      updateLatestMessage({
+        content: detail.contentPreview,
+        created_at: detail.created_at,
+        expires_at: null,
+        gift_type: null,
+        id: detail.id,
+        match_id: detail.match_id,
+        media_type: detail.media_type,
+        media_url: null,
+        message_type: detail.message_type,
+        read_at: detail.read_at,
+        receiver_id: detail.receiver_id,
+        sender_id: detail.sender_id,
+        story_id: null,
+        viewed_at: null,
+      });
+    },
+    [updateLatestMessage],
+  );
+
+  useEffect(() => {
+    const storedPreviews: MatchrNewMessageEventDetail[] = [];
+
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+
+      if (!key?.startsWith(MESSAGE_PREVIEW_STORAGE_PREFIX)) {
+        continue;
+      }
+
+      try {
+        const preview = JSON.parse(
+          sessionStorage.getItem(key) ?? "null",
+        ) as MatchrNewMessageEventDetail | null;
+
+        if (preview) {
+          storedPreviews.push(preview);
+        }
+      } catch {
+        sessionStorage.removeItem(key);
+      }
+    }
+
+    const refreshTimer = window.setTimeout(() => {
+      storedPreviews.forEach((preview) => applyMessagePreview(preview));
+      router.refresh();
+    }, 0);
+
+    return () => window.clearTimeout(refreshTimer);
+  }, [applyMessagePreview, router]);
+
+  useEffect(() => {
+    function handleNewMessage(event: Event) {
+      const { detail } = event as CustomEvent<MatchrNewMessageEventDetail>;
+
+      if (!detail) {
+        return;
+      }
+
+      applyMessagePreview(detail);
+    }
+
+    window.addEventListener("matchr:new-message", handleNewMessage);
+
+    return () => {
+      window.removeEventListener("matchr:new-message", handleNewMessage);
+    };
+  }, [applyMessagePreview]);
 
   useEffect(() => {
     const perfStartedAt = startPerfTimer();
@@ -132,28 +246,6 @@ export function MessagesClient({
           ...current,
         ]);
       });
-    }
-
-    function updateLatestMessage(nextMessage: MessageRow) {
-      setConversations((current) =>
-        sortConversations(
-          current.map((conversation) =>
-            conversation.id === nextMessage.match_id
-              ? conversation.latestMessage?.id === nextMessage.id
-                ? conversation
-                : {
-                    ...conversation,
-                    latestMessage: nextMessage,
-                    unreadCount:
-                      nextMessage.receiver_id === currentUserId &&
-                      !nextMessage.read_at
-                        ? conversation.unreadCount + 1
-                        : conversation.unreadCount,
-                  }
-              : conversation,
-          ),
-        ),
-      );
     }
 
     function refreshReadState(nextMessage: MessageRow) {
@@ -239,7 +331,7 @@ export function MessagesClient({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [blockedUserIdSet, currentUserId, supabase]);
+  }, [blockedUserIdSet, currentUserId, supabase, updateLatestMessage]);
 
   return (
     <>
@@ -257,7 +349,7 @@ export function MessagesClient({
               href={`/chat/${conversation.id}`}
               className="flex items-center gap-4 rounded-lg border border-neutral-800 bg-black/50 p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-neutral-600 hover:shadow-[0_0_35px_rgba(74,222,128,0.08)]"
             >
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-20 sm:w-20">
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-20 sm:w-20">
                 {conversation.profile.avatar_url ? (
                   <Image
                     src={conversation.profile.avatar_url}
@@ -272,6 +364,9 @@ export function MessagesClient({
                     {conversation.profile.display_name.charAt(0)}
                   </div>
                 )}
+                {isUserOnline(conversation.profile.id) ? (
+                  <span className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-black bg-emerald-300 shadow-[0_0_14px_rgba(74,222,128,0.45)]" />
+                ) : null}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -281,8 +376,12 @@ export function MessagesClient({
                       {conversation.profile.display_name},{" "}
                       {conversation.profile.age}
                     </h2>
-                    <p className="mt-1 text-xs text-emerald-200">
-                      Last seen recently
+                    <p className="mt-1 text-xs text-neutral-500">
+                      {isUserOnline(conversation.profile.id) ? (
+                        <span className="text-emerald-200">Online now</span>
+                      ) : (
+                        "Last seen recently"
+                      )}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -304,7 +403,11 @@ export function MessagesClient({
 
                 <p className="mt-3 line-clamp-1 text-sm text-neutral-400">
                   {conversation.latestMessage
-                    ? conversation.latestMessage.content
+                    ? sanitizeNotificationPreview({
+                        content: conversation.latestMessage.content,
+                        mediaType: conversation.latestMessage.media_type,
+                        messageType: conversation.latestMessage.message_type,
+                      })
                     : "No messages yet."}
                 </p>
               </div>

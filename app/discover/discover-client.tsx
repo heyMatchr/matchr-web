@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useMemo, useState, useTransition } from "react";
+import { useGlobalPresence } from "@/app/_components/global-presence";
 import { likeProfile, passProfile } from "./actions";
 
 export type DiscoverProfile = {
@@ -43,6 +44,7 @@ export function DiscoverClient({
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("compatible");
+  const { isUserOnline } = useGlobalPresence();
   const [filters, setFilters] = useState({
     acceptingDating: false,
     hasMoments: false,
@@ -58,7 +60,7 @@ export function DiscoverClient({
     const filtered = profiles.filter((profile) => {
       if (dismissed.has(profile.id)) return false;
       if (profile.age < filters.minAge || profile.age > filters.maxAge) return false;
-      if (filters.onlineNow && !profile.isOnline) return false;
+      if (filters.onlineNow && !(profile.isOnline || isUserOnline(profile.id))) return false;
       if (filters.hasStories && !profile.hasStories) return false;
       if (filters.hasMoments && !profile.hasMoments) return false;
       if (filters.verifiedOnly && !profile.verified) return false;
@@ -70,10 +72,22 @@ export function DiscoverClient({
     return [...filtered].sort((a, b) => {
       if (sortBy === "trending") return b.trendingScore - a.trendingScore;
       if (sortBy === "most followed") return b.followerCount - a.followerCount;
-      if (sortBy === "most active") return Number(b.isOnline) - Number(a.isOnline);
+      if (sortBy === "most active") {
+        return (
+          Number(b.isOnline || isUserOnline(b.id)) -
+          Number(a.isOnline || isUserOnline(a.id))
+        );
+      }
       return b.compatibility - a.compatibility;
     });
-  }, [dismissedIds, filters, profiles, sortBy]);
+  }, [dismissedIds, filters, isUserOnline, profiles, sortBy]);
+  const liveRecentlyActive = useMemo(
+    () =>
+      profiles
+        .filter((profile) => profile.isOnline || isUserOnline(profile.id) || profile.hasStories)
+        .slice(0, 10),
+    [isUserOnline, profiles],
+  );
 
   function act(profileId: string, action: "like" | "pass") {
     setDismissedIds((current) => [...current, profileId]);
@@ -102,7 +116,7 @@ export function DiscoverClient({
         </button>
       </div>
 
-      <ProfileRail title="Recently Active" profiles={recentlyActive} />
+      <ProfileRail title="Recently Active" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />
       <ProfileRail title="Trending Profiles" profiles={trending} />
 
       {visibleProfiles.length > 0 ? (
@@ -206,6 +220,8 @@ export function DiscoverClient({
 }
 
 function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: string }) {
+  const { isUserOnline } = useGlobalPresence();
+
   if (!profiles.length) return null;
 
   return (
@@ -220,7 +236,7 @@ function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: 
             href={`/profile/${profile.id}`}
             className="w-36 shrink-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3"
           >
-            <div className={`aspect-square overflow-hidden rounded-xl bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
+            <div className={`relative aspect-square overflow-hidden rounded-xl bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
               {profile.avatar_url ? (
                 <Image
                   src={profile.avatar_url}
@@ -230,6 +246,9 @@ function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: 
                   sizes="144px"
                   className="h-full w-full object-cover"
                 />
+              ) : null}
+              {profile.isOnline || isUserOnline(profile.id) ? (
+                <span className="absolute right-2 top-2 h-3 w-3 rounded-full border-2 border-black bg-emerald-300 shadow-[0_0_14px_rgba(74,222,128,0.45)]" />
               ) : null}
             </div>
             <p className="mt-2 truncate text-sm font-black">{profile.display_name}</p>
@@ -255,6 +274,8 @@ function SwipeCard({
   profile: DiscoverProfile;
 }) {
   const [dragStart, setDragStart] = useState<number | null>(null);
+  const { isUserOnline } = useGlobalPresence();
+  const profileIsOnline = profile.isOnline || isUserOnline(profile.id);
 
   return (
     <article
@@ -285,7 +306,7 @@ function SwipeCard({
           </div>
         )}
         <div className="absolute left-3 top-3 flex gap-2">
-          {profile.isOnline ? <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black">Online</span> : null}
+          {profileIsOnline ? <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black">Online</span> : null}
           {profile.verified ? <span className="rounded-full border border-white/20 bg-black/45 px-3 py-1 text-xs text-white">Verified</span> : null}
         </div>
       </div>

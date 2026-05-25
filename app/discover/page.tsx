@@ -21,7 +21,7 @@ export default async function DiscoverPage() {
         supabase
           .from("profiles")
           .select(
-            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, created_at",
+            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, is_online, last_seen_at, created_at",
           )
           .eq("onboarding_completed", true)
           .neq("id", user.id)
@@ -216,14 +216,12 @@ export default async function DiscoverPage() {
     }
   });
   const giftCounts = countBy(giftTransactionsResult.data, "receiver_id");
-  const activityHash = (value: string) =>
-    value.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const discoverProfiles: DiscoverProfile[] = visibleProfiles.map((profile) => {
     const sharedInterests = profile.interests?.length ?? 0;
     const momentCount = momentCounts.get(profile.id) ?? 0;
     const followerCount = followerCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
-    const isOnline = activityHash(profile.id) % 3 !== 0;
+    const isOnline = profile.is_online;
     const trendingScore =
       followerCount * 3 +
       momentCount * 4 +

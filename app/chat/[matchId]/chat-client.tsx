@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useGlobalPresence } from "@/app/_components/global-presence";
 import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
 import type { Database, MessageRow } from "@/lib/supabase/types";
 import {
@@ -71,7 +72,6 @@ export function ChatClient({
 }: ChatClientProps) {
   const [messages, setMessages] = useState(initialMessages);
   const [content, setContent] = useState("");
-  const [isReceiverOnline, setIsReceiverOnline] = useState(false);
   const [isReceiverTyping, setIsReceiverTyping] = useState(false);
   const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
   const [activePrivateMessage, setActivePrivateMessage] =
@@ -97,6 +97,9 @@ export function ChatClient({
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const { isUserOnline } = useGlobalPresence();
+  const receiverIsGloballyOnline = isUserOnline(receiverId);
+  const receiverOnlineForDisplay = receiverIsGloballyOnline;
   const activePrivateSeconds =
     activePrivateMessage?.expires_at
       ? Math.max(
@@ -187,7 +190,6 @@ export function ChatClient({
       PresenceMeta[]
     >;
     const receiverPresence = presenceState[receiverId] ?? [];
-    const receiverIsOnline = receiverPresence.length > 0;
     const receiverIsTyping = receiverPresence.some((presence) => {
       if (!presence.typing || !presence.typing_at) {
         return false;
@@ -196,7 +198,6 @@ export function ChatClient({
       return Date.now() - new Date(presence.typing_at).getTime() < 4000;
     });
 
-    setIsReceiverOnline(receiverIsOnline);
     setIsReceiverTyping(receiverIsTyping);
 
     if (receiverTypingTimerRef.current) {
@@ -451,7 +452,7 @@ export function ChatClient({
           sender_id: currentUserId,
         });
       }
-      if (!isReceiverOnline) {
+      if (!receiverIsGloballyOnline) {
         await supabase.from("notifications").insert({
           actor_id: currentUserId,
           body:
@@ -887,7 +888,7 @@ export function ChatClient({
               {receiverName}
             </p>
               <p className="mt-0.5 min-h-4 text-xs text-neutral-500 transition-colors sm:mt-1 sm:min-h-5 sm:text-sm">
-              {isReceiverOnline ? (
+              {receiverOnlineForDisplay ? (
                 <span className="text-emerald-200">Online now</span>
               ) : (
                 "Last seen recently"
@@ -899,7 +900,7 @@ export function ChatClient({
           <div
             aria-hidden="true"
             className={`h-2.5 w-2.5 rounded-full transition-colors ${
-              isReceiverOnline ? "bg-emerald-300" : "bg-neutral-700"
+              receiverOnlineForDisplay ? "bg-emerald-300" : "bg-neutral-700"
             }`}
           />
           {headerActions}

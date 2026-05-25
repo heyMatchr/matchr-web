@@ -3,6 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useGlobalPresence } from "@/app/_components/global-presence";
 import type { Database, MatchRow } from "@/lib/supabase/types";
 
 type MatchProfile = {
@@ -46,6 +47,7 @@ export function MatchesClient({
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const { isUserOnline } = useGlobalPresence();
   const blockedUserIdSet = useMemo(
     () => new Set(blockedUserIds),
     [blockedUserIds],
@@ -155,7 +157,7 @@ export function MatchesClient({
               href={`/chat/${match.id}`}
               className="overflow-hidden rounded-lg border border-neutral-800 bg-black/50 transition-all duration-300 hover:-translate-y-0.5 hover:border-neutral-600 hover:shadow-[0_0_35px_rgba(74,222,128,0.08)]"
             >
-              <div className="aspect-[4/3] overflow-hidden bg-neutral-950">
+              <div className="relative aspect-[4/3] overflow-hidden bg-neutral-950">
                 {match.profile.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -168,6 +170,11 @@ export function MatchesClient({
                     {match.profile.display_name.charAt(0)}
                   </div>
                 )}
+                {isUserOnline(match.profile.id) ? (
+                  <span className="absolute right-3 top-3 rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black shadow-[0_0_18px_rgba(74,222,128,0.35)]">
+                    Online
+                  </span>
+                ) : null}
               </div>
               <div className="p-5">
                 <h2 className="text-2xl font-black tracking-tight">
@@ -180,7 +187,11 @@ export function MatchesClient({
                   {match.profile.bio}
                 </p>
                 <p className="mt-5 text-sm text-neutral-500">
-                  Last active recently
+                  {isUserOnline(match.profile.id) ? (
+                    <span className="text-emerald-200">Online now</span>
+                  ) : (
+                    "Last active recently"
+                  )}
                 </p>
               </div>
             </Link>

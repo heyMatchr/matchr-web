@@ -38,6 +38,20 @@ type ProfilePreview = {
   display_name: string | null;
 };
 
+type MatchrNewMessageEventDetail = {
+  contentPreview: string;
+  created_at: string;
+  id: string;
+  match_id: string;
+  media_type: string | null;
+  message_type: string;
+  read_at: string | null;
+  receiver_id: string;
+  sender_id: string;
+};
+
+const MESSAGE_PREVIEW_STORAGE_PREFIX = "matchr_latest_message_preview_";
+
 function DiscoverIcon() {
   return (
     <svg
@@ -348,18 +362,55 @@ export function AuthNav({
         return;
       }
 
+      const contentPreview = sanitizeNotificationPreview({
+        content: message.content,
+        mediaType: message.media_type,
+        messageType: message.message_type,
+      });
       const sender = await loadProfilePreview(message.sender_id);
-      showBrowserNotification({
-        body: sanitizeNotificationPreview({
-          content: message.content,
-          mediaType: message.media_type,
-          messageType: message.message_type,
-        }),
+      const shown = showBrowserNotification({
+        body: contentPreview,
         icon: sender.avatar_url,
         requireHidden: false,
         tag: `matchr-message-${message.id}`,
         title: sender.display_name ?? "New Matchr message",
       });
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[BrowserNotification] message attempt", {
+          messageId: message.id,
+          shown,
+        });
+      }
+    }
+
+    function dispatchNewMessageEvent(message: MessageRow) {
+      const contentPreview = sanitizeNotificationPreview({
+        content: message.content,
+        mediaType: message.media_type,
+        messageType: message.message_type,
+      });
+      const detail: MatchrNewMessageEventDetail = {
+        contentPreview,
+        created_at: message.created_at,
+        id: message.id,
+        match_id: message.match_id,
+        media_type: message.media_type,
+        message_type: message.message_type,
+        read_at: message.read_at,
+        receiver_id: message.receiver_id,
+        sender_id: message.sender_id,
+      };
+
+      sessionStorage.setItem(
+        `${MESSAGE_PREVIEW_STORAGE_PREFIX}${message.match_id}`,
+        JSON.stringify(detail),
+      );
+      window.dispatchEvent(
+        new CustomEvent<MatchrNewMessageEventDetail>("matchr:new-message", {
+          detail,
+        }),
+      );
     }
 
     async function notifyGiftReceived(notification: NotificationRow) {
@@ -459,8 +510,10 @@ export function AuthNav({
           filter: `receiver_id=eq.${currentUserId}`,
         },
         (payload) => {
+          const message = payload.new as MessageRow;
           void refreshUnreadCount();
-          void notifyIncomingMessage(payload.new as MessageRow);
+          dispatchNewMessageEvent(message);
+          void notifyIncomingMessage(message);
         },
       )
       .on(

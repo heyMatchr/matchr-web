@@ -54,7 +54,7 @@ export default async function MessagesPage() {
   );
 
   const messageSelect =
-    "id, sender_id, receiver_id, match_id, content, read_at, created_at";
+    "id, sender_id, receiver_id, match_id, content, message_type, media_type, read_at, created_at";
   const recentMessageLimit = Math.min(
     500,
     Math.max(80, Math.max(1, matchIds.length) * 4),
@@ -111,6 +111,8 @@ export default async function MessagesPage() {
     | "created_at"
     | "id"
     | "match_id"
+    | "media_type"
+    | "message_type"
     | "read_at"
     | "receiver_id"
     | "sender_id"

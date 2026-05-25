@@ -29,6 +29,8 @@ export type ProfileRow = {
   looking_for: string | null;
   verified: boolean;
   onboarding_completed: boolean;
+  last_seen_at: string | null;
+  is_online: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -813,6 +815,8 @@ export type Database = {
           looking_for?: string | null;
           verified?: boolean;
           onboarding_completed?: boolean;
+          last_seen_at?: string | null;
+          is_online?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -841,6 +845,8 @@ export type Database = {
           looking_for?: string | null;
           verified?: boolean;
           onboarding_completed?: boolean;
+          last_seen_at?: string | null;
+          is_online?: boolean;
           created_at?: string;
           updated_at?: string;
         };

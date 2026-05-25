@@ -15,6 +15,7 @@ type BrowserNotificationPayload = {
 };
 
 const NOTIFICATION_PREF_KEY = "matchr_browser_notifications_enabled";
+const ENABLE_NOTIFICATION_DEBUG = process.env.NODE_ENV === "development";
 
 function hasNotificationApi() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -120,11 +121,71 @@ export function showBrowserNotification({
   tag,
   title,
 }: BrowserNotificationPayload) {
-  if (!areBrowserNotificationsEnabled()) {
+  const debugState = {
+    enabledFlag:
+      typeof window === "undefined"
+        ? null
+        : localStorage.getItem(NOTIFICATION_PREF_KEY),
+    isSecureContext:
+      typeof window === "undefined" ? false : window.isSecureContext,
+    permission: hasNotificationApi() ? Notification.permission : "unsupported",
+    requireHidden,
+    visibilityState:
+      typeof document === "undefined" ? "unknown" : document.visibilityState,
+  };
+
+  if (!hasNotificationApi()) {
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] skipped", {
+        ...debugState,
+        reason: "unsupported",
+        title,
+      });
+    }
+    return false;
+  }
+
+  if (!window.isSecureContext) {
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] skipped", {
+        ...debugState,
+        reason: "insecure-context",
+        title,
+      });
+    }
+    return false;
+  }
+
+  if (Notification.permission !== "granted") {
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] skipped", {
+        ...debugState,
+        reason: "permission-not-granted",
+        title,
+      });
+    }
+    return false;
+  }
+
+  if (localStorage.getItem(NOTIFICATION_PREF_KEY) !== "enabled") {
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] skipped", {
+        ...debugState,
+        reason: "local-storage-flag-disabled",
+        title,
+      });
+    }
     return false;
   }
 
   if (requireHidden && document.visibilityState !== "hidden") {
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] skipped", {
+        ...debugState,
+        reason: "visible-tab",
+        title,
+      });
+    }
     return false;
   }
 
@@ -134,10 +195,50 @@ export function showBrowserNotification({
       icon: icon ?? "/matchr-logo.png",
       tag,
     });
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] shown", {
+        ...debugState,
+        tag,
+        title,
+      });
+    }
     return true;
-  } catch {
+  } catch (error) {
+    if (ENABLE_NOTIFICATION_DEBUG) {
+      console.log("[BrowserNotification] failed", {
+        ...debugState,
+        error,
+        reason: "browser-blocked-notification",
+        title,
+      });
+    }
     return false;
   }
+}
+
+export function showTestBrowserNotification() {
+  return showBrowserNotification({
+    body: "Browser notifications are ready for Matchr.",
+    requireHidden: false,
+    tag: "matchr-test-notification",
+    title: "Matchr notifications enabled",
+  });
+}
+
+export function getBrowserNotificationDebugState() {
+  if (typeof window === "undefined") {
+    return {
+      enabledFlag: null,
+      isSecureContext: false,
+      permission: "unknown",
+    };
+  }
+
+  return {
+    enabledFlag: localStorage.getItem(NOTIFICATION_PREF_KEY),
+    isSecureContext: window.isSecureContext,
+    permission: hasNotificationApi() ? Notification.permission : "unsupported",
+  };
 }
 
 export function vibrateForNotification(pattern: VibratePattern = [140, 70, 140]) {
