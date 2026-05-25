@@ -482,7 +482,7 @@ function CommentsSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[100] overflow-hidden bg-black text-white [touch-action:pan-y]"
+      className="fixed inset-0 z-[120] overflow-hidden bg-black text-white [touch-action:none]"
       onTouchMove={(event) => event.stopPropagation()}
       onTouchStart={(event) => event.stopPropagation()}
       style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
@@ -507,6 +507,51 @@ function CommentsSheet({
           >
             Close
           </button>
+        </div>
+        <div className="mt-3 flex shrink-0 items-center gap-3 rounded-2xl border border-neutral-900 bg-white/[0.03] p-3">
+          <Link
+            href={`/profile/${moment.profile.id}`}
+            className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950"
+          >
+            {moment.profile.avatar_url ? (
+              <Image
+                src={moment.profile.avatar_url}
+                alt={moment.profile.display_name}
+                width={40}
+                height={40}
+                sizes="40px"
+                className="h-full w-full object-cover"
+              />
+            ) : null}
+          </Link>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-black text-white">
+              {moment.profile.display_name}
+            </p>
+            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-neutral-400">
+              {moment.caption || "Moment comments"}
+            </p>
+          </div>
+          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-neutral-950">
+            {moment.media_type === "video" ? (
+              <video
+                src={moment.media_url}
+                muted
+                playsInline
+                preload="metadata"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <Image
+                src={moment.media_url}
+                alt=""
+                width={48}
+                height={48}
+                sizes="48px"
+                className="h-full w-full object-cover"
+              />
+            )}
+          </div>
         </div>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden overscroll-contain py-4">
           {isLoading ? (
