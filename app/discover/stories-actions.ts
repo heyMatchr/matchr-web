@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   STORY_ALLOWED_TYPES,
@@ -32,73 +31,87 @@ export async function createStory(
   _previousState: StoryFormState,
   formData: FormData,
 ): Promise<StoryFormState> {
-  const text = getFormString(formData, "text");
-  const backgroundStyle = getFormString(formData, "background_style") || "emerald";
-  const media = formData.get("media");
+  try {
+    const text = getFormString(formData, "text");
+    const backgroundStyle = getFormString(formData, "background_style") || "emerald";
+    const media = formData.get("media");
+    const hasMedia = media instanceof File && media.size > 0;
 
-  if (text.length > 220) {
-    return { message: "Keep story text under 220 characters." };
-  }
-
-  if (!(media instanceof File) && !text) {
-    return { message: "Add an image or a short status." };
-  }
-
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login?next=/discover");
-  }
-
-  let mediaUrl: string | null = null;
-  let mediaPath = "";
-
-  if (media instanceof File && media.size > 0) {
-    if (!STORY_ALLOWED_TYPES.includes(media.type as (typeof STORY_ALLOWED_TYPES)[number])) {
-      return { message: "Upload a JPG, PNG, WebP, or GIF story image." };
+    if (text.length > 220) {
+      return { message: "Keep story text under 220 characters." };
     }
 
-    if (media.size > STORY_MAX_SIZE_BYTES) {
-      return { message: "Keep story images under 10 MB." };
+    if (!hasMedia && !text) {
+      return { message: "Add an image or a short status." };
     }
 
-    mediaPath = `${user.id}/story-${Date.now()}.${getMediaExtension(media)}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(STORY_BUCKET_NAME)
-      .upload(mediaPath, media, {
-        cacheControl: "3600",
-        contentType: media.type,
-      });
-
-    if (uploadError) {
-      return { message: uploadError.message };
-    }
-
+    const supabase = await createSupabaseServerClient();
     const {
-      data: { publicUrl },
-    } = supabase.storage.from(STORY_BUCKET_NAME).getPublicUrl(mediaPath);
-    mediaUrl = publicUrl;
-  }
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  const { error } = await supabase.from("stories").insert({
-    background_style: backgroundStyle,
-    media_url: mediaUrl,
-    text,
-    user_id: user.id,
-  });
-
-  if (error) {
-    if (mediaPath) {
-      await supabase.storage.from(STORY_BUCKET_NAME).remove([mediaPath]);
+    if (!user) {
+      return { message: "Sign in again to post a story." };
     }
 
-    return { message: error.message };
-  }
+    let mediaUrl: string | null = null;
+    let mediaPath = "";
 
-  revalidatePath("/discover");
-  return { message: "" };
+    if (hasMedia) {
+      if (!STORY_ALLOWED_TYPES.includes(media.type as (typeof STORY_ALLOWED_TYPES)[number])) {
+        return { message: "Upload a JPG, PNG, WebP, or GIF story image." };
+      }
+
+      if (media.size > STORY_MAX_SIZE_BYTES) {
+        return { message: "Keep story images under 10 MB." };
+      }
+
+      mediaPath = `${user.id}/story-${Date.now()}.${getMediaExtension(media)}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(STORY_BUCKET_NAME)
+        .upload(mediaPath, media, {
+          cacheControl: "3600",
+          contentType: media.type,
+        });
+
+      if (uploadError) {
+        return { message: uploadError.message };
+      }
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from(STORY_BUCKET_NAME).getPublicUrl(mediaPath);
+      mediaUrl = publicUrl;
+    }
+
+    const { error } = await supabase.from("stories").insert({
+      background_style: backgroundStyle,
+      media_url: mediaUrl,
+      text,
+      user_id: user.id,
+    });
+
+    if (error) {
+      if (mediaPath) {
+        await supabase.storage.from(STORY_BUCKET_NAME).remove([mediaPath]);
+      }
+
+      return { message: error.message };
+    }
+
+    revalidatePath("/discover");
+    return { message: "" };
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[Stories] createStory failed", error);
+    }
+
+    return {
+      message:
+        error instanceof Error
+          ? error.message
+          : "Could not post your story. Try again.",
+    };
+  }
 }

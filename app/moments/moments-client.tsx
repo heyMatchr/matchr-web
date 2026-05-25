@@ -115,6 +115,13 @@ export function MomentsClient({
     video.src = URL.createObjectURL(file);
   }
 
+  function openComments(moment: MomentCard) {
+    setOpenSettingsId("");
+    setActiveGifts(null);
+    setActiveLikes(null);
+    setActiveComments(moment);
+  }
+
   return (
     <>
       <div className="mt-6 flex min-w-0 items-center justify-between gap-3 md:mt-8">
@@ -250,8 +257,12 @@ export function MomentsClient({
                   </form>
                   <button
                     type="button"
-                    onClick={() => setActiveComments(moment)}
-                    className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openComments(moment);
+                    }}
+                    className="relative z-10 touch-manipulation rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
                   >
                     {moment.commentCount} comments
                   </button>

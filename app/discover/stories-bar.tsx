@@ -275,34 +275,44 @@ export function StoriesBar({
   }, [activeGroup?.isOwn, activeStory, currentUserId, supabase]);
 
   function handleMediaChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    try {
+      const file = event.target.files?.[0];
 
-    if (mediaPreview) {
-      URL.revokeObjectURL(mediaPreview);
-    }
+      if (mediaPreview) {
+        URL.revokeObjectURL(mediaPreview);
+      }
 
-    setMediaError("");
+      setMediaError("");
 
-    if (!file) {
-      setMediaPreview("");
-      return;
-    }
+      if (!file) {
+        setMediaPreview("");
+        return;
+      }
 
-    if (!STORY_ALLOWED_TYPES.includes(file.type as (typeof STORY_ALLOWED_TYPES)[number])) {
+      if (!STORY_ALLOWED_TYPES.includes(file.type as (typeof STORY_ALLOWED_TYPES)[number])) {
+        event.target.value = "";
+        setMediaPreview("");
+        setMediaError("Upload a JPG, PNG, WebP, or GIF story image.");
+        return;
+      }
+
+      if (file.size > STORY_MAX_SIZE_BYTES) {
+        event.target.value = "";
+        setMediaPreview("");
+        setMediaError("Keep story images under 10 MB.");
+        return;
+      }
+
+      setMediaPreview(URL.createObjectURL(file));
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[Stories] media preview failed", error);
+      }
+
       event.target.value = "";
       setMediaPreview("");
-      setMediaError("Upload a JPG, PNG, WebP, or GIF story image.");
-      return;
+      setMediaError("Could not preview this image. Try another one.");
     }
-
-    if (file.size > STORY_MAX_SIZE_BYTES) {
-      event.target.value = "";
-      setMediaPreview("");
-      setMediaError("Keep story images under 10 MB.");
-      return;
-    }
-
-    setMediaPreview(URL.createObjectURL(file));
   }
 
   function openViewer(index: number) {
