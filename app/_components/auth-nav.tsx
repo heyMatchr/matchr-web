@@ -486,7 +486,8 @@ export function AuthNav({
         },
         (payload) => {
           void refreshNotificationCount();
-          void notifyGiftReceived(payload.new as NotificationRow);
+          const notification = payload.new as NotificationRow;
+          void notifyGiftReceived(notification);
         },
       )
       .on(
