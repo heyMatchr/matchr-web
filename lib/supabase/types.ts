@@ -33,6 +33,11 @@ export type ProfileRow = {
   is_online: boolean;
   moderation_score: number;
   under_review: boolean;
+  shadow_restricted: boolean;
+  discover_hidden: boolean;
+  messaging_limited: boolean;
+  calls_limited: boolean;
+  trusted_user: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -845,6 +850,11 @@ export type Database = {
           is_online?: boolean;
           moderation_score?: number;
           under_review?: boolean;
+          shadow_restricted?: boolean;
+          discover_hidden?: boolean;
+          messaging_limited?: boolean;
+          calls_limited?: boolean;
+          trusted_user?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -877,6 +887,11 @@ export type Database = {
           is_online?: boolean;
           moderation_score?: number;
           under_review?: boolean;
+          shadow_restricted?: boolean;
+          discover_hidden?: boolean;
+          messaging_limited?: boolean;
+          calls_limited?: boolean;
+          trusted_user?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -1066,6 +1081,13 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      apply_self_moderation_penalty: {
+        Args: {
+          reason: string;
+          amount?: number;
+        };
+        Returns: undefined;
+      };
       users_are_blocked: {
         Args: {
           first_user_id: string;

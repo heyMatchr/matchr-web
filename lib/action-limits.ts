@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { applyModerationPenalty } from "@/lib/moderation";
 import type { Database } from "@/lib/supabase/types";
 
 export const ACTION_LIMIT_MESSAGE =
@@ -75,6 +76,12 @@ export async function enforceActionLimit(
   );
 
   if (!result.allowed) {
+    await applyModerationPenalty(
+      supabase,
+      userId,
+      `rate_limit:${actionType}`,
+      1,
+    );
     return false;
   }
 

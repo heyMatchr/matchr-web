@@ -15,6 +15,7 @@ import {
   recordAction,
 } from "@/lib/action-limits";
 import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
+import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
 import { triggerMatchrHaptic } from "@/lib/haptics";
 import type { Database, MessageRow } from "@/lib/supabase/types";
 import {
@@ -417,6 +418,13 @@ export function ChatClient({
       return;
     }
 
+    const canMessage = await canUserMessage(supabase, currentUserId);
+
+    if (!canMessage) {
+      setError(MODERATION_UNAVAILABLE_MESSAGE);
+      return;
+    }
+
     const allowed = await enforceActionLimit(
       supabase,
       currentUserId,
@@ -543,6 +551,13 @@ export function ChatClient({
         setError("Keep videos under 30 seconds.");
         return;
       }
+    }
+
+    const canMessage = await canUserMessage(supabase, currentUserId);
+
+    if (!canMessage) {
+      setError(MODERATION_UNAVAILABLE_MESSAGE);
+      return;
     }
 
     const allowed = await enforceActionLimit(

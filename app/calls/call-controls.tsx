@@ -4,6 +4,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
+import { MODERATION_UNAVAILABLE_MESSAGE, canUserCall } from "@/lib/moderation";
 import type { CallSessionRow, Database } from "@/lib/supabase/types";
 
 type CallType = "audio" | "video";
@@ -309,6 +310,13 @@ export function CallControls({
     }
 
     startTransition(async () => {
+      const canCall = await canUserCall(supabase, currentUserId);
+
+      if (!canCall) {
+        setError(MODERATION_UNAVAILABLE_MESSAGE);
+        return;
+      }
+
       const allowed = await enforceActionLimit(
         supabase,
         currentUserId,

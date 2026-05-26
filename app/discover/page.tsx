@@ -1,4 +1,5 @@
 import { AppShell } from "@/app/_components/app-shell";
+import { canAppearInDiscover } from "@/lib/moderation";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
@@ -21,7 +22,7 @@ export default async function DiscoverPage() {
         supabase
           .from("profiles")
           .select(
-            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, is_online, last_seen_at, created_at",
+            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, is_online, last_seen_at, discover_hidden, shadow_restricted, trusted_user, created_at",
           )
           .eq("onboarding_completed", true)
           .neq("id", user.id)
@@ -63,7 +64,10 @@ export default async function DiscoverPage() {
     ),
   ]);
   const visibleProfiles =
-    profilesResult.data.filter((profile) => !excludedUserIds.has(profile.id)) ??
+    profilesResult.data.filter(
+      (profile) =>
+        !excludedUserIds.has(profile.id) && canAppearInDiscover(profile),
+    ) ??
     [];
   const { data: stories, error: storiesError } = await timeAsync(
     "[Perf] Discover stories",
