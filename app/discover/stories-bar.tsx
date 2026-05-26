@@ -617,12 +617,12 @@ export function StoriesBar({
       </div>
 
       {isCreateOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end overflow-y-auto bg-black/80 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-6 backdrop-blur-sm sm:items-center sm:justify-center sm:pb-6">
+        <div className="fixed inset-0 z-[120] flex min-w-0 items-center justify-center overflow-hidden bg-black/90 px-3 py-4 backdrop-blur-sm">
           <form
             action={formAction}
-            className="max-h-[calc(100dvh-3rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-800 bg-black p-5 shadow-[0_0_45px_rgba(74,222,128,0.10)]"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-neutral-800 bg-black p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] shadow-[0_0_45px_rgba(74,222,128,0.10)] sm:p-5 sm:pb-6"
           >
-            <div className="flex items-center justify-between gap-4">
+            <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center justify-between gap-4 border-b border-white/10 bg-black px-4 py-4 sm:-mx-5 sm:-mt-5 sm:px-5">
               <h2 className="text-xl font-black tracking-tight">Create story</h2>
               <button
                 type="button"
@@ -635,14 +635,14 @@ export function StoriesBar({
 
             <label
               htmlFor="media"
-              className="mt-5 flex min-h-44 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-neutral-700 bg-white/[0.03] text-center text-sm text-neutral-400"
+              className="mt-4 flex min-h-32 max-h-[35dvh] cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed border-neutral-700 bg-white/[0.03] text-center text-sm text-neutral-400 sm:mt-5 sm:min-h-44"
             >
               {mediaPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={mediaPreview}
                   alt="Story preview"
-                  className="h-full max-h-72 w-full object-cover"
+                  className="h-full max-h-[35dvh] w-full object-contain"
                 />
               ) : (
                 "Upload image"
@@ -663,7 +663,7 @@ export function StoriesBar({
               maxLength={220}
               disabled={pending}
               placeholder="Add a short status"
-              className="mt-4 min-h-24 w-full rounded-3xl border border-neutral-700 bg-black/60 px-5 py-4 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none"
+              className="mt-4 min-h-20 w-full rounded-3xl border border-neutral-700 bg-black/60 px-5 py-4 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none sm:min-h-24"
             />
 
             <select
