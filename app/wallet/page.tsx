@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { getEconomyConfig } from "@/lib/economy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
 
@@ -32,6 +33,7 @@ export default async function WalletPage() {
     messageChargesResult,
     premiumResult,
     paymentOrdersResult,
+    premiumWeeklyPrice,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase.from("gold_packages").select("id, name, gold_amount, price_usd").order("price_usd", { ascending: true }),
@@ -41,6 +43,7 @@ export default async function WalletPage() {
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
     supabase.from("payment_orders").select("order_type, status, amount_usd, gold_amount, plan_name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+    getEconomyConfig<number>(supabase, "premium_weekly_price_usd"),
   ]);
 
   return (
@@ -81,7 +84,7 @@ export default async function WalletPage() {
           </p>
           <form action={startPremiumCheckout} className="mt-4">
             <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
-              Start $3/week placeholder checkout
+              Start ${premiumWeeklyPrice}/week placeholder checkout
             </button>
           </form>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">

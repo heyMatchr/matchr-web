@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getGiftCatalog } from "@/lib/economy";
 import { getGiftOption } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -208,7 +209,7 @@ export async function commentOnMoment(
 
 export async function giftMoment(momentId: string, ownerId: string, giftType: string) {
   const { supabase, user } = await currentUser();
-  const gift = getGiftOption(giftType);
+  const gift = getGiftOption(giftType, await getGiftCatalog(supabase));
 
   if (ownerId === user.id || !gift) {
     return {

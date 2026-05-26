@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
-import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
+import type { GiftOption } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import { ReportButton } from "@/app/safety/report-button";
@@ -39,6 +39,7 @@ export type StoryGroup = {
 export type StoriesBarProps = {
   anonKey: string;
   currentUserId: string;
+  giftCatalog: GiftOption[];
   initialGroups: StoryGroup[];
   supabaseUrl: string;
 };
@@ -174,6 +175,7 @@ async function compressStoryImage(file: File) {
 export function StoriesBar({
   anonKey,
   currentUserId,
+  giftCatalog,
   initialGroups,
   supabaseUrl,
 }: StoriesBarProps) {
@@ -1194,7 +1196,7 @@ export function StoriesBar({
                         <p className="px-2 text-xs text-neutral-500">
                           Coin wallet coming soon
                         </p>
-                        {GIFT_CATALOG.map((gift) => (
+                        {giftCatalog.map((gift) => (
                           <button
                             key={gift.type}
                             type="button"

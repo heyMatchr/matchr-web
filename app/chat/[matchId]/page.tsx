@@ -3,6 +3,12 @@ import { AppShell } from "@/app/_components/app-shell";
 import { CallControls } from "@/app/calls/call-controls";
 import { ChatClient } from "@/app/chat/[matchId]/chat-client";
 import { SafetyActions } from "@/app/safety/safety-actions";
+import {
+  DEFAULT_MESSAGE_RULES,
+  getCreatorSplit,
+  getEconomyConfig,
+  getGiftCatalog,
+} from "@/lib/economy";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
@@ -28,7 +34,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const { data: currentProfile } = await timeAsync("[Perf] Chat profile", () =>
     supabase
       .from("profiles")
-      .select("id, gender, onboarding_completed")
+      .select("id, gender, gender_identity, onboarding_completed")
       .eq("id", user.id)
       .maybeSingle(),
   );
@@ -67,12 +73,19 @@ export default async function ChatPage({ params }: ChatPageProps) {
     redirect("/messages?blocked=1");
   }
 
-  const [{ data: receiverProfile }, { data: wallet }, { data: premium }] =
+  const [
+    { data: receiverProfile },
+    { data: wallet },
+    { data: premium },
+    giftCatalog,
+    messageRules,
+    creatorSplit,
+  ] =
     await timeAsync("[Perf] Chat media/profile enrichment", () =>
       Promise.all([
         supabase
           .from("profiles")
-          .select("display_name, avatar_url, gender")
+          .select("display_name, avatar_url, gender, gender_identity")
           .eq("id", receiverId)
           .maybeSingle(),
         supabase
@@ -87,6 +100,12 @@ export default async function ChatPage({ params }: ChatPageProps) {
           .eq("plan_name", "Matchr Premium")
           .eq("status", "active")
           .maybeSingle(),
+        getGiftCatalog(supabase),
+        getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(
+          supabase,
+          "message_rules",
+        ),
+        getCreatorSplit(supabase),
       ]),
     );
 
@@ -121,8 +140,12 @@ export default async function ChatPage({ params }: ChatPageProps) {
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
           currentUserGender={currentProfile.gender}
+          currentUserGenderIdentity={currentProfile.gender_identity}
+          creatorSplit={creatorSplit}
+          giftCatalog={giftCatalog}
           goldBalance={wallet?.gold_balance ?? 0}
           hasPremium={Boolean(premium)}
+          messageRules={messageRules}
           headerActions={
             <div className="flex min-w-fit shrink-0 items-center gap-1 sm:gap-2">
               <CallControls
@@ -145,6 +168,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           matchId={match.id}
           receiverAvatarUrl={receiverProfile?.avatar_url ?? null}
           receiverGender={receiverProfile?.gender ?? ""}
+          receiverGenderIdentity={receiverProfile?.gender_identity ?? null}
           receiverId={receiverId}
           receiverName={receiverProfile?.display_name ?? "Chat"}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}

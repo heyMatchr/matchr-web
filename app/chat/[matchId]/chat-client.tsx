@@ -14,7 +14,13 @@ import {
   enforceActionLimit,
   recordAction,
 } from "@/lib/action-limits";
-import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
+import {
+  calculateMessageCost,
+  DEFAULT_CREATOR_SPLIT,
+  DEFAULT_MESSAGE_RULES,
+  type CreatorSplit,
+} from "@/lib/economy";
+import { getGiftOption, type GiftOption } from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
 import { triggerMatchrHaptic } from "@/lib/haptics";
 import type { Database, MessageRow } from "@/lib/supabase/types";
@@ -39,13 +45,18 @@ type ChatClientProps = {
   anonKey: string;
   currentUserId: string;
   currentUserGender: string;
+  currentUserGenderIdentity: string | null;
+  creatorSplit: CreatorSplit;
+  giftCatalog: GiftOption[];
   goldBalance: number;
   hasPremium: boolean;
   headerActions?: ReactNode;
   initialMessages: LocalMessage[];
   matchId: string;
+  messageRules: typeof DEFAULT_MESSAGE_RULES;
   receiverAvatarUrl: string | null;
   receiverGender: string;
+  receiverGenderIdentity: string | null;
   receiverId: string;
   receiverName: string;
   supabaseUrl: string;
@@ -67,13 +78,18 @@ export function ChatClient({
   anonKey,
   currentUserId,
   currentUserGender,
+  currentUserGenderIdentity,
+  creatorSplit,
+  giftCatalog,
   goldBalance,
   hasPremium,
   headerActions,
   initialMessages,
   matchId,
+  messageRules,
   receiverAvatarUrl,
   receiverGender,
+  receiverGenderIdentity,
   receiverId,
   receiverName,
   supabaseUrl,
@@ -88,6 +104,7 @@ export function ChatClient({
   const [privacyWarning, setPrivacyWarning] = useState("");
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
   const [goldModal, setGoldModal] = useState("");
+  const [spendableGold, setSpendableGold] = useState(goldBalance);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [mobileViewportHeight, setMobileViewportHeight] = useState<
@@ -120,13 +137,21 @@ export function ChatClient({
           ),
         )
       : 0;
-  const messageGoldCost =
-    currentUserGender.toLowerCase() === "male" &&
-    receiverGender.toLowerCase() === "female"
-      ? hasPremium
-        ? 2
-        : 5
-      : 0;
+  const messageGoldCost = calculateMessageCost({
+    hasPremium,
+    hasReceiverReply: messages.some(
+      (message) => message.sender_id === receiverId && !message.optimistic,
+    ),
+    receiver: {
+      gender: receiverGender,
+      gender_identity: receiverGenderIdentity,
+    },
+    rules: { ...DEFAULT_MESSAGE_RULES, ...messageRules },
+    sender: {
+      gender: currentUserGender,
+      gender_identity: currentUserGenderIdentity,
+    },
+  });
   const mobileChatHeightStyle = mobileViewportHeight
     ? {
         height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.75rem)`,
@@ -413,8 +438,8 @@ export function ChatClient({
       return;
     }
 
-    if (messageGoldCost > 0 && goldBalance < messageGoldCost) {
-      setGoldModal("Not enough gold to send this demo paid message.");
+    if (messageGoldCost > 0 && spendableGold < messageGoldCost) {
+      setGoldModal("Not enough Gold to send this paid first message.");
       return;
     }
 
@@ -468,20 +493,22 @@ export function ChatClient({
 
     setMessages((current) => [...current, optimisticMessage]);
 
-    const { data: savedMessage, error: sendError } = await supabase
-      .from("messages")
-      .insert({
-        content: trimmedContent,
-        match_id: matchId,
-        message_type: "text",
-        receiver_id: receiverId,
-        sender_id: currentUserId,
-      })
-      .select(MESSAGE_SELECT)
-      .single();
+    const { data: savedMessage, error: sendError } = await supabase.rpc(
+      "send_text_message_with_economy",
+      {
+        active_match_id: matchId,
+        gold_amount: messageGoldCost,
+        message_body: trimmedContent,
+        receiver_user_id: receiverId,
+      },
+    );
 
     if (sendError) {
-      setError(sendError.message);
+      setError(
+        sendError.message.includes("insufficient_gold")
+          ? "Not enough Gold to send this message."
+          : sendError.message,
+      );
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticMessage.id),
       );
@@ -489,12 +516,7 @@ export function ChatClient({
       mergeConfirmedMessage(savedMessage);
       triggerMatchrHaptic(10);
       if (messageGoldCost > 0) {
-        await supabase.from("message_charges").insert({
-          gold_cost: messageGoldCost,
-          message_id: savedMessage.id,
-          receiver_id: receiverId,
-          sender_id: currentUserId,
-        });
+        setSpendableGold((current) => Math.max(0, current - messageGoldCost));
       }
       if (!receiverIsGloballyOnline) {
         await supabase.from("notifications").insert({
@@ -627,7 +649,7 @@ export function ChatClient({
   }
 
   async function sendGift(gift: GiftOption) {
-    if (goldBalance < gift.coinPrice) {
+    if (spendableGold < gift.coinPrice) {
       setGoldModal("Not enough gold to send this gift.");
       return;
     }
@@ -635,33 +657,32 @@ export function ChatClient({
     await recordAction(supabase, currentUserId, "gift", receiverId);
 
     setSending(true);
-    const { data: savedMessage, error: sendError } = await supabase
-      .from("messages")
-      .insert({
-        content: `${gift.icon} ${gift.name} · ${gift.coinPrice} coins`,
-        gift_type: gift.type,
-        match_id: matchId,
-        message_type: "gift",
-        receiver_id: receiverId,
-        sender_id: currentUserId,
-      })
-      .select(MESSAGE_SELECT)
-      .single();
+    const receiverGold = Math.floor(
+      gift.coinPrice *
+        ((creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent / 100),
+    );
+    const { data: savedMessage, error: sendError } = await supabase.rpc(
+      "send_chat_gift_with_economy",
+      {
+        active_match_id: matchId,
+        gift_icon: gift.icon,
+        gift_name: gift.name,
+        gift_price: gift.coinPrice,
+        receiver_gold: receiverGold,
+        receiver_user_id: receiverId,
+        selected_gift_type: gift.type,
+      },
+    );
 
     if (sendError) {
-      setError(sendError.message);
+      setError(
+        sendError.message.includes("insufficient_gold")
+          ? "Not enough Gold to send this gift."
+          : sendError.message,
+      );
     } else {
       mergeConfirmedMessage(savedMessage);
-      await supabase.from("gift_transactions").insert({
-        coin_price: gift.coinPrice,
-        gold_cost: gift.coinPrice,
-        gift_type: gift.type,
-        message_id: savedMessage.id,
-        receiver_id: receiverId,
-        sender_id: currentUserId,
-        source: "chat",
-        source_id: matchId,
-      });
+      setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
       await supabase.from("notifications").insert({
         actor_id: currentUserId,
         body: `Sent you ${gift.icon} ${gift.name}.`,
@@ -760,7 +781,7 @@ export function ChatClient({
 
     if (SYSTEM_MESSAGE_TYPES.has(message.message_type)) {
       const gift = message.message_type === "story_gift"
-        ? getGiftOption(message.gift_type)
+        ? getGiftOption(message.gift_type, giftCatalog)
         : null;
       const label = message.message_type === "story_reaction"
         ? "Story reaction"
@@ -787,7 +808,7 @@ export function ChatClient({
     }
 
     if (message.message_type === "gift") {
-      const gift = getGiftOption(message.gift_type);
+      const gift = getGiftOption(message.gift_type, giftCatalog);
 
       return (
         <div className="min-w-36 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2.5 text-center shadow-[0_0_26px_rgba(16,185,129,0.08)] sm:min-w-40 sm:px-4 sm:py-3">
@@ -1047,6 +1068,12 @@ export function ChatClient({
         onSubmit={sendMessage}
         className="relative z-20 shrink-0 border-t border-neutral-800 bg-black/90 p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
+        {messageGoldCost > 0 ? (
+          <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-50">
+            Send message for {messageGoldCost} Gold? Conversation becomes free
+            after they reply.
+          </p>
+        ) : null}
         <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">
           <button
             type="button"
@@ -1059,7 +1086,7 @@ export function ChatClient({
           {isMediaMenuOpen ? (
             <div className="absolute bottom-16 left-0 z-20 grid w-56 max-w-[calc(100vw-2rem)] gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
               <p className="px-3 py-2 text-xs text-neutral-500">
-                {goldBalance} gold · Gold wallet coming soon
+                {spendableGold} gold available
               </p>
               {messageGoldCost > 0 ? (
                 <p className="px-3 pb-2 text-xs text-amber-100/80">
@@ -1090,7 +1117,7 @@ export function ChatClient({
               <p className="px-3 py-2 text-xs text-neutral-500">
                 Coin wallet coming soon
               </p>
-              {GIFT_CATALOG.map((gift) => (
+              {giftCatalog.map((gift) => (
                 <button
                   key={gift.type}
                   type="button"

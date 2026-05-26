@@ -177,6 +177,13 @@ export type GiftCatalogRow = {
   created_at: string;
 };
 
+export type EconomyConfigRow = {
+  key: string;
+  value_json: unknown;
+  description: string;
+  updated_at: string;
+};
+
 export type GiftTransactionRow = {
   id: string;
   gift_type: string;
@@ -534,6 +541,17 @@ export type Database = {
           status?: string;
           updated_at?: string;
         };
+        Relationships: [];
+      };
+      economy_config: {
+        Row: EconomyConfigRow;
+        Insert: {
+          key: string;
+          value_json: unknown;
+          description?: string;
+          updated_at?: string;
+        };
+        Update: never;
         Relationships: [];
       };
       gifts_catalog: {
@@ -1105,6 +1123,34 @@ export type Database = {
           amount?: number;
         };
         Returns: undefined;
+      };
+      grant_starter_gold_once: {
+        Args: {
+          target_user_id: string;
+          gold_amount: number;
+        };
+        Returns: number;
+      };
+      send_text_message_with_economy: {
+        Args: {
+          receiver_user_id: string;
+          active_match_id: string;
+          message_body: string;
+          gold_amount: number;
+        };
+        Returns: MessageRow;
+      };
+      send_chat_gift_with_economy: {
+        Args: {
+          receiver_user_id: string;
+          active_match_id: string;
+          selected_gift_type: string;
+          gift_name: string;
+          gift_icon: string;
+          gift_price: number;
+          receiver_gold: number;
+        };
+        Returns: MessageRow;
       };
       users_are_blocked: {
         Args: {

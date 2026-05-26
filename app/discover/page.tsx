@@ -1,4 +1,5 @@
 import { AppShell } from "@/app/_components/app-shell";
+import { getGiftCatalog } from "@/lib/economy";
 import { profileMatchesIdentityPreferences } from "@/lib/identity";
 import { canAppearInDiscover } from "@/lib/moderation";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
@@ -185,6 +186,9 @@ export default async function DiscoverPage() {
       new Date(a.stories[0].created_at).getTime()
     );
   });
+  const giftCatalog = await timeAsync("[Perf] Discover economy config", () =>
+    getGiftCatalog(supabase),
+  );
   const activeStoryUserIds = new Set(storyGroups.map((group) => group.user_id));
   const visibleProfileIds = visibleProfiles.map((profile) => profile.id);
   const [
@@ -313,6 +317,7 @@ export default async function DiscoverPage() {
         <StoriesBarLazy
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
+          giftCatalog={giftCatalog}
           initialGroups={storyGroups}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
         />

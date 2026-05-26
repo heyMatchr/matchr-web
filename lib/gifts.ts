@@ -5,7 +5,19 @@ export type GiftOption = {
   type: string;
 };
 
-export const GIFT_CATALOG = [
+export const GIFT_ICON_BY_TYPE: Record<string, string> = {
+  diamond: "💎",
+  diamond_ring: "💍",
+  heart_box: "💝",
+  kiss: "💋",
+  matchr_crown: "👑",
+  private_jet: "✈️",
+  rose: "🌹",
+  teddy: "🧸",
+  wine: "🍷",
+};
+
+export const DEFAULT_GIFT_CATALOG = [
   {
     coinPrice: 5,
     icon: "🌹",
@@ -32,6 +44,11 @@ export const GIFT_CATALOG = [
   },
 ] satisfies GiftOption[];
 
-export function getGiftOption(type: string | null | undefined) {
-  return GIFT_CATALOG.find((gift) => gift.type === type);
+export const GIFT_CATALOG = DEFAULT_GIFT_CATALOG;
+
+export function getGiftOption(
+  type: string | null | undefined,
+  catalog: GiftOption[] = DEFAULT_GIFT_CATALOG,
+) {
+  return catalog.find((gift) => gift.type === type);
 }

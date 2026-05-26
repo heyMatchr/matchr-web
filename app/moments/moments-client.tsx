@@ -13,7 +13,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent } from "react";
-import { GIFT_CATALOG } from "@/lib/gifts";
+import type { GiftOption } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database } from "@/lib/supabase/types";
 import { ReportButton } from "@/app/safety/report-button";
@@ -55,6 +55,7 @@ export type MomentCard = {
 type MomentsClientProps = {
   anonKey: string;
   currentUserId: string;
+  giftCatalog: GiftOption[];
   goldBalance: number;
   moments: MomentCard[];
   supabaseUrl: string;
@@ -80,6 +81,7 @@ function timeAgo(timestamp: string) {
 export function MomentsClient({
   anonKey,
   currentUserId,
+  giftCatalog,
   goldBalance,
   moments,
   supabaseUrl,
@@ -389,6 +391,7 @@ export function MomentsClient({
 
       {activeGifts ? (
         <GiftsSheet
+          giftCatalog={giftCatalog}
           goldBalance={goldBalance}
           moment={activeGifts}
           onClose={() => setActiveGifts(null)}
@@ -786,10 +789,12 @@ function LikesSheet({
 }
 
 function GiftsSheet({
+  giftCatalog,
   goldBalance,
   moment,
   onClose,
 }: {
+  giftCatalog: GiftOption[];
   goldBalance: number;
   moment: MomentCard;
   onClose: () => void;
@@ -823,7 +828,7 @@ function GiftsSheet({
           </div>
         ) : null}
         <div className="mt-4 grid gap-2">
-          {GIFT_CATALOG.map((gift) => (
+          {giftCatalog.map((gift) => (
             <form
               key={gift.type}
               action={async () => {

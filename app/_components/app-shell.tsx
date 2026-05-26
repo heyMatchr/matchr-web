@@ -28,8 +28,8 @@ export function AppShell({
   const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
 
   return (
-    <main className={`matchr-app-shell relative min-h-[100dvh] overflow-x-hidden bg-black text-white ${hideNav ? "" : "md:pl-64"}`}>
-      <div className="fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.10)_0%,_rgba(0,0,0,0)_58%)]" />
+    <main className={`matchr-app-shell relative min-h-[100dvh] overflow-x-hidden overflow-y-auto bg-black text-white ${hideNav ? "" : "md:pl-64"}`}>
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.10)_0%,_rgba(0,0,0,0)_58%)]" />
       <GlobalPresenceProvider
         anonKey={supabaseAnonKey}
         currentUserId={currentUserId}

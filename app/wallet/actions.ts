@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getEconomyConfig } from "@/lib/economy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const goldPackages = new Map([
@@ -64,11 +65,15 @@ export async function startGoldCheckout(formData: FormData) {
 
 export async function startPremiumCheckout() {
   const { supabase, user } = await currentUser();
+  const premiumWeeklyPrice = await getEconomyConfig<number>(
+    supabase,
+    "premium_weekly_price_usd",
+  );
   const stripeReady = Boolean(
     process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   );
   const { error } = await supabase.from("payment_orders").insert({
-    amount_usd: 3,
+    amount_usd: premiumWeeklyPrice,
     order_type: "premium",
     plan_name: "Matchr Premium",
     status: stripeReady ? "pending" : "checkout_placeholder",
