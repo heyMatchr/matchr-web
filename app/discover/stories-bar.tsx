@@ -3,7 +3,8 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
@@ -186,6 +187,7 @@ export function StoriesBar({
   const [engagement, setEngagement] = useState<StoryEngagement>(emptyEngagement);
   const [interactionMessage, setInteractionMessage] = useState("");
   const [isGiftPickerOpen, setIsGiftPickerOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
   const [replyText, setReplyText] = useState("");
@@ -198,6 +200,11 @@ export function StoriesBar({
   const activeGroup =
     activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
   const activeStory = activeGroup?.stories[activeStoryIndex] ?? null;
+  const isClientMounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   useEffect(() => {
     const perfStartedAt = startPerfTimer();
@@ -567,6 +574,7 @@ export function StoriesBar({
     setActiveStoryIndex(0);
     setInteractionMessage("");
     setIsGiftPickerOpen(false);
+    setIsAnalyticsOpen(false);
     setIsPaused(false);
     setReplyText("");
     setSelectedReaction("");
@@ -938,9 +946,9 @@ export function StoriesBar({
         </div>
       ) : null}
 
-      {activeGroup && activeStory ? (
+      {isClientMounted && activeGroup && activeStory ? createPortal(
         <div
-          className="fixed inset-0 z-[9999] h-[100dvh] w-screen overflow-hidden bg-black text-white"
+          className="fixed inset-0 z-[9999] h-[100dvh] w-screen overflow-hidden overscroll-none bg-black text-white"
           onTouchMove={(event) => event.stopPropagation()}
           onWheel={(event) => event.stopPropagation()}
         >
@@ -1039,52 +1047,24 @@ export function StoriesBar({
               ) : null}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 z-30 max-h-[42dvh] overflow-y-auto overscroll-contain border-t border-white/10 bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+            <div className="absolute bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
               {activeGroup.isOwn ? (
-                <div className="space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.24em] text-emerald-100/70">
-                    Story activity
-                  </p>
-                  <div className="grid gap-2">
-                    {[...engagement.reactions, ...engagement.gifts, ...engagement.viewers]
-                      .slice(0, 8)
-                      .map((item) => (
-                        <div
-                          key={`${item.id}-${item.label}-${item.created_at}`}
-                          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2"
-                        >
-                          <div className="h-8 w-8 overflow-hidden rounded-full bg-neutral-900">
-                            {item.avatar_url ? (
-                              <Image
-                                src={item.avatar_url}
-                                alt={item.display_name}
-                                width={32}
-                                height={32}
-                                sizes="32px"
-                                className="h-full w-full object-cover"
-                              />
-                            ) : null}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">
-                              {item.display_name}
-                            </p>
-                            <p className="text-xs text-neutral-400">{item.label}</p>
-                          </div>
-                          <p className="text-xs text-neutral-500">
-                            {storyAge(item.created_at)}
-                          </p>
-                        </div>
-                      ))}
-                    {engagement.reactions.length +
-                      engagement.gifts.length +
-                      engagement.viewers.length ===
-                    0 ? (
-                      <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm text-neutral-400">
-                        Viewers and reactions will appear here.
-                      </p>
-                    ) : null}
-                  </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsAnalyticsOpen(true)}
+                    className="flex min-w-0 flex-1 items-center justify-between rounded-full border border-white/10 bg-white/[0.06] px-4 py-3 text-left"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-black">Story activity</span>
+                      <span className="block truncate text-xs text-neutral-400">
+                        {engagement.viewers.length} viewers ·{" "}
+                        {engagement.reactions.length} reactions ·{" "}
+                        {engagement.gifts.length} gifts
+                      </span>
+                    </span>
+                    <span className="text-lg text-emerald-100">⌃</span>
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -1163,8 +1143,68 @@ export function StoriesBar({
                 </div>
               )}
             </div>
+            {activeGroup.isOwn && isAnalyticsOpen ? (
+              <div className="absolute inset-x-0 bottom-0 z-40 max-h-[70dvh] rounded-t-3xl border border-white/10 bg-black/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-24px_70px_rgba(0,0,0,0.65)]">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-base font-black">Story activity</p>
+                    <p className="text-xs text-neutral-500">
+                      Viewers, reactions, and gifts
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAnalyticsOpen(false)}
+                    className="rounded-full border border-white/10 px-3 py-1.5 text-sm text-neutral-300"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="max-h-[52dvh] space-y-2 overflow-y-auto overscroll-contain">
+                  {[...engagement.reactions, ...engagement.gifts, ...engagement.viewers]
+                    .slice(0, 24)
+                    .map((item) => (
+                      <div
+                        key={`${item.id}-${item.label}-${item.created_at}`}
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2"
+                      >
+                        <div className="h-9 w-9 overflow-hidden rounded-full bg-neutral-900">
+                          {item.avatar_url ? (
+                            <Image
+                              src={item.avatar_url}
+                              alt={item.display_name}
+                              width={36}
+                              height={36}
+                              sizes="36px"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {item.display_name}
+                          </p>
+                          <p className="text-xs text-neutral-400">{item.label}</p>
+                        </div>
+                        <p className="text-xs text-neutral-500">
+                          {storyAge(item.created_at)}
+                        </p>
+                      </div>
+                    ))}
+                  {engagement.reactions.length +
+                    engagement.gifts.length +
+                    engagement.viewers.length ===
+                  0 ? (
+                    <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-center text-sm text-neutral-400">
+                      Viewers and reactions will appear here.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );
