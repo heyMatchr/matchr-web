@@ -37,6 +37,14 @@ export type ProfileRow = {
   updated_at: string;
 };
 
+export type ActionLimitRow = {
+  id: string;
+  user_id: string;
+  action_type: string;
+  target_id: string | null;
+  created_at: string;
+};
+
 export type LikeRow = {
   id: string;
   liker_id: string;
@@ -397,6 +405,18 @@ export type MomentGiftRow = {
 export type Database = {
   public: {
     Tables: {
+      action_limits: {
+        Row: ActionLimitRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          action_type: string;
+          target_id?: string | null;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       blocks: {
         Row: BlockRow;
         Insert: {

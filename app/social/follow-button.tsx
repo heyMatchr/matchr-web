@@ -19,10 +19,12 @@ export function FollowButton({
 }: FollowButtonProps) {
   const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(initialFollowing);
+  const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function toggleFollow() {
     const nextFollowing = !isFollowing;
+    setMessage("");
     setIsFollowing(nextFollowing);
 
     startTransition(async () => {
@@ -34,26 +36,34 @@ export function FollowButton({
         }
 
         router.refresh();
-      } catch {
+      } catch (error) {
         setIsFollowing(!nextFollowing);
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Slow down a little. Try again shortly.",
+        );
       }
     });
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggleFollow}
-      disabled={isPending}
-      className={`rounded-full font-medium transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
-        compact ? "px-3 py-1.5 text-xs" : "px-5 py-2.5 text-sm"
-      } ${
-        isFollowing
-          ? "border border-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-900"
-          : "bg-white text-black hover:bg-neutral-200 hover:shadow-[0_0_28px_rgba(255,255,255,0.10)]"
-      } ${className}`}
-    >
-      {isPending ? "Saving..." : isFollowing ? "Following" : "Follow"}
-    </button>
+    <span className="inline-flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={toggleFollow}
+        disabled={isPending}
+        className={`rounded-full font-medium transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-60 ${
+          compact ? "px-3 py-1.5 text-xs" : "px-5 py-2.5 text-sm"
+        } ${
+          isFollowing
+            ? "border border-neutral-700 text-neutral-200 hover:border-neutral-500 hover:bg-neutral-900"
+            : "bg-white text-black hover:bg-neutral-200 hover:shadow-[0_0_28px_rgba(255,255,255,0.10)]"
+        } ${className}`}
+      >
+        {isPending ? "Saving..." : isFollowing ? "Following" : "Follow"}
+      </button>
+      {message ? <span className="text-xs text-amber-100">{message}</span> : null}
+    </span>
   );
 }

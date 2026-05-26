@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getGiftOption } from "@/lib/gifts";
+import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   MEDIA_ALLOWED_TYPES,
@@ -71,6 +72,19 @@ export async function createMoment(
   }
 
   const { supabase, user } = await currentUser();
+
+  const allowed = await enforceActionLimit(
+    supabase,
+    user.id,
+    "moment_post",
+    60,
+    10,
+  );
+
+  if (!allowed) {
+    return { message: ACTION_LIMIT_MESSAGE };
+  }
+
   const mediaType = media.type.startsWith("video/") ? "video" : "image";
   const mediaPath = `${user.id}/moment-${Date.now()}.${getMediaExtension(media)}`;
 
@@ -142,14 +156,31 @@ export async function toggleMomentLike(momentId: string, ownerId: string) {
   revalidatePath("/moments");
 }
 
-export async function commentOnMoment(momentId: string, ownerId: string, formData: FormData) {
+export async function commentOnMoment(
+  momentId: string,
+  ownerId: string,
+  formData: FormData,
+) {
   const content = getFormString(formData, "content");
 
   if (!content) {
-    return;
+    return { message: "" };
   }
 
   const { supabase, user } = await currentUser();
+  const allowed = await enforceActionLimit(
+    supabase,
+    user.id,
+    "comment",
+    10,
+    15,
+    momentId,
+  );
+
+  if (!allowed) {
+    return { message: ACTION_LIMIT_MESSAGE };
+  }
+
   const { error } = await supabase.from("moment_comments").insert({
     content,
     moment_id: momentId,
@@ -172,6 +203,7 @@ export async function commentOnMoment(momentId: string, ownerId: string, formDat
   }
 
   revalidatePath("/moments");
+  return { message: "" };
 }
 
 export async function giftMoment(momentId: string, ownerId: string, giftType: string) {
@@ -184,6 +216,8 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
       status: "error",
     } satisfies GiftActionState;
   }
+
+  await recordAction(supabase, user.id, "gift", momentId);
 
   const { data: wallet } = await supabase
     .from("user_wallets")

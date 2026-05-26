@@ -9,6 +9,11 @@ import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import { ReportButton } from "@/app/safety/report-button";
+import {
+  ACTION_LIMIT_MESSAGE,
+  enforceActionLimit,
+  recordAction,
+} from "@/lib/action-limits";
 import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
 import { triggerMatchrHaptic } from "@/lib/haptics";
 import type { Database, MessageRow } from "@/lib/supabase/types";
@@ -412,6 +417,20 @@ export function ChatClient({
       return;
     }
 
+    const allowed = await enforceActionLimit(
+      supabase,
+      currentUserId,
+      "message",
+      10,
+      20,
+      receiverId,
+    );
+
+    if (!allowed) {
+      setError(ACTION_LIMIT_MESSAGE);
+      return;
+    }
+
     setSending(true);
     setError("");
     setContent("");
@@ -526,6 +545,20 @@ export function ChatClient({
       }
     }
 
+    const allowed = await enforceActionLimit(
+      supabase,
+      currentUserId,
+      "message",
+      10,
+      20,
+      receiverId,
+    );
+
+    if (!allowed) {
+      setError(ACTION_LIMIT_MESSAGE);
+      return;
+    }
+
     setSending(true);
     const extension = file.name.split(".").pop() || (mediaType === "video" ? "mp4" : "jpg");
     const path = `${currentUserId}/chat-${Date.now()}.${extension}`;
@@ -583,6 +616,8 @@ export function ChatClient({
       setGoldModal("Not enough gold to send this gift.");
       return;
     }
+
+    await recordAction(supabase, currentUserId, "gift", receiverId);
 
     setSending(true);
     const { data: savedMessage, error: sendError } = await supabase

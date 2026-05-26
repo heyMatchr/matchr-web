@@ -3,6 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
 import type { CallSessionRow, Database } from "@/lib/supabase/types";
 
 type CallType = "audio" | "video";
@@ -308,6 +309,20 @@ export function CallControls({
     }
 
     startTransition(async () => {
+      const allowed = await enforceActionLimit(
+        supabase,
+        currentUserId,
+        "call_start",
+        10,
+        5,
+        receiverId,
+      );
+
+      if (!allowed) {
+        setError(ACTION_LIMIT_MESSAGE);
+        return;
+      }
+
       const { data: existingCall } = await supabase
         .from("call_sessions")
         .select(CALL_SELECT)

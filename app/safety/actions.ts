@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ReportFormState = {
@@ -69,6 +70,23 @@ export async function submitReport(
 
   if (target.targetUserId === user.id) {
     return { message: "You cannot report yourself.", success: false };
+  }
+
+  const allowed = await enforceActionLimit(
+    supabase,
+    user.id,
+    "report",
+    60,
+    5,
+    target.targetUserId ??
+      target.targetStoryId ??
+      target.targetMomentId ??
+      target.targetMessageId ??
+      null,
+  );
+
+  if (!allowed) {
+    return { message: ACTION_LIMIT_MESSAGE, success: false };
   }
 
   const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function createNotification({
@@ -46,6 +47,19 @@ export async function followUser(userToFollowId: string) {
 
   if (user.id === userToFollowId) {
     return;
+  }
+
+  const allowed = await enforceActionLimit(
+    supabase,
+    user.id,
+    "follow",
+    60,
+    30,
+    userToFollowId,
+  );
+
+  if (!allowed) {
+    throw new Error(ACTION_LIMIT_MESSAGE);
   }
 
   const { data: profile } = await supabase
@@ -95,6 +109,19 @@ export async function unfollowUser(userToUnfollowId: string) {
 
   if (!user) {
     redirect(`/login?next=/profile/${userToUnfollowId}`);
+  }
+
+  const allowed = await enforceActionLimit(
+    supabase,
+    user.id,
+    "unfollow",
+    60,
+    30,
+    userToUnfollowId,
+  );
+
+  if (!allowed) {
+    throw new Error(ACTION_LIMIT_MESSAGE);
   }
 
   const { error } = await supabase

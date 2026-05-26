@@ -424,6 +424,7 @@ function CommentsSheet({
     user_id: string;
   };
   const [comments, setComments] = useState<CommentItem[]>([]);
+  const [commentMessage, setCommentMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [draft, setDraft] = useState("");
   const isMounted = useSyncExternalStore(
@@ -639,30 +640,41 @@ function CommentsSheet({
         <form
           ref={composerRef}
           action={async (formData) => {
-            await commentOnMoment(moment.id, moment.user_id, formData);
-            setDraft("");
+            const result = await commentOnMoment(moment.id, moment.user_id, formData);
+            setCommentMessage(result?.message ?? "");
+            if (!result?.message) {
+              setDraft("");
+            }
           }}
-          className="flex shrink-0 gap-2 border-t border-white/10 bg-black pt-3"
+          className="grid shrink-0 gap-2 border-t border-white/10 bg-black pt-3"
         >
-          <input
-            name="content"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onFocus={() => {
-              window.setTimeout(() => {
-                composerRef.current?.scrollIntoView({
-                  block: "end",
-                  behavior: "smooth",
-                });
-              }, 80);
-            }}
-            required
-            placeholder="Write a comment"
-            className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white"
-          />
-          <button className="shrink-0 rounded-full bg-white px-4 py-3 text-sm font-medium text-black">
-            Send
-          </button>
+          <div className="flex gap-2">
+            <input
+              name="content"
+              value={draft}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setCommentMessage("");
+              }}
+              onFocus={() => {
+                window.setTimeout(() => {
+                  composerRef.current?.scrollIntoView({
+                    block: "end",
+                    behavior: "smooth",
+                  });
+                }, 80);
+              }}
+              required
+              placeholder="Write a comment"
+              className="min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-3 text-white"
+            />
+            <button className="shrink-0 rounded-full bg-white px-4 py-3 text-sm font-medium text-black">
+              Send
+            </button>
+          </div>
+          {commentMessage ? (
+            <p className="text-center text-xs text-amber-100">{commentMessage}</p>
+          ) : null}
         </form>
     </div>
     </div>

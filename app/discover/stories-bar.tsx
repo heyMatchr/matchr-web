@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
+import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import { ReportButton } from "@/app/safety/report-button";
 import type { Database } from "@/lib/supabase/types";
@@ -517,6 +518,19 @@ export function StoriesBar({
         return;
       }
 
+      const allowed = await enforceActionLimit(
+        supabase,
+        currentUserId,
+        "story_post",
+        60,
+        10,
+      );
+
+      if (!allowed) {
+        setStorySubmitError(ACTION_LIMIT_MESSAGE);
+        return;
+      }
+
       setIsPostingStory(true);
       setUploadStage(hasMedia ? "Preparing..." : "Posting...");
 
@@ -791,6 +805,7 @@ export function StoriesBar({
     }
 
     setInteractionMessage("");
+    await recordAction(supabase, currentUserId, "gift", activeStory.id);
     const { error } = await supabase.from("story_gifts").insert({
       gift_type: gift.type,
       receiver_id: activeStory.user_id,
