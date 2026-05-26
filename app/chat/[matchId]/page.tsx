@@ -57,13 +57,14 @@ export default async function ChatPage({ params }: ChatPageProps) {
     supabase
       .from("blocks")
       .select("id")
-      .eq("blocker_id", user.id)
-      .eq("blocked_user_id", receiverId)
+      .or(
+        `and(blocker_id.eq.${user.id},blocked_user_id.eq.${receiverId}),and(blocker_id.eq.${receiverId},blocked_user_id.eq.${user.id})`,
+      )
       .maybeSingle(),
   );
 
   if (existingBlock) {
-    redirect("/messages");
+    redirect("/messages?blocked=1");
   }
 
   const [{ data: receiverProfile }, { data: wallet }, { data: premium }] =

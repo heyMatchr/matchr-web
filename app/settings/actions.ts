@@ -62,3 +62,33 @@ export async function saveSettings(formData: FormData) {
   revalidatePath("/settings");
   revalidatePath("/discover");
 }
+
+export async function unblockUser(blockedUserId: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/settings");
+  }
+
+  await Promise.all([
+    supabase
+      .from("blocks")
+      .delete()
+      .eq("blocker_id", user.id)
+      .eq("blocked_user_id", blockedUserId),
+    supabase
+      .from("blocked_users")
+      .delete()
+      .eq("blocker_id", user.id)
+      .eq("blocked_user_id", blockedUserId),
+  ]);
+
+  revalidatePath("/settings");
+  revalidatePath("/discover");
+  revalidatePath("/matches");
+  revalidatePath("/messages");
+  revalidatePath("/moments");
+}

@@ -34,8 +34,8 @@ export default async function DiscoverPage() {
           .eq("passer_id", user.id),
         supabase
           .from("blocks")
-          .select("blocked_user_id")
-          .eq("blocker_id", user.id),
+          .select("blocker_id, blocked_user_id")
+          .or(`blocker_id.eq.${user.id},blocked_user_id.eq.${user.id}`),
       ]),
     );
 
@@ -58,7 +58,9 @@ export default async function DiscoverPage() {
   const excludedUserIds = new Set([
     ...likesResult.data.map((like) => like.liked_profile_id),
     ...passesResult.data.map((pass) => pass.passed_profile_id),
-    ...blocksResult.data.map((block) => block.blocked_user_id),
+    ...blocksResult.data.map((block) =>
+      block.blocker_id === user.id ? block.blocked_user_id : block.blocker_id,
+    ),
   ]);
   const visibleProfiles =
     profilesResult.data.filter((profile) => !excludedUserIds.has(profile.id)) ??
@@ -107,6 +109,10 @@ export default async function DiscoverPage() {
   const storyGroupsByUser = new Map<string, StoryGroup>();
 
   stories?.forEach((story) => {
+    if (excludedUserIds.has(story.user_id)) {
+      return;
+    }
+
     const profile = storyProfilesById.get(story.user_id);
 
     if (!profile) {

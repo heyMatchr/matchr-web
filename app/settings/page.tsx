@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { saveSettings } from "./actions";
+import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
 import { InstallPromptCard } from "./install-prompt-card";
 
@@ -130,7 +130,13 @@ export default async function SettingsPage() {
 
       <div className="mt-6 grid gap-5">
         <SettingsSection title="Safety">
-          <SafetyList title="Blocked users" rows={blocksResult.data ?? []} idKey="blocked_user_id" profilesById={profilesById} />
+          <SafetyList
+            allowUnblock
+            title="Blocked users"
+            rows={blocksResult.data ?? []}
+            idKey="blocked_user_id"
+            profilesById={profilesById}
+          />
           <SafetyList title="Muted chats" rows={mutedResult.data ?? []} idKey="muted_user_id" profilesById={profilesById} />
           <SafetyList title="Hidden users" rows={hiddenResult.data ?? []} idKey="hidden_user_id" profilesById={profilesById} />
           <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
@@ -207,11 +213,13 @@ function NumberInput({ defaultValue, label, name }: { defaultValue: number; labe
 }
 
 function SafetyList({
+  allowUnblock = false,
   idKey,
   profilesById,
   rows,
   title,
 }: {
+  allowUnblock?: boolean;
   idKey: string;
   profilesById: Map<string, { avatar_url: string | null; display_name: string; id: string }>;
   rows: Record<string, string>[];
@@ -224,8 +232,20 @@ function SafetyList({
         {rows.length ? rows.map((row) => {
           const profile = profilesById.get(row[idKey]);
           return (
-            <div key={`${row[idKey]}-${row.created_at}`} className="rounded-xl bg-black/40 p-3 text-sm text-neutral-300">
-              {profile?.display_name ?? "User"} · {new Date(row.created_at).toLocaleDateString()}
+            <div
+              key={`${row[idKey]}-${row.created_at}`}
+              className="flex items-center justify-between gap-3 rounded-xl bg-black/40 p-3 text-sm text-neutral-300"
+            >
+              <span className="min-w-0 truncate">
+                {profile?.display_name ?? "User"} · {new Date(row.created_at).toLocaleDateString()}
+              </span>
+              {allowUnblock ? (
+                <form action={unblockUser.bind(null, row[idKey])}>
+                  <button className="shrink-0 rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200 hover:border-emerald-300/40">
+                    Unblock
+                  </button>
+                </form>
+              ) : null}
             </div>
           );
         }) : <p className="text-sm text-neutral-500">Nothing here yet.</p>}

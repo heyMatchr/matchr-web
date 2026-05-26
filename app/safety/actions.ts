@@ -105,9 +105,23 @@ export async function blockUser(blockedUserId: string, redirectTo = "/discover")
     },
   );
 
+  await supabase
+    .from("call_sessions")
+    .update({
+      connection_state: "ended",
+      ended_at: new Date().toISOString(),
+      ended_reason: "blocked",
+      status: "ended",
+    })
+    .or(
+      `and(caller_id.eq.${user.id},receiver_id.eq.${blockedUserId}),and(caller_id.eq.${blockedUserId},receiver_id.eq.${user.id})`,
+    )
+    .in("status", ["ringing", "accepted"]);
+
   revalidatePath("/discover");
   revalidatePath("/matches");
   revalidatePath("/messages");
   revalidatePath("/profile");
+  revalidatePath("/moments");
   redirect(redirectTo);
 }

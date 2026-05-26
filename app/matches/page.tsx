@@ -48,15 +48,17 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
 
   const { data: blocks, error: blocksError } = await supabase
     .from("blocks")
-    .select("blocked_user_id")
-    .eq("blocker_id", user.id);
+    .select("blocker_id, blocked_user_id")
+    .or(`blocker_id.eq.${user.id},blocked_user_id.eq.${user.id}`);
 
   if (blocksError) {
     throw new Error(blocksError.message);
   }
 
   const blockedUserIds = new Set(
-    blocks?.map((block) => block.blocked_user_id) ?? [],
+    blocks?.map((block) =>
+      block.blocker_id === user.id ? block.blocked_user_id : block.blocker_id,
+    ) ?? [],
   );
 
   const { data: profiles, error: profilesError } = matchedUserIds.length

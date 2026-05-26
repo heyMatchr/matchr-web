@@ -21,6 +21,7 @@ export function SafetyActions({
 }: SafetyActionsProps) {
   const [copyMessage, setCopyMessage] = useState("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isBlockConfirmOpen, setIsBlockConfirmOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [blockError, setBlockError] = useState("");
@@ -41,15 +42,12 @@ export function SafetyActions({
 
   function handleBlock() {
     setIsMenuOpen(false);
-    const confirmed = window.confirm(
-      `Block ${reportedUserName}? You will no longer see each other across Matchr.`,
-    );
+    setIsBlockConfirmOpen(true);
+  }
 
-    if (!confirmed) {
-      return;
-    }
-
+  function confirmBlock() {
     setBlockError("");
+    setIsBlockConfirmOpen(false);
     startBlockTransition(() => {
       void blockUser(reportedUserId, blockRedirectTo);
     });
@@ -127,6 +125,36 @@ export function SafetyActions({
         <p className="absolute right-0 top-12 w-64 text-right text-sm text-emerald-200">
           {copyMessage || "Conversation muted on this device."}
         </p>
+      ) : null}
+
+      {isBlockConfirmOpen ? (
+        <div className="fixed inset-0 z-[90] flex items-end bg-black/75 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm sm:items-center sm:justify-center sm:pb-0">
+          <div className="w-full max-w-md rounded-3xl border border-red-300/20 bg-black p-5 shadow-[0_0_55px_rgba(248,113,113,0.12)]">
+            <h2 className="text-xl font-black">Block this user?</h2>
+            <p className="mt-2 text-sm leading-6 text-neutral-400">
+              {reportedUserName} will be hidden from your Matchr experience.
+              Messaging stops, calls stop, stories and moments are hidden, and
+              profile access is restricted.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsBlockConfirmOpen(false)}
+                className="rounded-full border border-neutral-700 px-4 py-3 text-sm text-neutral-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmBlock}
+                disabled={isBlocking}
+                className="rounded-full bg-red-300 px-4 py-3 text-sm font-medium text-black disabled:opacity-60"
+              >
+                {isBlocking ? "Blocking..." : "Block"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {isReportOpen ? (
