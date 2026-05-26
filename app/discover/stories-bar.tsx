@@ -2,16 +2,17 @@
 
 import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
-import { useActionState, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database } from "@/lib/supabase/types";
 import {
   STORY_ALLOWED_TYPES,
+  STORY_BUCKET_NAME,
   STORY_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
-import { createStory, type StoryFormState } from "./stories-actions";
 
 export type StoryItem = {
   id: string;
@@ -37,10 +38,6 @@ export type StoriesBarProps = {
   currentUserId: string;
   initialGroups: StoryGroup[];
   supabaseUrl: string;
-};
-
-const initialState: StoryFormState = {
-  message: "",
 };
 
 type StoryEngagementItem = {
@@ -89,16 +86,35 @@ function storyAge(timestamp: string) {
   return `${Math.floor(minutes / 60)}h`;
 }
 
+function getStoryFormString(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getStoryMediaExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)) {
+    return extension;
+  }
+
+  return file.type.split("/").pop() || "jpg";
+}
+
 export function StoriesBar({
   anonKey,
   currentUserId,
   initialGroups,
   supabaseUrl,
 }: StoriesBarProps) {
+  const router = useRouter();
   const [groups, setGroups] = useState(initialGroups);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [mediaError, setMediaError] = useState("");
   const [mediaPreview, setMediaPreview] = useState("");
+  const [storySubmitError, setStorySubmitError] = useState("");
+  const [storyNotice, setStoryNotice] = useState("");
+  const [isPostingStory, setIsPostingStory] = useState(false);
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [engagement, setEngagement] = useState<StoryEngagement>(emptyEngagement);
@@ -108,10 +124,6 @@ export function StoriesBar({
   const [progressKey, setProgressKey] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [selectedReaction, setSelectedReaction] = useState("");
-  const [state, formAction, pending] = useActionState(
-    createStory,
-    initialState,
-  );
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -283,6 +295,7 @@ export function StoriesBar({
       }
 
       setMediaError("");
+      setStorySubmitError("");
 
       if (!file) {
         setMediaPreview("");
@@ -312,6 +325,136 @@ export function StoriesBar({
       event.target.value = "";
       setMediaPreview("");
       setMediaError("Could not preview this image. Try another one.");
+    }
+  }
+
+  async function postStory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isPostingStory) {
+      return;
+    }
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const text = getStoryFormString(formData, "text");
+    const backgroundStyle =
+      getStoryFormString(formData, "background_style") || "emerald";
+    const media = formData.get("media");
+    const hasMedia = media instanceof File && media.size > 0;
+
+    setMediaError("");
+    setStorySubmitError("");
+    setStoryNotice("");
+
+    try {
+      if (process.env.NODE_ENV === "development") {
+        console.log("[StoryUpload] selected file", {
+          hasMedia,
+          name: hasMedia ? media.name : null,
+          size: hasMedia ? media.size : null,
+          type: hasMedia ? media.type : null,
+        });
+      }
+
+      if (text.length > 220) {
+        setStorySubmitError("Keep story text under 220 characters.");
+        return;
+      }
+
+      if (!hasMedia && !text) {
+        setStorySubmitError("Add an image or a short status.");
+        return;
+      }
+
+      if (hasMedia && !STORY_ALLOWED_TYPES.includes(media.type as (typeof STORY_ALLOWED_TYPES)[number])) {
+        setStorySubmitError("Upload a JPG, PNG, WebP, or GIF story image.");
+        return;
+      }
+
+      if (hasMedia && media.size > STORY_MAX_SIZE_BYTES) {
+        setStorySubmitError("Keep story images under 10 MB.");
+        return;
+      }
+
+      setIsPostingStory(true);
+
+      let mediaUrl: string | null = null;
+      let mediaPath = "";
+
+      if (hasMedia) {
+        mediaPath = `${currentUserId}/story-${Date.now()}.${getStoryMediaExtension(media)}`;
+
+        const uploadResult = await supabase.storage
+          .from(STORY_BUCKET_NAME)
+          .upload(mediaPath, media, {
+            cacheControl: "3600",
+            contentType: media.type,
+          });
+
+        if (process.env.NODE_ENV === "development") {
+          console.log("[StoryUpload] upload result", {
+            data: uploadResult.data,
+            error: uploadResult.error,
+            path: mediaPath,
+          });
+        }
+
+        if (uploadResult.error) {
+          setStorySubmitError(uploadResult.error.message);
+          return;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(STORY_BUCKET_NAME).getPublicUrl(mediaPath);
+        mediaUrl = publicUrl;
+      }
+
+      const insertResult = await supabase.from("stories").insert({
+        background_style: backgroundStyle,
+        media_url: mediaUrl,
+        text,
+        user_id: currentUserId,
+      });
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[StoryUpload] insert result", {
+          error: insertResult.error,
+          mediaUrl: Boolean(mediaUrl),
+        });
+      }
+
+      if (insertResult.error) {
+        if (mediaPath) {
+          await supabase.storage.from(STORY_BUCKET_NAME).remove([mediaPath]);
+        }
+
+        setStorySubmitError(insertResult.error.message);
+        return;
+      }
+
+      if (mediaPreview) {
+        URL.revokeObjectURL(mediaPreview);
+      }
+
+      form.reset();
+      setMediaPreview("");
+      setIsCreateOpen(false);
+      setStoryNotice("Story posted.");
+      router.refresh();
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[StoryUpload] error", error);
+      }
+
+      setStorySubmitError(
+        error instanceof Error
+          ? error.message
+          : "Could not post your story. Try again.",
+      );
+    } finally {
+      setIsPostingStory(false);
     }
   }
 
@@ -616,10 +759,16 @@ export function StoriesBar({
         })}
       </div>
 
+      {storyNotice ? (
+        <p className="mt-3 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-100">
+          {storyNotice}
+        </p>
+      ) : null}
+
       {isCreateOpen ? (
         <div className="fixed inset-0 z-[120] flex min-w-0 items-center justify-center overflow-hidden bg-black/90 px-3 py-4 backdrop-blur-sm">
           <form
-            action={formAction}
+            onSubmit={postStory}
             className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overflow-x-hidden overscroll-contain rounded-2xl border border-neutral-800 bg-black p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] shadow-[0_0_45px_rgba(74,222,128,0.10)] sm:p-5 sm:pb-6"
           >
             <div className="sticky top-0 z-10 -mx-4 -mt-4 flex items-center justify-between gap-4 border-b border-white/10 bg-black px-4 py-4 sm:-mx-5 sm:-mt-5 sm:px-5">
@@ -653,7 +802,7 @@ export function StoriesBar({
               name="media"
               type="file"
               accept="image/*"
-              disabled={pending}
+              disabled={isPostingStory}
               onChange={handleMediaChange}
               className="sr-only"
             />
@@ -661,7 +810,7 @@ export function StoriesBar({
             <textarea
               name="text"
               maxLength={220}
-              disabled={pending}
+              disabled={isPostingStory}
               placeholder="Add a short status"
               className="mt-4 min-h-20 w-full rounded-3xl border border-neutral-700 bg-black/60 px-5 py-4 text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none sm:min-h-24"
             />
@@ -669,7 +818,7 @@ export function StoriesBar({
             <select
               name="background_style"
               defaultValue="emerald"
-              disabled={pending}
+              disabled={isPostingStory}
               className="mt-4 w-full rounded-full border border-neutral-700 bg-black/60 px-5 py-3 text-white focus:border-emerald-300 focus:outline-none"
             >
               <option value="emerald">Emerald glow</option>
@@ -678,15 +827,15 @@ export function StoriesBar({
             </select>
 
             <p className="mt-3 min-h-5 text-sm text-red-300" role="alert">
-              {mediaError || state.message}
+              {mediaError || storySubmitError}
             </p>
 
             <button
               type="submit"
-              disabled={pending || Boolean(mediaError)}
+              disabled={isPostingStory || Boolean(mediaError)}
               className="mt-2 w-full rounded-full bg-white px-6 py-3 font-medium text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {pending ? "Posting..." : "Post story"}
+              {isPostingStory ? "Posting..." : "Post story"}
             </button>
           </form>
         </div>
