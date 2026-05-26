@@ -1,7 +1,12 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import { blockUser, reportUser, type ReportFormState } from "./actions";
+import {
+  REPORT_REASONS,
+  blockUser,
+  reportUser,
+  type ReportFormState,
+} from "./actions";
 
 type SafetyActionsProps = {
   blockRedirectTo?: string;
@@ -194,13 +199,11 @@ export function SafetyActions({
                 <option value="" disabled>
                   Choose a reason
                 </option>
-                <option value="spam">Spam</option>
-                <option value="fake_profile">Fake profile</option>
-                <option value="harassment">Harassment</option>
-                <option value="inappropriate_content">Inappropriate content</option>
-                <option value="underage">Underage</option>
-                <option value="scam_fraud">Scam/fraud</option>
-                <option value="other">Other</option>
+                {REPORT_REASONS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
               </select>
 
               <label className="sr-only" htmlFor="details">

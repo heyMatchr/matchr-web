@@ -9,25 +9,53 @@ export type ReportFormState = {
   success: boolean;
 };
 
+export type ReportTarget = {
+  targetMessageId?: string;
+  targetMomentId?: string;
+  targetStoryId?: string;
+  targetUserId?: string;
+};
+
+export const REPORT_REASONS = [
+  "Spam",
+  "Harassment",
+  "Nudity / sexual content",
+  "Fake account",
+  "Underage user",
+  "Violence",
+  "Scam/fraud",
+  "Hate speech",
+  "Other",
+] as const;
+
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function reportUser(
-  reportedUserId: string,
+export async function submitReport(
+  target: ReportTarget,
   _previousState: ReportFormState,
   formData: FormData,
 ): Promise<ReportFormState> {
   const reason = getFormString(formData, "reason");
   const details = getFormString(formData, "details");
 
-  if (!reason) {
-    return { message: "Choose a reason before submitting.", success: false };
+  if (!REPORT_REASONS.includes(reason as (typeof REPORT_REASONS)[number])) {
+    return { message: "Choose a report reason.", success: false };
   }
 
   if (details.length > 1000) {
     return { message: "Keep report details under 1000 characters.", success: false };
+  }
+
+  if (
+    !target.targetUserId &&
+    !target.targetStoryId &&
+    !target.targetMomentId &&
+    !target.targetMessageId
+  ) {
+    return { message: "There is nothing to report here.", success: false };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -39,32 +67,71 @@ export async function reportUser(
     redirect("/login");
   }
 
-  if (reportedUserId === user.id) {
-    return { message: "You cannot report your own profile.", success: false };
+  if (target.targetUserId === user.id) {
+    return { message: "You cannot report yourself.", success: false };
+  }
+
+  const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  let duplicateQuery = supabase
+    .from("reports")
+    .select("id")
+    .eq("reporter_id", user.id)
+    .eq("reason", reason)
+    .gte("created_at", recentCutoff)
+    .limit(1);
+
+  duplicateQuery = target.targetUserId
+    ? duplicateQuery.eq("target_user_id", target.targetUserId)
+    : duplicateQuery.is("target_user_id", null);
+  duplicateQuery = target.targetStoryId
+    ? duplicateQuery.eq("target_story_id", target.targetStoryId)
+    : duplicateQuery.is("target_story_id", null);
+  duplicateQuery = target.targetMomentId
+    ? duplicateQuery.eq("target_moment_id", target.targetMomentId)
+    : duplicateQuery.is("target_moment_id", null);
+  duplicateQuery = target.targetMessageId
+    ? duplicateQuery.eq("target_message_id", target.targetMessageId)
+    : duplicateQuery.is("target_message_id", null);
+
+  const { data: duplicate } = await duplicateQuery;
+
+  if (duplicate?.length) {
+    return { message: "Thanks. Your report was submitted.", success: true };
   }
 
   const { error } = await supabase.from("reports").insert({
-    details,
+    details: details || null,
     reason,
-    reported_user_id: reportedUserId,
+    reported_user_id: target.targetUserId ?? null,
     reporter_id: user.id,
+    status: "open",
+    target_message_id: target.targetMessageId ?? null,
+    target_moment_id: target.targetMomentId ?? null,
+    target_story_id: target.targetStoryId ?? null,
+    target_user_id: target.targetUserId ?? null,
   });
 
   if (error) {
     return { message: error.message, success: false };
   }
 
-  await supabase.from("user_reports").insert({
-    category: reason,
-    details,
-    reported_user_id: reportedUserId,
-    reporter_id: user.id,
-  });
+  return { message: "Thanks. Your report was submitted.", success: true };
+}
 
-  return {
-    message: "Report submitted. Thanks for helping keep Matchr safer.",
-    success: true,
-  };
+export async function reportUser(
+  reportedUserId: string,
+  _previousState: ReportFormState,
+  formData: FormData,
+): Promise<ReportFormState> {
+  const result = await submitReport(
+    { targetUserId: reportedUserId },
+    _previousState,
+    formData,
+  );
+
+  return result.success
+    ? { message: "Thanks. Your report was submitted.", success: true }
+    : result;
 }
 
 export async function blockUser(blockedUserId: string, redirectTo = "/discover") {

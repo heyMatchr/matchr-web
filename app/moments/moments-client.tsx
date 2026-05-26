@@ -16,6 +16,7 @@ import type { ChangeEvent } from "react";
 import { GIFT_CATALOG } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database } from "@/lib/supabase/types";
+import { ReportButton } from "@/app/safety/report-button";
 import {
   commentOnMoment,
   createMoment,
@@ -181,8 +182,9 @@ export function MomentsClient({
                   </Link>
                   <p className="text-xs text-neutral-500">{timeAgo(moment.created_at)}</p>
                 </div>
+                <div className="relative ml-auto shrink-0">
                 {isOwner ? (
-                  <div className="relative ml-auto shrink-0">
+                  <>
                     <button
                       type="button"
                       onClick={() =>
@@ -221,8 +223,18 @@ export function MomentsClient({
                         </form>
                       </div>
                     ) : null}
-                  </div>
-                ) : null}
+                  </>
+                ) : (
+                  <ReportButton
+                    buttonClassName="grid h-9 w-9 place-items-center rounded-full border border-neutral-800 text-xs text-neutral-300"
+                    buttonLabel="!"
+                    target={{
+                      targetMomentId: moment.id,
+                      targetUserId: moment.user_id,
+                    }}
+                  />
+                )}
+                </div>
               </div>
 
               <div className="w-full max-w-full overflow-hidden bg-neutral-950">

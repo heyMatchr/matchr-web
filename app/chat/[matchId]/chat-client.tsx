@@ -8,6 +8,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { ReportButton } from "@/app/safety/report-button";
 import { GIFT_CATALOG, getGiftOption, type GiftOption } from "@/lib/gifts";
 import { triggerMatchrHaptic } from "@/lib/haptics";
 import type { Database, MessageRow } from "@/lib/supabase/types";
@@ -959,6 +960,17 @@ export function ChatClient({
                           minute: "2-digit",
                         })}
                   </p>
+                  {!isMine && !message.optimistic ? (
+                    <div className="mt-1 text-right">
+                      <ReportButton
+                        buttonClassName="text-[11px] text-neutral-600 hover:text-red-200"
+                        target={{
+                          targetMessageId: message.id,
+                          targetUserId: message.sender_id,
+                        }}
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );

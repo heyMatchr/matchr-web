@@ -31,6 +31,8 @@ export type ProfileRow = {
   onboarding_completed: boolean;
   last_seen_at: string | null;
   is_online: boolean;
+  moderation_score: number;
+  under_review: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -59,9 +61,13 @@ export type MatchRow = {
 export type ReportRow = {
   id: string;
   reporter_id: string;
-  reported_user_id: string;
+  reported_user_id: string | null;
+  target_user_id: string | null;
+  target_story_id: string | null;
+  target_moment_id: string | null;
+  target_message_id: string | null;
   reason: string;
-  details: string;
+  details: string | null;
   status: string;
   created_at: string;
 };
@@ -817,6 +823,8 @@ export type Database = {
           onboarding_completed?: boolean;
           last_seen_at?: string | null;
           is_online?: boolean;
+          moderation_score?: number;
+          under_review?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -847,6 +855,8 @@ export type Database = {
           onboarding_completed?: boolean;
           last_seen_at?: string | null;
           is_online?: boolean;
+          moderation_score?: number;
+          under_review?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -865,9 +875,13 @@ export type Database = {
         Insert: {
           id?: string;
           reporter_id: string;
-          reported_user_id: string;
+          reported_user_id?: string | null;
+          target_user_id?: string | null;
+          target_story_id?: string | null;
+          target_moment_id?: string | null;
+          target_message_id?: string | null;
           reason: string;
-          details?: string;
+          details?: string | null;
           status?: string;
           created_at?: string;
         };

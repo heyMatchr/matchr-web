@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import { GIFT_CATALOG, type GiftOption } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
+import { ReportButton } from "@/app/safety/report-button";
 import type { Database } from "@/lib/supabase/types";
 import {
   STORY_ALLOWED_TYPES,
@@ -1054,15 +1055,27 @@ export function StoriesBar({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeViewer}
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-lg sm:w-auto sm:px-3 sm:py-1 sm:text-sm"
-                  aria-label="Close story"
-                >
-                  <span className="sm:hidden">×</span>
-                  <span className="hidden sm:inline">Close</span>
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {!activeGroup.isOwn ? (
+                    <ReportButton
+                      buttonClassName="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-xs text-neutral-200"
+                      buttonLabel="!"
+                      target={{
+                        targetStoryId: activeStory.id,
+                        targetUserId: activeStory.user_id,
+                      }}
+                    />
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={closeViewer}
+                    className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-lg sm:w-auto sm:px-3 sm:py-1 sm:text-sm"
+                    aria-label="Close story"
+                  >
+                    <span className="sm:hidden">×</span>
+                    <span className="hidden sm:inline">Close</span>
+                  </button>
+                </div>
               </div>
             </div>
 
