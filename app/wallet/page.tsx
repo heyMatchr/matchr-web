@@ -37,7 +37,7 @@ export default async function WalletPage() {
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase.from("gold_packages").select("id, name, gold_amount, price_usd").order("price_usd", { ascending: true }),
-    supabase.from("wallet_transactions").select("transaction_type, gold_delta, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
+    supabase.from("wallet_transactions").select("transaction_type, gold_delta, reference_type, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
@@ -52,7 +52,7 @@ export default async function WalletPage() {
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
-          <p className="mt-3 text-sm text-neutral-400">Gold wallet coming soon. Demo balances are read-only placeholders.</p>
+          <p className="mt-3 text-sm text-neutral-400">Your Gold powers paid messages, gifts, and premium Matchr experiences.</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <form action={startGoldCheckout}>
               <input type="hidden" name="package" value="500" />
@@ -94,7 +94,7 @@ export default async function WalletPage() {
           </div>
         </section>
 
-        <History title="Wallet transactions" rows={(walletTransactionsResult.data ?? []).map((row) => `${row.transaction_type} · ${row.gold_delta} gold`)} />
+        <History title="Wallet transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
         <History title="Payment orders" rows={(paymentOrdersResult.data ?? []).map((row) => `${row.order_type} · ${row.status} · $${row.amount_usd}`)} />
         <History title="Incoming gifts" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0} gold value`)} />
         <History title="Outgoing gifts" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0} gold`)} />
@@ -102,6 +102,27 @@ export default async function WalletPage() {
       </div>
     </AppShell>
   );
+}
+
+function formatWalletTransaction(row: {
+  created_at: string;
+  gold_delta: number;
+  reference_type: string | null;
+  transaction_type: string;
+}) {
+  const labels: Record<string, string> = {
+    adjustment:
+      row.reference_type === "Starter Gold Bonus"
+        ? "Starter Gold Bonus"
+        : "Wallet adjustment",
+    gift_received: "Gift received",
+    gift_sent: "Gift sent",
+    message_charge: "Message charge",
+    top_up: "Gold top-up",
+  };
+  const sign = row.gold_delta > 0 ? "+" : "";
+
+  return `${labels[row.transaction_type] ?? row.transaction_type} · ${sign}${row.gold_delta} Gold`;
 }
 
 function History({ rows, title }: { rows: string[]; title: string }) {

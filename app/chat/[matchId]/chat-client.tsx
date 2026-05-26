@@ -105,6 +105,8 @@ export function ChatClient({
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
   const [goldModal, setGoldModal] = useState("");
   const [spendableGold, setSpendableGold] = useState(goldBalance);
+  const [paidMessageDraft, setPaidMessageDraft] = useState("");
+  const [pendingGift, setPendingGift] = useState<GiftOption | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [mobileViewportHeight, setMobileViewportHeight] = useState<
@@ -443,6 +445,19 @@ export function ChatClient({
       return;
     }
 
+    if (messageGoldCost > 0) {
+      setPaidMessageDraft(trimmedContent);
+      return;
+    }
+
+    await sendTextMessage(trimmedContent);
+  }
+
+  async function sendTextMessage(trimmedContent: string) {
+    if (!trimmedContent) {
+      return;
+    }
+
     const canMessage = await canUserMessage(supabase, currentUserId);
 
     if (!canMessage) {
@@ -466,6 +481,7 @@ export function ChatClient({
 
     setSending(true);
     setError("");
+    setPaidMessageDraft("");
     setContent("");
     trackPresence(false);
 
@@ -504,11 +520,11 @@ export function ChatClient({
     );
 
     if (sendError) {
-      setError(
-        sendError.message.includes("insufficient_gold")
-          ? "Not enough Gold to send this message."
-          : sendError.message,
-      );
+      if (sendError.message.includes("insufficient_gold")) {
+        setGoldModal("Not enough Gold to send this message.");
+      } else {
+        setError(sendError.message);
+      }
       setMessages((current) =>
         current.filter((message) => message.id !== optimisticMessage.id),
       );
@@ -654,9 +670,14 @@ export function ChatClient({
       return;
     }
 
+    setPendingGift(gift);
+  }
+
+  async function confirmGift(gift: GiftOption) {
     await recordAction(supabase, currentUserId, "gift", receiverId);
 
     setSending(true);
+    setPendingGift(null);
     const receiverGold = Math.floor(
       gift.coinPrice *
         ((creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent / 100),
@@ -675,11 +696,11 @@ export function ChatClient({
     );
 
     if (sendError) {
-      setError(
-        sendError.message.includes("insufficient_gold")
-          ? "Not enough Gold to send this gift."
-          : sendError.message,
-      );
+      if (sendError.message.includes("insufficient_gold")) {
+        setGoldModal("Not enough Gold to send this gift.");
+      } else {
+        setError(sendError.message);
+      }
     } else {
       mergeConfirmedMessage(savedMessage);
       setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
@@ -1090,7 +1111,7 @@ export function ChatClient({
               </p>
               {messageGoldCost > 0 ? (
                 <p className="px-3 pb-2 text-xs text-amber-100/80">
-                  Messages cost {messageGoldCost} gold in demo mode.
+                  First message costs {messageGoldCost} Gold until they reply.
                 </p>
               ) : null}
               <button
@@ -1115,7 +1136,7 @@ export function ChatClient({
                 Voice note
               </button>
               <p className="px-3 py-2 text-xs text-neutral-500">
-                Coin wallet coming soon
+                Gifts use your Matchr Gold balance.
               </p>
               {giftCatalog.map((gift) => (
                 <button
@@ -1191,18 +1212,96 @@ export function ChatClient({
         </div>
       ) : null}
 
+      {paidMessageDraft ? (
+        <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
+            <p className="text-xl font-black">Send paid message?</p>
+            <p className="mt-2 text-sm leading-6 text-neutral-400">
+              This first message costs {messageGoldCost} Gold. If{" "}
+              {receiverName} replies, this conversation unlocks and future
+              messages are free.
+            </p>
+            <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
+              {spendableGold} Gold available
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPaidMessageDraft("")}
+                className="rounded-full border border-neutral-700 px-4 py-3 text-sm text-neutral-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => void sendTextMessage(paidMessageDraft)}
+                className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black disabled:opacity-60"
+              >
+                Send for {messageGoldCost}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingGift ? (
+        <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
+            <p className="text-4xl">{pendingGift.icon}</p>
+            <p className="mt-3 text-xl font-black">Send {pendingGift.name}?</p>
+            <p className="mt-2 text-sm leading-6 text-neutral-400">
+              This gift costs {pendingGift.coinPrice} Gold.{" "}
+              {receiverName} receives{" "}
+              {Math.floor(
+                pendingGift.coinPrice *
+                  ((creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent /
+                    100),
+              )}{" "}
+              Gold from the creator split.
+            </p>
+            <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
+              {spendableGold} Gold available
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingGift(null)}
+                className="rounded-full border border-neutral-700 px-4 py-3 text-sm text-neutral-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => void confirmGift(pendingGift)}
+                className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black disabled:opacity-60"
+              >
+                Send gift
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {goldModal ? (
         <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-amber-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(245,158,11,0.12)]">
             <p className="text-xl font-black">Not enough gold</p>
             <p className="mt-2 text-sm leading-6 text-neutral-400">{goldModal}</p>
             <div className="mt-5 grid grid-cols-2 gap-2">
-              <button className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black">
+              <Link
+                href="/wallet"
+                className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black"
+              >
                 Buy Gold
-              </button>
-              <button className="rounded-full border border-amber-200/30 px-4 py-3 text-sm text-amber-100">
+              </Link>
+              <Link
+                href="/wallet"
+                className="rounded-full border border-amber-200/30 px-4 py-3 text-sm text-amber-100"
+              >
                 Upgrade
-              </button>
+              </Link>
             </div>
             <button
               type="button"
