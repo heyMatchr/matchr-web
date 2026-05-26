@@ -3,7 +3,15 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import Image from "next/image";
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent } from "react";
 import { GIFT_CATALOG } from "@/lib/gifts";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
@@ -356,14 +364,6 @@ export function MomentsClient({
         </div>
       ) : null}
 
-      {activeComments ? (
-        <CommentsSheet
-          moment={activeComments}
-          onClose={() => setActiveComments(null)}
-          supabase={supabase}
-        />
-      ) : null}
-
       {activeLikes ? (
         <LikesSheet
           moment={activeLikes}
@@ -377,6 +377,14 @@ export function MomentsClient({
           goldBalance={goldBalance}
           moment={activeGifts}
           onClose={() => setActiveGifts(null)}
+        />
+      ) : null}
+
+      {activeComments ? (
+        <CommentsSheet
+          moment={activeComments}
+          onClose={() => setActiveComments(null)}
+          supabase={supabase}
         />
       ) : null}
     </>
@@ -403,6 +411,11 @@ function CommentsSheet({
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [draft, setDraft] = useState("");
+  const isMounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   const composerRef = useRef<HTMLFormElement>(null);
 
@@ -491,9 +504,9 @@ function CommentsSheet({
     };
   }, [moment.id, supabase]);
 
-  return (
+  const commentsView = (
     <div
-      className="fixed inset-0 z-[120] overflow-hidden bg-black text-white [touch-action:none]"
+      className="fixed inset-0 z-[9999] overflow-hidden bg-black text-white [touch-action:pan-y]"
       onTouchMove={(event) => event.stopPropagation()}
       onTouchStart={(event) => event.stopPropagation()}
       style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
@@ -639,6 +652,12 @@ function CommentsSheet({
     </div>
     </div>
   );
+
+  if (!isMounted) {
+    return null;
+  }
+
+  return createPortal(commentsView, document.body);
 }
 
 function LikesSheet({
