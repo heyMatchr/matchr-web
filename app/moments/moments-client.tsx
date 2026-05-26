@@ -131,8 +131,8 @@ export function MomentsClient({
   }
 
   return (
-    <>
-      <div className="mt-6 flex min-w-0 items-center justify-between gap-3 md:mt-8">
+    <div className="min-w-0 max-w-full overflow-x-hidden pb-[calc(var(--matchr-page-bottom-padding)+1.5rem)]">
+      <div className="mt-6 flex min-w-0 max-w-full items-center justify-between gap-3 md:mt-8">
         <p className="min-w-0 text-sm leading-6 text-neutral-400">
           Share moments with your Matchr circle.
         </p>
@@ -145,7 +145,7 @@ export function MomentsClient({
         </button>
       </div>
 
-      <div className="mt-6 grid gap-5">
+      <div className="mt-6 grid min-w-0 max-w-full gap-5">
         {moments.length > 0 ? (
           moments.map((moment, index) => {
             const isOwner = moment.user_id === currentUserId;
@@ -154,12 +154,12 @@ export function MomentsClient({
             return (
             <article
               key={moment.id}
-              className="min-w-0 overflow-hidden rounded-lg border border-neutral-800 bg-black/50"
+              className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-neutral-800 bg-black/50"
             >
-              <div className="flex items-center gap-3 p-4">
+              <div className="flex min-w-0 items-center gap-3 p-4">
                 <Link
                   href={`/profile/${moment.profile.id}`}
-                  className="h-11 w-11 overflow-hidden rounded-full bg-neutral-950"
+                  className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-neutral-950"
                 >
                   {moment.profile.avatar_url ? (
                     <Image
@@ -172,17 +172,17 @@ export function MomentsClient({
                     />
                   ) : null}
                 </Link>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <Link
                     href={`/profile/${moment.profile.id}`}
-                    className="font-black text-white"
+                    className="block truncate font-black text-white"
                   >
                     {moment.profile.display_name}
                   </Link>
                   <p className="text-xs text-neutral-500">{timeAgo(moment.created_at)}</p>
                 </div>
                 {isOwner ? (
-                  <div className="relative ml-auto">
+                  <div className="relative ml-auto shrink-0">
                     <button
                       type="button"
                       onClick={() =>
@@ -225,14 +225,14 @@ export function MomentsClient({
                 ) : null}
               </div>
 
-              <div className="bg-neutral-950">
+              <div className="w-full max-w-full overflow-hidden bg-neutral-950">
                 {moment.media_type === "video" ? (
                   <video
                     src={moment.media_url}
                     controls
                     playsInline
                     preload="metadata"
-                    className="max-h-[70vh] w-full object-contain"
+                    className="block max-h-[70dvh] w-full max-w-full object-contain"
                   />
                 ) : (
                   <Image
@@ -242,16 +242,19 @@ export function MomentsClient({
                     height={1125}
                     priority={index === 0}
                     sizes="(min-width: 768px) 768px, 100vw"
-                    className="h-auto max-h-[70vh] w-full object-contain"
+                    className="h-auto max-h-[70dvh] w-full max-w-full object-contain"
                   />
                 )}
               </div>
 
-              <div className="p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <form action={async () => {
+              <div className="min-w-0 p-4">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <form
+                    className="shrink-0"
+                    action={async () => {
                     await toggleMomentLike(moment.id, moment.user_id);
-                  }}>
+                  }}
+                  >
                     <button
                       type="submit"
                       className={`rounded-full px-4 py-2 text-xl transition-colors ${
@@ -270,14 +273,14 @@ export function MomentsClient({
                       event.stopPropagation();
                       openComments(moment);
                     }}
-                    className="relative z-10 touch-manipulation rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
+                    className="relative z-10 min-h-10 touch-manipulation rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
                   >
                     {moment.commentCount} comments
                   </button>
                   <button
                     type="button"
                     onClick={() => setActiveGifts(moment)}
-                    className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
+                    className="min-h-10 rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300 sm:px-4"
                   >
                     Gift
                   </button>
@@ -387,7 +390,7 @@ export function MomentsClient({
           supabase={supabase}
         />
       ) : null}
-    </>
+    </div>
   );
 }
 
