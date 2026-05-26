@@ -52,12 +52,14 @@ type StoryEngagementItem = {
 type StoryEngagement = {
   gifts: StoryEngagementItem[];
   reactions: StoryEngagementItem[];
+  replies: StoryEngagementItem[];
   viewers: StoryEngagementItem[];
 };
 
 const emptyEngagement: StoryEngagement = {
   gifts: [],
   reactions: [],
+  replies: [],
   viewers: [],
 };
 
@@ -200,6 +202,21 @@ export function StoriesBar({
   const activeGroup =
     activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
   const activeStory = activeGroup?.stories[activeStoryIndex] ?? null;
+  const storyActivityItems = useMemo(
+    () =>
+      [
+        ...engagement.replies,
+        ...engagement.reactions,
+        ...engagement.gifts,
+        ...engagement.viewers,
+      ]
+        .sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        )
+        .slice(0, 24),
+    [engagement],
+  );
   const isClientMounted = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -224,28 +241,34 @@ export function StoriesBar({
       return;
     }
 
-    void supabase
-      .from("story_views")
-      .upsert(
-        {
-          story_id: activeStory.id,
+    const storyToView = activeStory;
+
+    async function recordViewOnce() {
+      const { data: existingViews } = await supabase
+        .from("story_views")
+        .select("id")
+        .eq("story_id", storyToView.id)
+        .eq("viewer_id", currentUserId)
+        .limit(1);
+
+      if (!existingViews?.length) {
+        await supabase.from("story_views").insert({
+          story_id: storyToView.id,
           viewer_id: currentUserId,
-        },
-        {
-          ignoreDuplicates: true,
-          onConflict: "story_id,viewer_id",
-        },
-      )
-      .then(() => {
-        setGroups((current) =>
-          current.map((group) => ({
-            ...group,
-            stories: group.stories.map((story) =>
-              story.id === activeStory.id ? { ...story, viewed: true } : story,
-            ),
-          })),
-        );
-      });
+        });
+      }
+
+      setGroups((current) =>
+        current.map((group) => ({
+          ...group,
+          stories: group.stories.map((story) =>
+            story.id === storyToView.id ? { ...story, viewed: true } : story,
+          ),
+        })),
+      );
+    }
+
+    void recordViewOnce();
   }, [activeStory, currentUserId, supabase]);
 
   useEffect(() => {
@@ -292,7 +315,8 @@ export function StoriesBar({
     const story = activeStory;
 
     async function loadEngagement() {
-      const [viewsResult, reactionsResult, giftsResult] = await Promise.all([
+      const [viewsResult, reactionsResult, giftsResult, repliesResult] =
+        await Promise.all([
         supabase
           .from("story_views")
           .select("viewer_id, created_at")
@@ -312,12 +336,26 @@ export function StoriesBar({
           .eq("story_id", story.id)
           .order("created_at", { ascending: false })
           .limit(12),
+        supabase
+          .from("story_replies")
+          .select("sender_id, content, created_at")
+          .eq("story_id", story.id)
+          .order("created_at", { ascending: false })
+          .limit(12),
       ]);
 
+      const uniqueViewsByViewer = new Map<string, { viewer_id: string; created_at: string }>();
+      viewsResult.data?.forEach((item) => {
+        if (!uniqueViewsByViewer.has(item.viewer_id)) {
+          uniqueViewsByViewer.set(item.viewer_id, item);
+        }
+      });
+      const uniqueViews = [...uniqueViewsByViewer.values()];
       const profileIds = [
-        ...(viewsResult.data?.map((item) => item.viewer_id) ?? []),
+        ...uniqueViews.map((item) => item.viewer_id),
         ...(reactionsResult.data?.map((item) => item.reactor_id) ?? []),
         ...(giftsResult.data?.map((item) => item.sender_id) ?? []),
+        ...(repliesResult.data?.map((item) => item.sender_id) ?? []),
       ];
       const uniqueProfileIds = [...new Set(profileIds)];
       const { data: profiles } = uniqueProfileIds.length
@@ -355,8 +393,19 @@ export function StoriesBar({
               label: item.reaction_type,
             };
           }) ?? [],
+        replies:
+          repliesResult.data?.map((item) => {
+            const profile = profilesById.get(item.sender_id);
+            return {
+              avatar_url: profile?.avatar_url ?? null,
+              created_at: item.created_at,
+              display_name: profile?.display_name ?? "Someone",
+              id: `${item.sender_id}-${item.created_at}`,
+              label: `Replied: ${item.content}`,
+            };
+          }) ?? [],
         viewers:
-          viewsResult.data?.map((item) => {
+          uniqueViews.map((item) => {
             const profile = profilesById.get(item.viewer_id);
             return {
               avatar_url: profile?.avatar_url ?? null,
@@ -961,7 +1010,7 @@ export function StoriesBar({
               backgroundClasses.emerald
             }`}
           >
-            <div className="absolute left-0 right-0 top-0 z-30 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
+            <div className="absolute left-0 right-0 top-0 z-30 px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:px-4 sm:pb-4 sm:pt-[calc(env(safe-area-inset-top)+1rem)]">
               <div className="flex gap-1">
                 {activeGroup.stories.map((story, index) => (
                   <div
@@ -982,9 +1031,9 @@ export function StoriesBar({
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="mt-3 flex items-center justify-between gap-2 sm:mt-4 sm:gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="h-10 w-10 overflow-hidden rounded-full bg-neutral-950">
+                  <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-10 sm:w-10">
                     {activeGroup.avatar_url ? (
                       <Image
                         src={activeGroup.avatar_url}
@@ -996,7 +1045,7 @@ export function StoriesBar({
                       />
                     ) : null}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-black">
                       {activeGroup.isOwn ? "Your story" : activeGroup.display_name}
                     </p>
@@ -1008,9 +1057,11 @@ export function StoriesBar({
                 <button
                   type="button"
                   onClick={closeViewer}
-                  className="rounded-full bg-white/10 px-3 py-1 text-sm"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-lg sm:w-auto sm:px-3 sm:py-1 sm:text-sm"
+                  aria-label="Close story"
                 >
-                  Close
+                  <span className="sm:hidden">×</span>
+                  <span className="hidden sm:inline">Close</span>
                 </button>
               </div>
             </div>
@@ -1028,7 +1079,7 @@ export function StoriesBar({
               className="absolute bottom-0 right-0 top-0 z-10 w-2/3 touch-manipulation"
             />
 
-            <div className="absolute inset-0 z-0 flex h-[100dvh] w-screen items-center justify-center overflow-hidden px-0">
+            <div className="absolute inset-0 z-0 flex h-[100dvh] w-screen items-center justify-center overflow-hidden px-0 pb-[calc(env(safe-area-inset-bottom)+10.5rem)] pt-[calc(env(safe-area-inset-top)+5.25rem)] sm:pb-[calc(env(safe-area-inset-bottom)+8rem)] sm:pt-[calc(env(safe-area-inset-top)+6rem)]">
               {activeStory.media_url ? (
                 <Image
                   src={activeStory.media_url}
@@ -1037,17 +1088,17 @@ export function StoriesBar({
                   height={1280}
                   priority
                   sizes="100vw"
-                  className="max-h-[100dvh] max-w-full object-contain"
+                  className="max-h-full max-w-full object-contain"
                 />
               ) : null}
               {activeStory.text ? (
-                <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+9rem)] left-5 right-5 rounded-3xl bg-black/45 p-5 text-center text-2xl font-black leading-tight backdrop-blur-md">
+                <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+8.25rem)] left-4 right-4 rounded-3xl bg-black/45 p-4 text-center text-xl font-black leading-tight backdrop-blur-md sm:bottom-[calc(env(safe-area-inset-bottom)+9rem)] sm:left-5 sm:right-5 sm:p-5 sm:text-2xl">
                   {activeStory.text}
                 </p>
               ) : null}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+            <div className="absolute bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-black/65 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]">
               {activeGroup.isOwn ? (
                 <div className="flex items-center gap-3">
                   <button
@@ -1059,7 +1110,7 @@ export function StoriesBar({
                       <span className="block text-sm font-black">Story activity</span>
                       <span className="block truncate text-xs text-neutral-400">
                         {engagement.viewers.length} viewers ·{" "}
-                        {engagement.reactions.length} reactions ·{" "}
+                        {engagement.reactions.length + engagement.replies.length} responses ·{" "}
                         {engagement.gifts.length} gifts
                       </span>
                     </span>
@@ -1067,7 +1118,7 @@ export function StoriesBar({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5 sm:space-y-3">
                   <div className="flex gap-2">
                     {STORY_REACTIONS.map((reaction) => (
                       <button
@@ -1075,7 +1126,7 @@ export function StoriesBar({
                         type="button"
                         aria-label={reaction.label}
                         onClick={() => void reactToStory(reaction.type)}
-                        className={`grid h-12 w-12 flex-1 place-items-center rounded-full border text-xl transition-all duration-300 hover:border-emerald-200/50 hover:bg-emerald-300/10 ${
+                        className={`grid h-10 w-10 flex-1 place-items-center rounded-full border text-lg transition-all duration-300 hover:border-emerald-200/50 hover:bg-emerald-300/10 sm:h-12 sm:w-12 sm:text-xl ${
                           selectedReaction === reaction.type
                             ? "scale-110 border-emerald-200/60 bg-emerald-300/15 shadow-[0_0_28px_rgba(16,185,129,0.18)]"
                             : "border-white/10 bg-white/[0.06]"
@@ -1092,11 +1143,11 @@ export function StoriesBar({
                       onChange={(event) => setReplyText(event.target.value)}
                       maxLength={1000}
                       placeholder="Reply privately"
-                      className="min-w-0 flex-1 rounded-full border border-white/10 bg-black/45 px-4 py-3 text-sm text-white placeholder:text-neutral-500 focus:border-emerald-200 focus:outline-none"
+                      className="min-w-0 flex-1 rounded-full border border-white/10 bg-black/45 px-4 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-emerald-200 focus:outline-none sm:py-3"
                     />
                     <button
                       type="submit"
-                      className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black"
+                      className="shrink-0 rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black sm:py-3"
                     >
                       Send
                     </button>
@@ -1106,7 +1157,7 @@ export function StoriesBar({
                     <button
                       type="button"
                       onClick={() => setIsGiftPickerOpen((current) => !current)}
-                      className="w-full rounded-full border border-emerald-200/20 bg-emerald-300/10 px-4 py-3 text-sm font-medium text-emerald-50"
+                      className="w-full rounded-full border border-emerald-200/20 bg-emerald-300/10 px-4 py-2.5 text-sm font-medium text-emerald-50 sm:py-3"
                     >
                       Send gift
                     </button>
@@ -1144,7 +1195,7 @@ export function StoriesBar({
               )}
             </div>
             {activeGroup.isOwn && isAnalyticsOpen ? (
-              <div className="absolute inset-x-0 bottom-0 z-40 max-h-[70dvh] rounded-t-3xl border border-white/10 bg-black/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-24px_70px_rgba(0,0,0,0.65)]">
+              <div className="fixed inset-x-0 bottom-0 z-[10000] max-h-[55dvh] rounded-t-3xl border border-white/10 bg-black/95 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-[0_-24px_70px_rgba(0,0,0,0.65)] backdrop-blur-xl">
                 <div className="mb-3 flex items-center justify-between">
                   <div>
                     <p className="text-base font-black">Story activity</p>
@@ -1160,10 +1211,8 @@ export function StoriesBar({
                     Close
                   </button>
                 </div>
-                <div className="max-h-[52dvh] space-y-2 overflow-y-auto overscroll-contain">
-                  {[...engagement.reactions, ...engagement.gifts, ...engagement.viewers]
-                    .slice(0, 24)
-                    .map((item) => (
+                <div className="max-h-[40dvh] space-y-2 overflow-y-auto overscroll-contain sm:max-h-[42dvh]">
+                  {storyActivityItems.map((item) => (
                       <div
                         key={`${item.id}-${item.label}-${item.created_at}`}
                         className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2"
@@ -1191,7 +1240,8 @@ export function StoriesBar({
                         </p>
                       </div>
                     ))}
-                  {engagement.reactions.length +
+                  {engagement.replies.length +
+                    engagement.reactions.length +
                     engagement.gifts.length +
                     engagement.viewers.length ===
                   0 ? (
