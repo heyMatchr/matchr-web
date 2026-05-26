@@ -15,6 +15,7 @@ export type DiscoverProfile = {
   country: string | null;
   display_name: string;
   followerCount: number;
+  gender_identity: string | null;
   hasMoments: boolean;
   hasStories: boolean;
   id: string;
@@ -22,7 +23,9 @@ export type DiscoverProfile = {
   isOnline: boolean;
   location: string;
   momentCount: number;
+  pronouns: string | null;
   relationship_intent: string;
+  sexual_orientation: string | null;
   trendingScore: number;
   verified: boolean;
 };
@@ -331,6 +334,20 @@ function SwipeCard({
           <span>{profile.momentCount} moments</span>
           <span>{profile.relationship_intent}</span>
         </div>
+        {profile.pronouns || profile.gender_identity || profile.sexual_orientation ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[profile.pronouns, profile.gender_identity, profile.sexual_orientation]
+              .filter(Boolean)
+              .map((value) => (
+                <span
+                  key={value}
+                  className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-50"
+                >
+                  {value}
+                </span>
+              ))}
+          </div>
+        ) : null}
         <div className="mt-5 grid grid-cols-3 gap-2">
           <button disabled={disabled} onClick={onPass} className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300">Pass</button>
           <Link href={`/profile/${profile.id}`} className="rounded-full border border-neutral-700 px-3 py-2 text-center text-sm text-neutral-300">View</Link>

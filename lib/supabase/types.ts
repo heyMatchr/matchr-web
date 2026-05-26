@@ -9,6 +9,11 @@ export type ProfileRow = {
   display_name: string;
   age: number;
   gender: string;
+  gender_identity: string | null;
+  pronouns: string | null;
+  sexual_orientation: string | null;
+  show_gender_on_profile: boolean;
+  show_orientation_on_profile: boolean;
   interested_in: string;
   occupation: string;
   interests: string[];
@@ -238,6 +243,9 @@ export type UserSettingsRow = {
   max_age_preference: number;
   gender_preference: string;
   relationship_intent_preference: string | null;
+  interested_in_gender_identities: string[];
+  interested_in_orientations: string[];
+  inclusive_discovery: boolean;
   push_notifications: boolean;
   story_notifications: boolean;
   message_notifications: boolean;
@@ -826,6 +834,11 @@ export type Database = {
           display_name: string;
           age: number;
           gender: string;
+          gender_identity?: string | null;
+          pronouns?: string | null;
+          sexual_orientation?: string | null;
+          show_gender_on_profile?: boolean;
+          show_orientation_on_profile?: boolean;
           interested_in: string;
           occupation: string;
           interests: string[];
@@ -863,6 +876,11 @@ export type Database = {
           display_name?: string;
           age?: number;
           gender?: string;
+          gender_identity?: string | null;
+          pronouns?: string | null;
+          sexual_orientation?: string | null;
+          show_gender_on_profile?: boolean;
+          show_orientation_on_profile?: boolean;
           interested_in?: string;
           occupation?: string;
           interests?: string[];

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseMultiSelectFormValues } from "@/lib/identity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function isChecked(formData: FormData, key: string) {
@@ -48,6 +49,15 @@ export async function saveSettings(formData: FormData) {
     push_notifications: isChecked(formData, "push_notifications"),
     relationship_intent_preference:
       getString(formData, "relationship_intent_preference") || null,
+    interested_in_gender_identities: parseMultiSelectFormValues(
+      formData,
+      "interested_in_gender_identities",
+    ),
+    interested_in_orientations: parseMultiSelectFormValues(
+      formData,
+      "interested_in_orientations",
+    ),
+    inclusive_discovery: isChecked(formData, "inclusive_discovery"),
     show_in_discover: isChecked(formData, "show_in_discover"),
     story_notifications: isChecked(formData, "story_notifications"),
     gift_notifications: isChecked(formData, "gift_notifications"),

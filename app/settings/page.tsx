@@ -2,6 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
+import {
+  GENDER_IDENTITY_OPTIONS,
+  SEXUAL_ORIENTATION_OPTIONS,
+} from "@/lib/identity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
@@ -20,6 +24,9 @@ const defaults = {
   hide_moments_likes: false,
   hide_online_status: false,
   hide_read_receipts: false,
+  inclusive_discovery: true,
+  interested_in_gender_identities: [],
+  interested_in_orientations: [],
   match_notifications: true,
   max_age_preference: 99,
   message_notifications: true,
@@ -105,6 +112,19 @@ export default async function SettingsPage() {
           <NumberInput defaultValue={settings.min_age_preference} label="Minimum age" name="min_age_preference" />
           <NumberInput defaultValue={settings.max_age_preference} label="Maximum age" name="max_age_preference" />
           <Select defaultValue={settings.gender_preference} label="Gender preference" name="gender_preference" options={["any", "women", "men", "nonbinary"]} />
+          <Toggle defaultChecked={settings.inclusive_discovery} name="inclusive_discovery" title="Inclusive discovery mode" />
+          <MultiSelect
+            defaultValues={settings.interested_in_gender_identities ?? []}
+            label="Interested in gender identities"
+            name="interested_in_gender_identities"
+            options={[...GENDER_IDENTITY_OPTIONS]}
+          />
+          <MultiSelect
+            defaultValues={settings.interested_in_orientations ?? []}
+            label="Interested in orientations"
+            name="interested_in_orientations"
+            options={[...SEXUAL_ORIENTATION_OPTIONS]}
+          />
           <input
             name="relationship_intent_preference"
             defaultValue={settings.relationship_intent_preference ?? ""}
@@ -200,6 +220,46 @@ function Select({ defaultValue, label, name, options }: { defaultValue: string; 
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
     </label>
+  );
+}
+
+function MultiSelect({
+  defaultValues,
+  label,
+  name,
+  options,
+}: {
+  defaultValues: string[];
+  label: string;
+  name: string;
+  options: string[];
+}) {
+  const selected = new Set(defaultValues);
+
+  return (
+    <fieldset className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+      <legend className="text-sm text-neutral-300">{label}</legend>
+      <p className="mt-1 text-xs text-neutral-500">
+        Leave empty to keep discovery broad.
+      </p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {options.map((option) => (
+          <label
+            key={option}
+            className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-sm text-neutral-200"
+          >
+            <input
+              name={name}
+              type="checkbox"
+              value={option}
+              defaultChecked={selected.has(option)}
+              className="h-4 w-4 accent-emerald-300"
+            />
+            {option}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

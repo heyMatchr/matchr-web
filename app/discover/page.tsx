@@ -1,4 +1,5 @@
 import { AppShell } from "@/app/_components/app-shell";
+import { profileMatchesIdentityPreferences } from "@/lib/identity";
 import { canAppearInDiscover } from "@/lib/moderation";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
@@ -16,13 +17,19 @@ export default async function DiscoverPage() {
     () => getCurrentUserProfile(supabase, "/discover"),
   );
 
-  const [profilesResult, likesResult, passesResult, blocksResult] =
+  const [
+    profilesResult,
+    likesResult,
+    passesResult,
+    blocksResult,
+    currentSettingsResult,
+  ] =
     await timeAsync("[Perf] Discover base profile filters", () =>
       Promise.all([
         supabase
           .from("profiles")
           .select(
-            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, verified, accepting_dating, is_online, last_seen_at, discover_hidden, shadow_restricted, trusted_user, created_at",
+            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, discover_hidden, shadow_restricted, trusted_user, created_at",
           )
           .eq("onboarding_completed", true)
           .neq("id", user.id)
@@ -37,6 +44,13 @@ export default async function DiscoverPage() {
           .from("blocks")
           .select("blocker_id, blocked_user_id")
           .or(`blocker_id.eq.${user.id},blocked_user_id.eq.${user.id}`),
+        supabase
+          .from("user_settings")
+          .select(
+            "interested_in_gender_identities, interested_in_orientations, inclusive_discovery, relationship_intent_preference",
+          )
+          .eq("user_id", user.id)
+          .maybeSingle(),
       ]),
     );
 
@@ -63,10 +77,24 @@ export default async function DiscoverPage() {
       block.blocker_id === user.id ? block.blocked_user_id : block.blocker_id,
     ),
   ]);
+  const identityPreferences = currentSettingsResult.data;
   const visibleProfiles =
     profilesResult.data.filter(
       (profile) =>
-        !excludedUserIds.has(profile.id) && canAppearInDiscover(profile),
+        !excludedUserIds.has(profile.id) &&
+        canAppearInDiscover(profile) &&
+        profileMatchesIdentityPreferences({
+          inclusiveMode: identityPreferences?.inclusive_discovery ?? true,
+          interestedInGenderIdentities:
+            identityPreferences?.interested_in_gender_identities ?? [],
+          interestedInOrientations:
+            identityPreferences?.interested_in_orientations ?? [],
+          targetGenderIdentity: profile.gender_identity,
+          targetSexualOrientation: profile.sexual_orientation,
+        }) &&
+        (!identityPreferences?.relationship_intent_preference ||
+          profile.relationship_intent ===
+            identityPreferences.relationship_intent_preference),
     ) ??
     [];
   const { data: stories, error: storiesError } = await timeAsync(
@@ -255,7 +283,14 @@ export default async function DiscoverPage() {
       isOnline,
       location: profile.location,
       momentCount,
+      pronouns: profile.pronouns,
       relationship_intent: profile.relationship_intent,
+      gender_identity: profile.show_gender_on_profile
+        ? profile.gender_identity
+        : null,
+      sexual_orientation: profile.show_orientation_on_profile
+        ? profile.sexual_orientation
+        : null,
       trendingScore,
       verified: profile.verified,
     };

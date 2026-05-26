@@ -2,6 +2,11 @@
 
 import { useActionState, useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
+import {
+  GENDER_IDENTITY_OPTIONS,
+  PRONOUN_OPTIONS,
+  SEXUAL_ORIENTATION_OPTIONS,
+} from "@/lib/identity";
 import type { ProfileRow } from "@/lib/supabase/types";
 import {
   AVATAR_ALLOWED_TYPES,
@@ -21,6 +26,7 @@ type EditableProfile = Pick<
   | "display_name"
   | "drinking"
   | "gender"
+  | "gender_identity"
   | "height"
   | "interested_in"
   | "interests"
@@ -28,8 +34,12 @@ type EditableProfile = Pick<
   | "occupation"
   | "looking_for"
   | "open_to_long_distance"
+  | "pronouns"
   | "relationship_intent"
   | "relationship_status"
+  | "sexual_orientation"
+  | "show_gender_on_profile"
+  | "show_orientation_on_profile"
   | "smoking"
   | "weight"
 >;
@@ -184,6 +194,54 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
         <option>Man</option>
         <option>Non-binary</option>
         <option>Prefer to self-describe</option>
+      </select>
+
+      <label className="sr-only" htmlFor="gender_identity">
+        Gender identity
+      </label>
+      <select
+        id="gender_identity"
+        name="gender_identity"
+        disabled={pending}
+        className={inputClass}
+        defaultValue={profile.gender_identity ?? ""}
+      >
+        <option value="">Gender identity optional</option>
+        {GENDER_IDENTITY_OPTIONS.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+
+      <label className="sr-only" htmlFor="pronouns">
+        Pronouns
+      </label>
+      <select
+        id="pronouns"
+        name="pronouns"
+        disabled={pending}
+        className={inputClass}
+        defaultValue={profile.pronouns ?? ""}
+      >
+        <option value="">Pronouns optional</option>
+        {PRONOUN_OPTIONS.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+
+      <label className="sr-only" htmlFor="sexual_orientation">
+        Sexual orientation
+      </label>
+      <select
+        id="sexual_orientation"
+        name="sexual_orientation"
+        disabled={pending}
+        className={inputClass}
+        defaultValue={profile.sexual_orientation ?? ""}
+      >
+        <option value="">Sexual orientation optional</option>
+        {SEXUAL_ORIENTATION_OPTIONS.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
       </select>
 
       <label className="sr-only" htmlFor="interested_in">
@@ -399,6 +457,28 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
           className="h-4 w-4 accent-emerald-300"
         />
         Open to long distance
+      </label>
+
+      <label className="flex items-center gap-3 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-sm text-neutral-200">
+        <input
+          name="show_gender_on_profile"
+          type="checkbox"
+          defaultChecked={profile.show_gender_on_profile}
+          disabled={pending}
+          className="h-4 w-4 accent-emerald-300"
+        />
+        Show gender identity on profile
+      </label>
+
+      <label className="flex items-center gap-3 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-sm text-neutral-200">
+        <input
+          name="show_orientation_on_profile"
+          type="checkbox"
+          defaultChecked={profile.show_orientation_on_profile}
+          disabled={pending}
+          className="h-4 w-4 accent-emerald-300"
+        />
+        Show sexual orientation on profile
       </label>
 
       <label className="sr-only" htmlFor="interests">

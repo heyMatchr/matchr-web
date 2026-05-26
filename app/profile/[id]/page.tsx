@@ -8,6 +8,7 @@ import { BrowserNotificationSettings } from "@/app/settings/browser-notification
 import { InstallPromptCard } from "@/app/settings/install-prompt-card";
 import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
+import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -43,7 +44,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         supabase
           .from("profiles")
           .select(
-            "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
+            "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
           )
           .eq("id", id)
           .eq("onboarding_completed", true)
@@ -502,6 +503,36 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               </p>
               <p className="mt-2 text-xl">{profile.relationship_intent}</p>
             </div>
+
+            {profile.pronouns ||
+            (profile.show_gender_on_profile &&
+              isVisibleIdentityValue(profile.gender_identity)) ||
+            (profile.show_orientation_on_profile &&
+              isVisibleIdentityValue(profile.sexual_orientation)) ? (
+              <div className="mt-8">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                  Identity
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    profile.pronouns,
+                    profile.show_gender_on_profile ? profile.gender_identity : null,
+                    profile.show_orientation_on_profile
+                      ? profile.sexual_orientation
+                      : null,
+                  ]
+                    .filter(isVisibleIdentityValue)
+                    .map((value) => (
+                      <span
+                        key={value}
+                        className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-3 py-1 text-sm text-emerald-50"
+                      >
+                        {value}
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-8">
               <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">

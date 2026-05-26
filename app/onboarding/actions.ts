@@ -42,6 +42,9 @@ export async function saveOnboarding(
   const displayName = getFormString(formData, "display_name");
   const ageValue = getFormString(formData, "age");
   const gender = getFormString(formData, "gender");
+  const genderIdentity = getFormString(formData, "gender_identity");
+  const pronouns = getFormString(formData, "pronouns");
+  const sexualOrientation = getFormString(formData, "sexual_orientation");
   const interestedIn = getFormString(formData, "interested_in");
   const occupation = getFormString(formData, "occupation");
   const interests = getInterests(formData);
@@ -59,6 +62,9 @@ export async function saveOnboarding(
   const lookingFor = getFormString(formData, "looking_for");
   const acceptingDating = formData.get("accepting_dating") === "on";
   const openToLongDistance = formData.get("open_to_long_distance") === "on";
+  const showGenderOnProfile = formData.get("show_gender_on_profile") === "on";
+  const showOrientationOnProfile =
+    formData.get("show_orientation_on_profile") === "on";
   const avatar = formData.get("avatar");
   const age = Number(ageValue);
 
@@ -141,6 +147,9 @@ export async function saveOnboarding(
       display_name: displayName,
       age,
       gender,
+      gender_identity: genderIdentity || null,
+      pronouns: pronouns || null,
+      sexual_orientation: sexualOrientation || null,
       interested_in: interestedIn,
       occupation,
       interests,
@@ -155,6 +164,8 @@ export async function saveOnboarding(
       country_flag: countryFlag || null,
       accepting_dating: acceptingDating,
       open_to_long_distance: openToLongDistance,
+      show_gender_on_profile: showGenderOnProfile,
+      show_orientation_on_profile: showOrientationOnProfile,
       drinking: drinking || null,
       smoking: smoking || null,
       looking_for: lookingFor || null,
