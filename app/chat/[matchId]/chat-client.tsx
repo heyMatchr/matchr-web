@@ -83,6 +83,9 @@ export function ChatClient({
   const [goldModal, setGoldModal] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [mobileViewportHeight, setMobileViewportHeight] = useState<
+    number | null
+  >(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const typingRef = useRef(false);
   const receiverTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -117,6 +120,12 @@ export function ChatClient({
         ? 2
         : 5
       : 0;
+  const mobileChatHeightStyle = mobileViewportHeight
+    ? {
+        height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.75rem)`,
+        maxHeight: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.75rem)`,
+      }
+    : undefined;
 
   const mergeConfirmedMessage = useCallback((nextMessage: MessageRow) => {
     setMessages((current) => {
@@ -237,23 +246,28 @@ export function ChatClient({
   useEffect(() => {
     const viewport = window.visualViewport;
 
-    if (!viewport) {
-      return undefined;
+    function syncViewportHeight() {
+      const nextHeight = Math.round(viewport?.height ?? window.innerHeight);
+      setMobileViewportHeight(window.innerWidth < 768 ? nextHeight : null);
     }
 
     function handleViewportChange() {
+      syncViewportHeight();
       window.requestAnimationFrame(() => {
         inputRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
         scrollToLatest("auto");
       });
     }
 
-    viewport.addEventListener("resize", handleViewportChange);
-    viewport.addEventListener("scroll", handleViewportChange);
+    syncViewportHeight();
+    viewport?.addEventListener("resize", handleViewportChange);
+    viewport?.addEventListener("scroll", handleViewportChange);
+    window.addEventListener("resize", handleViewportChange);
 
     return () => {
-      viewport.removeEventListener("resize", handleViewportChange);
-      viewport.removeEventListener("scroll", handleViewportChange);
+      viewport?.removeEventListener("resize", handleViewportChange);
+      viewport?.removeEventListener("scroll", handleViewportChange);
+      window.removeEventListener("resize", handleViewportChange);
     };
   }, [scrollToLatest]);
 
@@ -863,7 +877,10 @@ export function ChatClient({
   }
 
   return (
-    <div className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.75rem)] min-h-[24rem] w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]">
+    <div
+      className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.75rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
+      style={mobileChatHeightStyle}
+    >
       <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
         <Link
           href={`/profile/${receiverId}`}
@@ -911,7 +928,7 @@ export function ChatClient({
 
       <div
         ref={messagesViewportRef}
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2.5 pb-5 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain p-2.5 pb-4 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
       >
         {messages.length > 0 ? (
           messages.map((message) => {
@@ -966,9 +983,9 @@ export function ChatClient({
 
       <form
         onSubmit={sendMessage}
-        className="sticky bottom-0 shrink-0 border-t border-neutral-800 bg-black/90 p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
+        className="relative z-20 shrink-0 border-t border-neutral-800 bg-black/90 p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
-        <div className="relative flex min-w-0 gap-2 sm:gap-3">
+        <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setIsMediaMenuOpen((current) => !current)}
@@ -1059,8 +1076,12 @@ export function ChatClient({
             ref={inputRef}
             value={content}
             onChange={handleContentChange}
+            onFocus={() => {
+              window.setTimeout(() => scrollToLatest("auto"), 80);
+            }}
             disabled={sending}
             maxLength={1000}
+            enterKeyHint="send"
             placeholder="Write a message"
             className="min-h-10 min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60 sm:px-5 sm:py-3"
           />
