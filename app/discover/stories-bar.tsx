@@ -101,6 +101,71 @@ function getStoryMediaExtension(file: File) {
   return file.type.split("/").pop() || "jpg";
 }
 
+async function compressStoryImage(file: File) {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") {
+    return file;
+  }
+
+  try {
+    const imageUrl = URL.createObjectURL(file);
+    const image = document.createElement("img");
+
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Could not read this image."));
+      image.src = imageUrl;
+    });
+
+    URL.revokeObjectURL(imageUrl);
+
+    const largestSide = Math.max(image.naturalWidth, image.naturalHeight);
+
+    if (largestSide <= 1080 && file.size <= 1_500_000) {
+      return file;
+    }
+
+    const scale = Math.min(1, 1080 / largestSide);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext("2d");
+
+    if (!context) {
+      return file;
+    }
+
+    context.fillStyle = "#000";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.82);
+    });
+
+    if (!blob || blob.size >= file.size) {
+      return file;
+    }
+
+    return new File(
+      [blob],
+      `${file.name.replace(/\.[^.]+$/, "") || "story"}.jpg`,
+      {
+        lastModified: Date.now(),
+        type: "image/jpeg",
+      },
+    );
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      console.error("[StoryUpload] compression fallback", error);
+    }
+
+    return file;
+  }
+}
+
 export function StoriesBar({
   anonKey,
   currentUserId,
@@ -115,6 +180,7 @@ export function StoriesBar({
   const [storySubmitError, setStorySubmitError] = useState("");
   const [storyNotice, setStoryNotice] = useState("");
   const [isPostingStory, setIsPostingStory] = useState(false);
+  const [uploadStage, setUploadStage] = useState("");
   const [activeGroupIndex, setActiveGroupIndex] = useState<number | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [engagement, setEngagement] = useState<StoryEngagement>(emptyEngagement);
@@ -174,6 +240,23 @@ export function StoriesBar({
         );
       });
   }, [activeStory, currentUserId, supabase]);
+
+  useEffect(() => {
+    if (!activeStory) {
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
+  }, [activeStory]);
 
   useEffect(() => {
     if (!activeStory) {
@@ -378,18 +461,30 @@ export function StoriesBar({
       }
 
       setIsPostingStory(true);
+      setUploadStage(hasMedia ? "Preparing..." : "Posting...");
 
       let mediaUrl: string | null = null;
       let mediaPath = "";
 
       if (hasMedia) {
-        mediaPath = `${currentUserId}/story-${Date.now()}.${getStoryMediaExtension(media)}`;
+        const uploadFile = await compressStoryImage(media);
+        setUploadStage("Uploading...");
+
+        if (process.env.NODE_ENV === "development") {
+          console.log("[StoryUpload] prepared file", {
+            originalSize: media.size,
+            preparedSize: uploadFile.size,
+            type: uploadFile.type,
+          });
+        }
+
+        mediaPath = `${currentUserId}/story-${Date.now()}.${getStoryMediaExtension(uploadFile)}`;
 
         const uploadResult = await supabase.storage
           .from(STORY_BUCKET_NAME)
-          .upload(mediaPath, media, {
+          .upload(mediaPath, uploadFile, {
             cacheControl: "3600",
-            contentType: media.type,
+            contentType: uploadFile.type,
           });
 
         if (process.env.NODE_ENV === "development") {
@@ -411,6 +506,7 @@ export function StoriesBar({
         mediaUrl = publicUrl;
       }
 
+      setUploadStage("Posting...");
       const insertResult = await supabase.from("stories").insert({
         background_style: backgroundStyle,
         media_url: mediaUrl,
@@ -455,6 +551,7 @@ export function StoriesBar({
       );
     } finally {
       setIsPostingStory(false);
+      setUploadStage("");
     }
   }
 
@@ -835,24 +932,28 @@ export function StoriesBar({
               disabled={isPostingStory || Boolean(mediaError)}
               className="mt-2 w-full rounded-full bg-white px-6 py-3 font-medium text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isPostingStory ? "Posting..." : "Post story"}
+              {isPostingStory ? uploadStage || "Posting..." : "Post story"}
             </button>
           </form>
         </div>
       ) : null}
 
       {activeGroup && activeStory ? (
-        <div className="fixed inset-0 z-50 bg-black text-white">
+        <div
+          className="fixed inset-0 z-[9999] h-[100dvh] w-screen overflow-hidden bg-black text-white"
+          onTouchMove={(event) => event.stopPropagation()}
+          onWheel={(event) => event.stopPropagation()}
+        >
           <div
             onPointerDown={() => setIsPaused(true)}
             onPointerLeave={() => setIsPaused(false)}
             onPointerUp={() => setIsPaused(false)}
-            className={`relative mx-auto flex h-full max-w-md flex-col overflow-hidden ${
+            className={`relative h-[100dvh] w-screen overflow-hidden ${
               backgroundClasses[activeStory.background_style] ??
               backgroundClasses.emerald
             }`}
           >
-            <div className="absolute left-0 right-0 top-0 z-20 p-4">
+            <div className="absolute left-0 right-0 top-0 z-30 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
               <div className="flex gap-1">
                 {activeGroup.stories.map((story, index) => (
                   <div
@@ -910,34 +1011,35 @@ export function StoriesBar({
               type="button"
               aria-label="Previous story"
               onClick={goPrevious}
-              className="absolute bottom-0 left-0 top-0 z-10 w-1/3"
+              className="absolute bottom-0 left-0 top-0 z-10 w-1/3 touch-manipulation"
             />
             <button
               type="button"
               aria-label="Next story"
               onClick={goNext}
-              className="absolute bottom-0 right-0 top-0 z-10 w-2/3"
+              className="absolute bottom-0 right-0 top-0 z-10 w-2/3 touch-manipulation"
             />
 
-            <div className="flex flex-1 items-center justify-center px-5 pt-24">
+            <div className="absolute inset-0 z-0 flex h-[100dvh] w-screen items-center justify-center overflow-hidden px-0">
               {activeStory.media_url ? (
                 <Image
                   src={activeStory.media_url}
                   alt=""
                   width={720}
                   height={1280}
-                  sizes="(min-width: 640px) 448px, 100vw"
-                  className="max-h-full w-full rounded-2xl object-contain"
+                  priority
+                  sizes="100vw"
+                  className="max-h-[100dvh] max-w-full object-contain"
                 />
               ) : null}
               {activeStory.text ? (
-                <p className="absolute bottom-36 left-5 right-5 rounded-3xl bg-black/45 p-5 text-center text-2xl font-black leading-tight backdrop-blur-md">
+                <p className="absolute bottom-[calc(env(safe-area-inset-bottom)+9rem)] left-5 right-5 rounded-3xl bg-black/45 p-5 text-center text-2xl font-black leading-tight backdrop-blur-md">
                   {activeStory.text}
                 </p>
               ) : null}
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 z-30 max-h-[42dvh] overflow-y-auto border-t border-white/10 bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
+            <div className="absolute bottom-0 left-0 right-0 z-30 max-h-[42dvh] overflow-y-auto overscroll-contain border-t border-white/10 bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-xl">
               {activeGroup.isOwn ? (
                 <div className="space-y-3">
                   <p className="text-xs font-medium uppercase tracking-[0.24em] text-emerald-100/70">
