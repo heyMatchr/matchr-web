@@ -356,6 +356,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     Settings
                   </Link>
                   <Link
+                    href="/settings#message-templates"
+                    className="inline-flex rounded-full border border-emerald-300/30 px-5 py-2.5 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-300/10"
+                  >
+                    Templates
+                  </Link>
+                  <Link
                     href="/wallet"
                     className="inline-flex rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
                   >

@@ -391,6 +391,19 @@ export type MessageRow = {
   created_at: string;
 };
 
+export type MessageTemplateRow = {
+  id: string;
+  user_id: string;
+  title: string;
+  message_text: string;
+  tone: string;
+  visibility: string;
+  price_gold: number | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MomentRow = {
   id: string;
   user_id: string;
@@ -666,6 +679,34 @@ export type Database = {
           story_id?: string | null;
           read_at?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      message_templates: {
+        Row: MessageTemplateRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          message_text: string;
+          tone?: string;
+          visibility?: string;
+          price_gold?: number | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          message_text?: string;
+          tone?: string;
+          visibility?: string;
+          price_gold?: number | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

@@ -10,6 +10,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
 import { InstallPromptCard } from "./install-prompt-card";
+import { MessageTemplatesManager } from "./message-templates-manager";
 
 const defaults = {
   allow_gifts: true,
@@ -66,6 +67,7 @@ export default async function SettingsPage() {
     hiddenResult,
     walletResult,
     premiumResult,
+    messageTemplatesResult,
   ] = await Promise.all([
     supabase.from("user_settings").select("*").eq("user_id", user.id).maybeSingle(),
     supabase.from("blocks").select("blocked_user_id, created_at").eq("blocker_id", user.id),
@@ -74,6 +76,12 @@ export default async function SettingsPage() {
     supabase.from("hidden_users").select("hidden_user_id, created_at").eq("hider_id", user.id),
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("message_templates")
+      .select("id, user_id, title, message_text, tone, visibility, price_gold, active, created_at, updated_at")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .order("created_at", { ascending: false }),
   ]);
   const settings = { ...defaults, ...(settingsResult.data ?? {}) };
   const relatedIds = [
@@ -149,6 +157,8 @@ export default async function SettingsPage() {
       </form>
 
       <div className="mt-6 grid gap-5">
+        <MessageTemplatesManager templates={messageTemplatesResult.data ?? []} />
+
         <SettingsSection title="Safety">
           <SafetyList
             allowUnblock

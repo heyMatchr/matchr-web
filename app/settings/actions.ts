@@ -3,6 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { parseMultiSelectFormValues } from "@/lib/identity";
+import {
+  normalizeMessageTemplateTone,
+  normalizeMessageTemplateVisibility,
+  validateMessageTemplateContent,
+} from "@/lib/message-templates";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function isChecked(formData: FormData, key: string) {
@@ -101,4 +106,108 @@ export async function unblockUser(blockedUserId: string) {
   revalidatePath("/matches");
   revalidatePath("/messages");
   revalidatePath("/moments");
+}
+
+export type MessageTemplateFormState = {
+  message: string;
+  status: "idle" | "error" | "success";
+};
+
+export async function saveMessageTemplate(
+  _previousState: MessageTemplateFormState,
+  formData: FormData,
+): Promise<MessageTemplateFormState> {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/settings");
+  }
+
+  const templateId = getString(formData, "template_id");
+  const title = getString(formData, "title");
+  const messageText = getString(formData, "message_text");
+  const tone = normalizeMessageTemplateTone(getString(formData, "tone"));
+  const visibility = normalizeMessageTemplateVisibility(
+    getString(formData, "visibility"),
+  );
+  const rawPriceGold = getString(formData, "price_gold");
+  const priceGold = rawPriceGold ? Number(rawPriceGold) : null;
+  const validationMessage = validateMessageTemplateContent({
+    messageText,
+    title,
+  });
+
+  if (validationMessage) {
+    return {
+      message: validationMessage,
+      status: "error",
+    };
+  }
+
+  if (priceGold !== null && (!Number.isFinite(priceGold) || priceGold < 0)) {
+    return {
+      message: "Template pack prices must be zero or higher.",
+      status: "error",
+    };
+  }
+
+  const payload = {
+    active: true,
+    message_text: messageText,
+    price_gold: visibility === "creator_pack" ? priceGold : null,
+    title,
+    tone,
+    updated_at: new Date().toISOString(),
+    user_id: user.id,
+    visibility,
+  };
+
+  const query = templateId
+    ? supabase
+        .from("message_templates")
+        .update(payload)
+        .eq("id", templateId)
+        .eq("user_id", user.id)
+    : supabase.from("message_templates").insert(payload);
+
+  const { error } = await query;
+
+  if (error) {
+    return {
+      message: error.message,
+      status: "error",
+    };
+  }
+
+  revalidatePath("/settings");
+
+  return {
+    message: templateId ? "Template updated." : "Template created.",
+    status: "success",
+  };
+}
+
+export async function deleteMessageTemplate(templateId: string) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/settings");
+  }
+
+  await supabase
+    .from("message_templates")
+    .update({
+      active: false,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", templateId)
+    .eq("user_id", user.id);
+
+  revalidatePath("/settings");
 }

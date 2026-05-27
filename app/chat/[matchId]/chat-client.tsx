@@ -20,10 +20,18 @@ import {
   DEFAULT_MESSAGE_RULES,
   type CreatorSplit,
 } from "@/lib/economy";
+import {
+  getConversationSuggestions,
+  type ConversationTone,
+} from "@/lib/conversation-assist";
 import { getGiftOption, type GiftOption } from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
 import { triggerMatchrHaptic } from "@/lib/haptics";
-import type { Database, MessageRow } from "@/lib/supabase/types";
+import type {
+  Database,
+  MessageRow,
+  MessageTemplateRow,
+} from "@/lib/supabase/types";
 import {
   MEDIA_ALLOWED_TYPES,
   MEDIA_BUCKET_NAME,
@@ -74,6 +82,14 @@ const SYSTEM_MESSAGE_TYPES = new Set([
   "call_event",
 ]);
 
+const conversationTones: ConversationTone[] = [
+  "Playful",
+  "Smooth",
+  "Bold",
+  "Sweet",
+  "Funny",
+];
+
 export function ChatClient({
   anonKey,
   currentUserId,
@@ -98,6 +114,15 @@ export function ChatClient({
   const [content, setContent] = useState("");
   const [isReceiverTyping, setIsReceiverTyping] = useState(false);
   const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
+  const [isAssistOpen, setIsAssistOpen] = useState(false);
+  const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
+  const [assistTone, setAssistTone] = useState<ConversationTone>("Playful");
+  const [messageTemplates, setMessageTemplates] = useState<
+    MessageTemplateRow[]
+  >([]);
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState("");
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
   const [now, setNow] = useState(0);
@@ -130,6 +155,30 @@ export function ChatClient({
   const { isUserOnline } = useGlobalPresence();
   const receiverIsGloballyOnline = isUserOnline(receiverId);
   const receiverOnlineForDisplay = receiverIsGloballyOnline;
+  const nonSystemMessages = messages.filter(
+    (message) => !SYSTEM_MESSAGE_TYPES.has(message.message_type),
+  );
+  const lastReceiverMessage = [...nonSystemMessages]
+    .reverse()
+    .find((message) => message.sender_id === receiverId);
+  const lastOwnMessage = [...nonSystemMessages]
+    .reverse()
+    .find((message) => message.sender_id === currentUserId);
+  const isReviveSuggestion =
+    Boolean(lastOwnMessage) &&
+    (!lastReceiverMessage ||
+      new Date(lastOwnMessage?.created_at ?? 0) >
+        new Date(lastReceiverMessage.created_at)) &&
+    Date.now() - new Date(lastOwnMessage?.created_at ?? 0).getTime() >
+      1000 * 60 * 60 * 6;
+  const conversationSuggestions = getConversationSuggestions(
+    {
+      isFirstMessage: nonSystemMessages.length === 0,
+      isRevive: isReviveSuggestion,
+      receiverName,
+    },
+    assistTone,
+  );
   const activePrivateSeconds =
     activePrivateMessage?.expires_at
       ? Math.max(
@@ -410,6 +459,45 @@ export function ChatClient({
     updateReceiverPresence,
   ]);
 
+  useEffect(() => {
+    if (!isTemplatesOpen || templatesLoaded) {
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadTemplates() {
+      const { data, error: loadError } = await supabase
+        .from("message_templates")
+        .select(
+          "id, user_id, title, message_text, tone, visibility, price_gold, active, created_at, updated_at",
+        )
+        .eq("user_id", currentUserId)
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(24);
+
+      if (!isActive) {
+        return;
+      }
+
+      if (loadError) {
+        setTemplatesError("Could not load templates right now.");
+      } else {
+        setMessageTemplates(data ?? []);
+        setTemplatesLoaded(true);
+      }
+
+      setTemplatesLoading(false);
+    }
+
+    void loadTemplates();
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentUserId, isTemplatesOpen, supabase, templatesLoaded]);
+
   function handleContentChange(event: ChangeEvent<HTMLInputElement>) {
     const nextContent = event.target.value;
     setContent(nextContent);
@@ -429,6 +517,18 @@ export function ChatClient({
     } else {
       trackPresence(false);
     }
+  }
+
+  function insertSuggestion(suggestion: string) {
+    setContent(suggestion);
+    setIsAssistOpen(false);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function insertTemplate(template: MessageTemplateRow) {
+    setContent(template.message_text);
+    setIsTemplatesOpen(false);
+    window.setTimeout(() => inputRef.current?.focus(), 0);
   }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
@@ -1089,6 +1189,148 @@ export function ChatClient({
         onSubmit={sendMessage}
         className="relative z-20 shrink-0 border-t border-neutral-800 bg-black/90 p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
       >
+        <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => {
+              setIsAssistOpen((current) => !current);
+              setIsTemplatesOpen(false);
+              setIsMediaMenuOpen(false);
+            }}
+            className="shrink-0 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-xs font-medium text-emerald-50 transition-colors hover:bg-emerald-300/15"
+          >
+            {isReviveSuggestion ? "Revive chat" : "Suggest opener"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsTemplatesOpen((current) => {
+                const nextOpen = !current;
+                if (nextOpen && !templatesLoaded) {
+                  setTemplatesLoading(true);
+                  setTemplatesError("");
+                }
+                return nextOpen;
+              });
+              setIsAssistOpen(false);
+              setIsMediaMenuOpen(false);
+            }}
+            className="shrink-0 rounded-full border border-neutral-700 bg-white/[0.03] px-3 py-2 text-xs font-medium text-neutral-100 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+          >
+            Templates
+          </button>
+        </div>
+        {isAssistOpen ? (
+          <div className="mb-3 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-3 shadow-[0_0_30px_rgba(16,185,129,0.10)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-emerald-50">
+                  {isReviveSuggestion ? "Revive chat" : "Suggest opener"}
+                </p>
+                <p className="mt-0.5 text-xs text-emerald-100/65">
+                  Tap one to place it in your composer.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAssistOpen(false)}
+                className="rounded-full border border-emerald-200/20 px-3 py-1.5 text-xs text-emerald-100"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {conversationTones.map((tone) => (
+                <button
+                  key={tone}
+                  type="button"
+                  onClick={() => setAssistTone(tone)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                    assistTone === tone
+                      ? "border-emerald-200 bg-emerald-200 text-black"
+                      : "border-emerald-300/20 bg-black/35 text-emerald-100"
+                  }`}
+                >
+                  {tone}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-2">
+              {conversationSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => insertSuggestion(suggestion)}
+                  className="rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-left text-sm leading-5 text-neutral-100 transition-colors hover:border-emerald-300/35 hover:bg-emerald-300/10"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {isTemplatesOpen ? (
+          <div className="mb-3 rounded-3xl border border-neutral-800 bg-neutral-950/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-white">Templates</p>
+                <p className="mt-0.5 text-xs text-neutral-500">
+                  Insert a saved line. You still send it manually.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTemplatesOpen(false)}
+                className="rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto pr-1">
+              {templatesLoading ? (
+                <p className="rounded-2xl border border-neutral-800 bg-black/45 px-4 py-3 text-sm text-neutral-400">
+                  Loading templates...
+                </p>
+              ) : null}
+              {templatesError ? (
+                <p className="rounded-2xl border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                  {templatesError}
+                </p>
+              ) : null}
+              {!templatesLoading &&
+              !templatesError &&
+              messageTemplates.length === 0 ? (
+                <div className="rounded-2xl border border-neutral-800 bg-black/45 px-4 py-3 text-sm text-neutral-400">
+                  <p>No templates yet.</p>
+                  <Link
+                    href="/settings#message-templates"
+                    className="mt-2 inline-flex rounded-full border border-emerald-300/25 px-3 py-1.5 text-xs text-emerald-100"
+                  >
+                    Create templates
+                  </Link>
+                </div>
+              ) : null}
+              {messageTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => insertTemplate(template)}
+                  className="rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-left transition-colors hover:border-emerald-300/35 hover:bg-emerald-300/10"
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-white">
+                    {template.title}
+                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-100">
+                      {template.tone}
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-sm leading-5 text-neutral-300">
+                    {template.message_text}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {messageGoldCost > 0 ? (
           <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-50">
             Send message for {messageGoldCost} Gold? Conversation becomes free
@@ -1098,7 +1340,11 @@ export function ChatClient({
         <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">
           <button
             type="button"
-            onClick={() => setIsMediaMenuOpen((current) => !current)}
+            onClick={() => {
+              setIsMediaMenuOpen((current) => !current);
+              setIsAssistOpen(false);
+              setIsTemplatesOpen(false);
+            }}
             aria-label="Open media options"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15 sm:h-12 sm:w-12"
           >
