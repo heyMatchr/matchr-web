@@ -10,7 +10,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
 import { InstallPromptCard } from "./install-prompt-card";
-import { MessageTemplatesManager } from "./message-templates-manager";
 
 const defaults = {
   allow_gifts: true,
@@ -67,7 +66,6 @@ export default async function SettingsPage() {
     hiddenResult,
     walletResult,
     premiumResult,
-    messageTemplatesResult,
   ] = await Promise.all([
     supabase.from("user_settings").select("*").eq("user_id", user.id).maybeSingle(),
     supabase.from("blocks").select("blocked_user_id, created_at").eq("blocker_id", user.id),
@@ -76,12 +74,6 @@ export default async function SettingsPage() {
     supabase.from("hidden_users").select("hidden_user_id, created_at").eq("hider_id", user.id),
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
-    supabase
-      .from("message_templates")
-      .select("id, user_id, title, message_text, tone, visibility, price_gold, active, created_at, updated_at")
-      .eq("user_id", user.id)
-      .eq("active", true)
-      .order("created_at", { ascending: false }),
   ]);
   const settings = { ...defaults, ...(settingsResult.data ?? {}) };
   const relatedIds = [
@@ -157,7 +149,28 @@ export default async function SettingsPage() {
       </form>
 
       <div className="mt-6 grid gap-5">
-        <MessageTemplatesManager templates={messageTemplatesResult.data ?? []} />
+        <SettingsSection title="Message Templates">
+          <div
+            id="message-templates"
+            className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4 sm:p-5"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-black text-white">My Message Templates</p>
+                <p className="mt-2 text-[15px] leading-6 text-neutral-300">
+                  Manage reusable openers and creator-pack foundations on a
+                  dedicated screen.
+                </p>
+              </div>
+              <Link
+                href="/settings/templates"
+                className="inline-flex w-fit rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
+              >
+                Open templates
+              </Link>
+            </div>
+          </div>
+        </SettingsSection>
 
         <SettingsSection title="Safety">
           <SafetyList

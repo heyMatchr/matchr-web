@@ -356,7 +356,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     Settings
                   </Link>
                   <Link
-                    href="/settings#message-templates"
+                    href="/settings/templates"
                     className="inline-flex rounded-full border border-emerald-300/30 px-5 py-2.5 text-sm font-medium text-emerald-100 transition-colors hover:bg-emerald-300/10"
                   >
                     Templates

@@ -1303,7 +1303,7 @@ export function ChatClient({
                 <div className="rounded-2xl border border-neutral-800 bg-black/45 px-4 py-3 text-sm text-neutral-400">
                   <p>No templates yet.</p>
                   <Link
-                    href="/settings#message-templates"
+                    href="/settings/templates"
                     className="mt-2 inline-flex rounded-full border border-emerald-300/25 px-3 py-1.5 text-xs text-emerald-100"
                   >
                     Create templates
