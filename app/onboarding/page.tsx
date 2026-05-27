@@ -28,11 +28,27 @@ export default async function OnboardingPage() {
       <section className="relative z-10 mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center py-12">
         <p className="text-sm text-neutral-300">matchr</p>
         <h1 className="mt-2 text-4xl font-black tracking-tight">
-          Build your profile
+          Let people feel your spark.
         </h1>
         <p className="mt-3 max-w-xl text-[15px] leading-6 text-neutral-300">
-          A few details help Matchr understand what feels aligned for you.
+          A few thoughtful details help Matchr introduce you to better people,
+          and give them something real to reply to.
         </p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          {[
+            "Profiles with stories get more replies.",
+            "A specific bio beats a perfect bio.",
+            "People respond faster to completed profiles.",
+            "Interests make first messages easier.",
+          ].map((tip) => (
+            <p
+              key={tip}
+              className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50"
+            >
+              {tip}
+            </p>
+          ))}
+        </div>
 
         <OnboardingForm />
       </section>

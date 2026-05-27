@@ -37,7 +37,27 @@ export default async function EditProfilePage() {
       title="Edit Profile"
     >
       <div className="mt-5 max-w-2xl text-[15px] leading-6 text-neutral-300 md:mt-8">
-        Update the details people see across Discover, Matches, and Messages.
+        Give people hooks they can actually reply to: a sharp bio, interests
+        with texture, and identity details you feel good sharing.
+      </div>
+      <div className="mt-5 rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-5">
+        <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-100">
+          Quick wins
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          {[
+            "Add a bio people can reply to.",
+            "Pick interests with personality.",
+            "Post a story after you save.",
+          ].map((tip) => (
+            <p
+              key={tip}
+              className="rounded-2xl border border-emerald-300/15 bg-black/25 px-4 py-3 text-sm leading-6 text-emerald-50"
+            >
+              {tip}
+            </p>
+          ))}
+        </div>
       </div>
 
       <ProfileEditForm profile={profile} />

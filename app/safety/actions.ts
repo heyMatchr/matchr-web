@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
+import { SAFETY_REPORT_REASONS } from "@/lib/safety-moderation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type ReportFormState = {
@@ -17,17 +18,7 @@ export type ReportTarget = {
   targetUserId?: string;
 };
 
-export const REPORT_REASONS = [
-  "Spam",
-  "Harassment",
-  "Nudity / sexual content",
-  "Fake account",
-  "Underage user",
-  "Violence",
-  "Scam/fraud",
-  "Hate speech",
-  "Other",
-] as const;
+export const REPORT_REASONS = SAFETY_REPORT_REASONS;
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);

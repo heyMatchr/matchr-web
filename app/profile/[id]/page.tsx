@@ -10,6 +10,7 @@ import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+import { getProfileCompletion } from "@/lib/profile-completion";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileOnlineStatus } from "./profile-online-status";
@@ -270,18 +271,17 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const following = followingIds
     .map((followingId) => socialProfilesById.get(followingId))
     .filter(Boolean);
-  const completedFields = [
-    profile.avatar_url,
-    profile.bio,
-    profile.occupation,
-    profile.relationship_intent,
-    profile.location,
-    profile.height,
-    profile.body_type,
-    profile.looking_for,
-    profile.interests.length ? "interests" : "",
-  ].filter(Boolean).length;
-  const completion = Math.round((completedFields / 9) * 100);
+  const profileCompletion = getProfileCompletion({
+    avatar_url: profile.avatar_url,
+    bio: profile.bio,
+    interests: profile.interests,
+    location: profile.location,
+    momentsPosted: Boolean(profileMomentsResult.data?.length),
+    pronouns: profile.pronouns,
+    sexual_orientation: profile.sexual_orientation,
+    storyPosted: hasActiveStories,
+  });
+  const completion = profileCompletion.score;
   const profileBadges = [
     premiumResult.data ? "Premium" : "",
     profile.verified ? "Verified" : "",
@@ -488,6 +488,50 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 <p className="mt-3 text-xs text-neutral-500">
                   Gold wallet coming soon.
                 </p>
+              </div>
+            ) : null}
+
+            {profile.id === user.id ? (
+              <div className="mt-4 rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                      Profile quality
+                    </p>
+                    <p className="mt-1 text-2xl font-black">
+                      {profileCompletion.score}% complete
+                    </p>
+                  </div>
+                  <Link
+                    href="/profile/edit"
+                    className="shrink-0 rounded-full border border-emerald-300/25 px-4 py-2 text-sm text-emerald-100"
+                  >
+                    Improve
+                  </Link>
+                </div>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-neutral-900">
+                  <div
+                    className="h-full rounded-full bg-emerald-300"
+                    style={{ width: `${profileCompletion.score}%` }}
+                  />
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {profileCompletion.nextPrompts.length ? (
+                    profileCompletion.nextPrompts.map((prompt) => (
+                      <p
+                        key={prompt}
+                        className="rounded-xl border border-neutral-800 bg-black/35 px-3 py-2.5 text-sm leading-5 text-neutral-300"
+                      >
+                        {prompt}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="rounded-xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2.5 text-sm leading-5 text-emerald-50">
+                      Your profile has enough personality to start doing some
+                      damage, respectfully.
+                    </p>
+                  )}
+                </div>
               </div>
             ) : null}
 

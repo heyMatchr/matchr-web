@@ -198,8 +198,15 @@ export function MatchesClient({
           ))}
         </div>
       ) : (
-        <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-6 text-neutral-400 md:mt-10 md:p-8">
-          No matches yet. Like someone in Discover to start a connection.
+        <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">
+          <p className="text-xl font-black text-white">No matches yet</p>
+          <p className="mt-3 text-[15px] leading-6 text-neutral-300">
+            Like someone in Discover to start a connection. Completed profiles
+            tend to get noticed faster, so give yours a little more signal.
+          </p>
+          <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+            Soft nudge: add one detail someone can tease you about.
+          </p>
         </div>
       )}
     </>

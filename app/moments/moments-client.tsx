@@ -10,10 +10,12 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  useTransition,
 } from "react";
 import { createPortal } from "react-dom";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import type { GiftOption } from "@/lib/gifts";
+import { compressImageFile } from "@/lib/client-media";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database } from "@/lib/supabase/types";
 import { ReportButton } from "@/app/safety/report-button";
@@ -92,6 +94,8 @@ export function MomentsClient({
   const [activeLikes, setActiveLikes] = useState<MomentCard | null>(null);
   const [openSettingsId, setOpenSettingsId] = useState("");
   const [mediaError, setMediaError] = useState("");
+  const [momentUploadStage, setMomentUploadStage] = useState("");
+  const [isCompressingMoment, startMomentSubmitTransition] = useTransition();
   const [state, formAction, pending] = useActionState(
     createMoment,
     initialState,
@@ -126,6 +130,28 @@ export function MomentsClient({
     video.src = URL.createObjectURL(file);
   }
 
+  async function submitMoment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const media = formData.get("media");
+
+    if (media instanceof File && media.size > 0 && media.type.startsWith("image/")) {
+      setMomentUploadStage("Preparing image...");
+      const compressed = await compressImageFile(media, {
+        maxSide: 1280,
+        quality: 0.82,
+      });
+      formData.set("media", compressed);
+    }
+
+    setMomentUploadStage("Uploading...");
+    startMomentSubmitTransition(() => {
+      formAction(formData);
+    });
+    window.setTimeout(() => setMomentUploadStage(""), 1800);
+  }
+
   function openComments(moment: MomentCard) {
     setOpenSettingsId("");
     setActiveGifts(null);
@@ -158,6 +184,7 @@ export function MomentsClient({
             <article
               key={moment.id}
               className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-neutral-800 bg-black/50"
+              style={{ contentVisibility: "auto", containIntrinsicSize: "720px" }}
             >
               <div className="flex min-w-0 items-center gap-3 p-4">
                 <Link
@@ -170,6 +197,8 @@ export function MomentsClient({
                       alt={moment.profile.display_name}
                       width={44}
                       height={44}
+                      loading="lazy"
+                      quality={70}
                       sizes="44px"
                       className="h-full w-full object-cover"
                     />
@@ -255,7 +284,8 @@ export function MomentsClient({
                     width={900}
                     height={1125}
                     priority={index === 0}
-                    sizes="(min-width: 768px) 768px, 100vw"
+                    quality={index === 0 ? 78 : 70}
+                    sizes="(min-width: 768px) 720px, 100vw"
                     className="h-auto max-h-[70dvh] w-full max-w-full object-contain"
                   />
                 )}
@@ -326,10 +356,16 @@ export function MomentsClient({
           );
           })
         ) : (
-          <div className="rounded-lg border border-neutral-800 bg-black/40 p-8">
+          <div className="rounded-3xl border border-neutral-800 bg-black/50 p-8">
             <p className="text-xl font-black text-white">No moments yet</p>
-            <p className="mt-3 text-sm leading-6 text-neutral-400">
+            <p className="mt-3 text-[15px] leading-6 text-neutral-300">
               Post the first moment or follow more people to fill your feed.
+              Small slices of real life make better conversation starters than
+              polished silence.
+            </p>
+            <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+              Try a low-pressure moment: what you are listening to, eating, or
+              secretly judging today.
             </p>
           </div>
         )}
@@ -339,6 +375,7 @@ export function MomentsClient({
         <div className="fixed inset-0 z-50 flex min-h-[100dvh] items-center justify-center overflow-hidden bg-black/80 px-3 py-4 backdrop-blur-sm">
           <form
             action={formAction}
+            onSubmit={(event) => void submitMoment(event)}
             className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-neutral-800 bg-black p-4 shadow-[0_0_45px_rgba(74,222,128,0.10)] sm:p-5"
           >
             <div className="flex items-center justify-between gap-4">
@@ -370,12 +407,19 @@ export function MomentsClient({
             <p className="mt-3 min-h-5 text-sm text-red-300">
               {mediaError || state.message}
             </p>
+            {momentUploadStage && (pending || isCompressingMoment) ? (
+              <p className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm text-emerald-100">
+                {momentUploadStage}
+              </p>
+            ) : null}
             <button
               type="submit"
-              disabled={pending || Boolean(mediaError)}
+              disabled={pending || isCompressingMoment || Boolean(mediaError)}
               className="mt-2 w-full rounded-full bg-white px-6 py-3 font-medium text-black disabled:opacity-60"
             >
-              {pending ? "Uploading..." : "Share moment"}
+              {pending || isCompressingMoment
+                ? momentUploadStage || "Uploading..."
+                : "Share moment"}
             </button>
           </form>
         </div>

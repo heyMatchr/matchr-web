@@ -46,6 +46,7 @@ export type ProfileRow = {
   messaging_limited: boolean;
   calls_limited: boolean;
   trusted_user: boolean;
+  risk_level: string;
   created_at: string;
   updated_at: string;
 };
@@ -257,11 +258,30 @@ export type UserSettingsRow = {
   interested_in_orientations: string[];
   inclusive_discovery: boolean;
   push_notifications: boolean;
+  push_messages: boolean;
+  push_matches: boolean;
+  push_gifts: boolean;
+  push_calls: boolean;
+  push_marketing: boolean;
   story_notifications: boolean;
   message_notifications: boolean;
   gift_notifications: boolean;
   match_notifications: boolean;
   updated_at: string;
+};
+
+export type PushSubscriptionRow = {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string | null;
+  auth: string | null;
+  device: string | null;
+  platform: string | null;
+  browser: string | null;
+  active: boolean;
+  created_at: string;
+  last_seen_at: string;
 };
 
 export type FollowRequestRow = {
@@ -436,6 +456,28 @@ export type MomentGiftRow = {
   receiver_id: string;
   gift_type: string;
   created_at: string;
+};
+
+export type ModerationEventRow = {
+  id: string;
+  user_id: string;
+  reason: string;
+  amount: number;
+  source: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type MediaModerationCheckRow = {
+  id: string;
+  user_id: string;
+  source: string;
+  source_id: string | null;
+  media_url: string | null;
+  status: string;
+  flags: unknown[];
+  created_at: string;
+  updated_at: string;
 };
 
 export type Database = {
@@ -768,6 +810,40 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      moderation_events: {
+        Row: ModerationEventRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          reason: string;
+          amount?: number;
+          source?: string;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      media_moderation_checks: {
+        Row: MediaModerationCheckRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          source: string;
+          source_id?: string | null;
+          media_url?: string | null;
+          status?: string;
+          flags?: unknown[];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: string;
+          flags?: unknown[];
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       message_charges: {
         Row: MessageChargeRow;
         Insert: {
@@ -804,6 +880,36 @@ export type Database = {
           metadata?: Record<string, unknown>;
           read_at?: string | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      push_subscriptions: {
+        Row: PushSubscriptionRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          endpoint: string;
+          p256dh?: string | null;
+          auth?: string | null;
+          device?: string | null;
+          platform?: string | null;
+          browser?: string | null;
+          active?: boolean;
+          created_at?: string;
+          last_seen_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          endpoint?: string;
+          p256dh?: string | null;
+          auth?: string | null;
+          device?: string | null;
+          platform?: string | null;
+          browser?: string | null;
+          active?: boolean;
+          created_at?: string;
+          last_seen_at?: string;
         };
         Relationships: [];
       };
@@ -933,6 +1039,7 @@ export type Database = {
           messaging_limited?: boolean;
           calls_limited?: boolean;
           trusted_user?: boolean;
+          risk_level?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -978,6 +1085,7 @@ export type Database = {
           messaging_limited?: boolean;
           calls_limited?: boolean;
           trusted_user?: boolean;
+          risk_level?: string;
           created_at?: string;
           updated_at?: string;
         };

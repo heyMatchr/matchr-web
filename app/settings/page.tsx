@@ -6,10 +6,12 @@ import {
   GENDER_IDENTITY_OPTIONS,
   SEXUAL_ORIENTATION_OPTIONS,
 } from "@/lib/identity";
+import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
 import { InstallPromptCard } from "./install-prompt-card";
+import { PushNotificationSettings } from "./push-notification-settings";
 
 const defaults = {
   allow_gifts: true,
@@ -33,6 +35,11 @@ const defaults = {
   min_age_preference: 18,
   private_profile: false,
   push_notifications: false,
+  push_calls: true,
+  push_gifts: true,
+  push_marketing: false,
+  push_matches: true,
+  push_messages: true,
   relationship_intent_preference: "",
   show_in_discover: true,
   story_notifications: true,
@@ -40,6 +47,8 @@ const defaults = {
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
+  const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
+  const anonKey = requiredSupabaseEnv("SUPABASE_ANON_KEY");
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -136,7 +145,17 @@ export default async function SettingsPage() {
         <SettingsSection title="Notifications">
           <InstallPromptCard />
           <BrowserNotificationSettings />
-          <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Push notifications placeholder" />
+          <PushNotificationSettings
+            anonKey={anonKey}
+            currentUserId={user.id}
+            supabaseUrl={supabaseUrl}
+          />
+          <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Allow PWA push alerts" />
+          <Toggle defaultChecked={settings.push_messages} name="push_messages" title="Push message alerts" />
+          <Toggle defaultChecked={settings.push_matches} name="push_matches" title="Push match alerts" />
+          <Toggle defaultChecked={settings.push_gifts} name="push_gifts" title="Push gift alerts" />
+          <Toggle defaultChecked={settings.push_calls} name="push_calls" title="Push missed call alerts" />
+          <Toggle defaultChecked={settings.push_marketing} name="push_marketing" title="Gentle re-engagement reminders" />
           <Toggle defaultChecked={settings.story_notifications} name="story_notifications" title="Story notifications" />
           <Toggle defaultChecked={settings.message_notifications} name="message_notifications" title="Message notifications" />
           <Toggle defaultChecked={settings.gift_notifications} name="gift_notifications" title="Gift notifications" />

@@ -26,6 +26,10 @@ import {
 } from "@/lib/conversation-assist";
 import { getGiftOption, type GiftOption } from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
+import {
+  createMediaModerationPlaceholder,
+  enforceTextSafety,
+} from "@/lib/safety-moderation";
 import { triggerMatchrHaptic } from "@/lib/haptics";
 import type {
   Database,
@@ -565,6 +569,17 @@ export function ChatClient({
       return;
     }
 
+    const textSafety = await enforceTextSafety(
+      supabase,
+      currentUserId,
+      trimmedContent,
+    );
+
+    if (!textSafety.allowed) {
+      setError(textSafety.message);
+      return;
+    }
+
     const allowed = await enforceActionLimit(
       supabase,
       currentUserId,
@@ -575,6 +590,20 @@ export function ChatClient({
     );
 
     if (!allowed) {
+      setError(ACTION_LIMIT_MESSAGE);
+      return;
+    }
+
+    const uploadAllowed = await enforceActionLimit(
+      supabase,
+      currentUserId,
+      "upload",
+      60,
+      30,
+      receiverId,
+    );
+
+    if (!uploadAllowed) {
       setError(ACTION_LIMIT_MESSAGE);
       return;
     }
@@ -749,6 +778,12 @@ export function ChatClient({
     if (sendError) {
       setError(sendError.message);
     } else {
+      await createMediaModerationPlaceholder(supabase, {
+        mediaUrl: publicUrl,
+        source: isPrivate ? "private_media_message" : "chat_media_message",
+        sourceId: savedMessage.id,
+        userId: currentUserId,
+      });
       mergeConfirmedMessage(savedMessage);
       await supabase.from("notifications").insert({
         actor_id: currentUserId,
@@ -1005,6 +1040,7 @@ export function ChatClient({
               src={message.media_url}
               alt=""
               fill
+              quality={62}
               sizes="192px"
               draggable={false}
               onContextMenu={(event) => {
@@ -1056,6 +1092,8 @@ export function ChatClient({
           alt=""
           width={640}
           height={640}
+          loading="lazy"
+          quality={72}
           sizes="(min-width: 640px) 70vw, 82vw"
           className="h-auto max-h-[42dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
         />
@@ -1168,8 +1206,14 @@ export function ChatClient({
             );
           })
         ) : (
-          <div className="flex h-full min-h-80 items-center justify-center text-center text-neutral-500">
-            Send the first message.
+          <div className="flex h-full min-h-80 items-center justify-center text-center">
+            <div className="max-w-xs rounded-3xl border border-neutral-800 bg-black/45 p-5">
+              <p className="text-lg font-black text-white">Say hi first</p>
+              <p className="mt-2 text-sm leading-6 text-neutral-300">
+                Open with one detail from their profile, or use Suggest opener
+                if your brain has left the chat.
+              </p>
+            </div>
           </div>
         )}
         <div className="min-h-6">

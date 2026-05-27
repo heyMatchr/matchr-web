@@ -51,6 +51,11 @@ export async function saveSettings(formData: FormData) {
     message_notifications: isChecked(formData, "message_notifications"),
     min_age_preference: getNumber(formData, "min_age_preference", 18),
     private_profile: isChecked(formData, "private_profile"),
+    push_calls: isChecked(formData, "push_calls"),
+    push_gifts: isChecked(formData, "push_gifts"),
+    push_marketing: isChecked(formData, "push_marketing"),
+    push_matches: isChecked(formData, "push_matches"),
+    push_messages: isChecked(formData, "push_messages"),
     push_notifications: isChecked(formData, "push_notifications"),
     relationship_intent_preference:
       getString(formData, "relationship_intent_preference") || null,

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function orderedUsers(userA: string, userB: string) {
@@ -28,6 +29,19 @@ export async function likeProfile(profileUserId: string) {
 
   if (profileUserId === userId) {
     return;
+  }
+
+  const allowed = await enforceActionLimit(
+    supabase,
+    userId,
+    "match_attempt",
+    60,
+    80,
+    profileUserId,
+  );
+
+  if (!allowed) {
+    throw new Error(ACTION_LIMIT_MESSAGE);
   }
 
   const { error: likeError } = await supabase.from("likes").upsert(

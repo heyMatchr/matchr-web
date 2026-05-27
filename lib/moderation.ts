@@ -8,6 +8,7 @@ type ModerationProfile = {
   calls_limited: boolean | null;
   discover_hidden: boolean | null;
   messaging_limited: boolean | null;
+  risk_level?: string | null;
   shadow_restricted: boolean | null;
   trusted_user: boolean | null;
 };
@@ -18,7 +19,7 @@ async function getModerationProfile(
 ) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("calls_limited, discover_hidden, messaging_limited, shadow_restricted, trusted_user")
+    .select("calls_limited, discover_hidden, messaging_limited, risk_level, shadow_restricted, trusted_user")
     .eq("id", userId)
     .maybeSingle();
 
@@ -73,6 +74,7 @@ export async function canUserCall(
 
 export function canAppearInDiscover(profile: {
   discover_hidden?: boolean | null;
+  risk_level?: string | null;
   shadow_restricted?: boolean | null;
   trusted_user?: boolean | null;
 }) {
@@ -80,5 +82,9 @@ export function canAppearInDiscover(profile: {
     return true;
   }
 
-  return !profile.discover_hidden && !profile.shadow_restricted;
+  return (
+    !profile.discover_hidden &&
+    !profile.shadow_restricted &&
+    profile.risk_level !== "critical"
+  );
 }

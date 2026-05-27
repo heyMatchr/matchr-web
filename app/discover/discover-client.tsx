@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useMemo, useState, useTransition } from "react";
+import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import { likeProfile, passProfile } from "./actions";
 
@@ -92,12 +92,12 @@ export function DiscoverClient({
     [isUserOnline, profiles],
   );
 
-  function act(profileId: string, action: "like" | "pass") {
+  const act = useCallback((profileId: string, action: "like" | "pass") => {
     setDismissedIds((current) => [...current, profileId]);
     startTransition(() => {
       void (action === "like" ? likeProfile(profileId) : passProfile(profileId));
     });
-  }
+  }, []);
 
   return (
     <>
@@ -136,10 +136,15 @@ export function DiscoverClient({
           ))}
         </div>
       ) : (
-        <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-8">
+        <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 sm:p-8">
           <p className="text-xl font-black">No profiles match these filters</p>
-          <p className="mt-3 text-sm text-neutral-400">
-            Try widening age, activity, or relationship intent filters.
+          <p className="mt-3 text-[15px] leading-6 text-neutral-300">
+            Try widening your filters, then come back with a story or moment so
+            you look active when new people land here.
+          </p>
+          <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+            Your profile could use more personality while the room fills up.
+            Add a bio people can reply to.
           </p>
         </div>
       )}
@@ -222,7 +227,7 @@ export function DiscoverClient({
   );
 }
 
-function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: string }) {
+const ProfileRail = memo(function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: string }) {
   const { isUserOnline } = useGlobalPresence();
 
   if (!profiles.length) return null;
@@ -232,7 +237,7 @@ function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: 
       <h2 className="text-sm font-black uppercase tracking-[0.22em] text-emerald-200">
         {title}
       </h2>
-      <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+      <div className="mt-3 flex gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
         {profiles.map((profile) => (
           <Link
             key={`${title}-${profile.id}`}
@@ -246,6 +251,8 @@ function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: 
                   alt={profile.display_name}
                   width={144}
                   height={144}
+                  loading="lazy"
+                  quality={68}
                   sizes="144px"
                   className="h-full w-full object-cover"
                 />
@@ -261,9 +268,9 @@ function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: 
       </div>
     </section>
   );
-}
+});
 
-function SwipeCard({
+const SwipeCard = memo(function SwipeCard({
   disabled,
   onLike,
   onPass,
@@ -291,7 +298,8 @@ function SwipeCard({
         if (delta > 80) onLike();
         if (delta < -80) onPass();
       }}
-      className="group overflow-hidden rounded-2xl border border-neutral-800 bg-black/50 transition-all duration-300 hover:-translate-y-1 hover:border-neutral-600 hover:shadow-[0_0_40px_rgba(74,222,128,0.10)]"
+      className="group overflow-hidden rounded-2xl border border-neutral-800 bg-black/50 transition-colors duration-300 hover:border-neutral-600 md:hover:-translate-y-1 md:hover:shadow-[0_0_32px_rgba(74,222,128,0.08)]"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "520px" }}
     >
       <div className={`relative aspect-[4/5] overflow-hidden bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
         {profile.avatar_url ? (
@@ -300,6 +308,7 @@ function SwipeCard({
             alt={profile.display_name}
             fill
             priority={priority}
+            quality={priority ? 78 : 68}
             sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
@@ -356,4 +365,4 @@ function SwipeCard({
       </div>
     </article>
   );
-}
+});

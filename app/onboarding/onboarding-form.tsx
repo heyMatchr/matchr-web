@@ -70,9 +70,19 @@ export function OnboardingForm() {
   return (
     <form
       action={formAction}
-      className="mt-8 grid gap-4 sm:grid-cols-2"
+      className="mt-8 grid gap-5 sm:grid-cols-2"
       encType="multipart/form-data"
     >
+      <div className="rounded-3xl border border-neutral-800 bg-white/[0.03] p-5 sm:col-span-2">
+        <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-200">
+          Profile boost
+        </p>
+        <p className="mt-2 text-[15px] leading-6 text-neutral-300">
+          A photo, a few interests, and a reply-friendly bio do most of the
+          heavy lifting. Keep it honest, keep it easy to start with.
+        </p>
+      </div>
+
       <div className="sm:col-span-2">
         <label
           htmlFor="avatar"
@@ -87,9 +97,10 @@ export function OnboardingForm() {
             />
           ) : (
             <>
-              <p className="text-sm font-medium text-white">Upload avatar</p>
+              <p className="text-base font-medium text-white">Upload avatar</p>
               <p className="mt-2 text-sm leading-6 text-neutral-400">
-                JPG, PNG, WebP, or GIF under 5 MB
+                Choose something clear and recent. JPG, PNG, WebP, or GIF under
+                5 MB.
               </p>
             </>
           )}
@@ -450,7 +461,7 @@ export function OnboardingForm() {
         name="interests"
         required
         disabled={pending}
-        placeholder="Interests, separated by commas"
+        placeholder="Interests people can ask about, separated by commas"
         className={`${inputClass} sm:col-span-2`}
       />
 
@@ -463,7 +474,7 @@ export function OnboardingForm() {
         required
         maxLength={500}
         disabled={pending}
-        placeholder="Bio"
+        placeholder="Give them a reason to say hi. A tiny detail, a taste, a challenge..."
         className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-400 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
       />
 
@@ -480,7 +491,7 @@ export function OnboardingForm() {
         disabled={pending || Boolean(avatarError)}
         className="rounded-full bg-white px-8 py-4 text-lg font-medium text-black transition-all duration-300 hover:scale-105 hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-neutral-300 sm:col-span-2"
       >
-        {pending ? "Uploading avatar..." : "Continue"}
+        {pending ? "Saving your vibe..." : "Start matching"}
       </button>
     </form>
   );

@@ -105,7 +105,7 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
   return (
     <form
       action={formAction}
-      className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8"
+      className="mt-6 grid gap-5 sm:grid-cols-2 md:mt-8"
       encType="multipart/form-data"
     >
       <div className="sm:col-span-2">

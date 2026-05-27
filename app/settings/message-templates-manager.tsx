@@ -227,9 +227,13 @@ export function MessageTemplatesManager({
             </article>
           ))
         ) : (
-          <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
-            No saved templates yet.
-          </p>
+          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 sm:p-5">
+            <p className="font-black text-white">No saved templates yet</p>
+            <p className="mt-2 text-[15px] leading-6 text-neutral-300">
+              Save a few lines you would actually say. Start with one playful
+              opener and one sweet follow-up.
+            </p>
+          </div>
         )}
       </div>
     </section>

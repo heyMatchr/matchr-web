@@ -415,8 +415,15 @@ export function MessagesClient({
           ))}
         </div>
       ) : (
-        <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-6 text-neutral-400 md:mt-10 md:p-8">
-          No conversations yet.
+        <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">
+          <p className="text-xl font-black text-white">No conversations yet</p>
+          <p className="mt-3 text-[15px] leading-6 text-neutral-300">
+            Say hi first when someone catches your eye. A small, specific opener
+            beats waiting for the perfect moment.
+          </p>
+          <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+            Try: “Your profile has good trouble written all over it.”
+          </p>
         </div>
       )}
     </>

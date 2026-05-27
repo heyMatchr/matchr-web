@@ -9,6 +9,10 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { GiftOption } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
+import {
+  createMediaModerationPlaceholder,
+  detectUnsafeLanguage,
+} from "@/lib/safety-moderation";
 import { ReportButton } from "@/app/safety/report-button";
 import type { Database } from "@/lib/supabase/types";
 import {
@@ -293,6 +297,30 @@ export function StoriesBar({
   }, [activeStory]);
 
   useEffect(() => {
+    if (!activeGroup || !activeStory) {
+      return;
+    }
+
+    const nextStory =
+      activeGroup.stories[activeStoryIndex + 1] ??
+      groups[activeGroupIndex === null ? 0 : activeGroupIndex + 1]?.stories[0];
+
+    if (!nextStory?.media_url) {
+      return;
+    }
+
+    const preloadLink = document.createElement("link");
+    preloadLink.rel = "preload";
+    preloadLink.as = "image";
+    preloadLink.href = nextStory.media_url;
+    document.head.appendChild(preloadLink);
+
+    return () => {
+      preloadLink.remove();
+    };
+  }, [activeGroup, activeGroupIndex, activeStory, activeStoryIndex, groups]);
+
+  useEffect(() => {
     if (!activeStory) {
       return;
     }
@@ -510,6 +538,13 @@ export function StoriesBar({
         return;
       }
 
+      const unsafeText = detectUnsafeLanguage(text);
+
+      if (unsafeText.flagged) {
+        setStorySubmitError("Action temporarily unavailable.");
+        return;
+      }
+
       if (hasMedia && !STORY_ALLOWED_TYPES.includes(media.type as (typeof STORY_ALLOWED_TYPES)[number])) {
         setStorySubmitError("Upload a JPG, PNG, WebP, or GIF story image.");
         return;
@@ -531,6 +566,21 @@ export function StoriesBar({
       if (!allowed) {
         setStorySubmitError(ACTION_LIMIT_MESSAGE);
         return;
+      }
+
+      if (hasMedia) {
+        const uploadAllowed = await enforceActionLimit(
+          supabase,
+          currentUserId,
+          "upload",
+          60,
+          30,
+        );
+
+        if (!uploadAllowed) {
+          setStorySubmitError(ACTION_LIMIT_MESSAGE);
+          return;
+        }
       }
 
       setIsPostingStory(true);
@@ -580,12 +630,16 @@ export function StoriesBar({
       }
 
       setUploadStage("Posting...");
-      const insertResult = await supabase.from("stories").insert({
-        background_style: backgroundStyle,
-        media_url: mediaUrl,
-        text,
-        user_id: currentUserId,
-      });
+      const insertResult = await supabase
+        .from("stories")
+        .insert({
+          background_style: backgroundStyle,
+          media_url: mediaUrl,
+          text,
+          user_id: currentUserId,
+        })
+        .select("id")
+        .single();
 
       if (process.env.NODE_ENV === "development") {
         console.log("[StoryUpload] insert result", {
@@ -601,6 +655,15 @@ export function StoriesBar({
 
         setStorySubmitError(insertResult.error.message);
         return;
+      }
+
+      if (mediaUrl) {
+        await createMediaModerationPlaceholder(supabase, {
+          mediaUrl,
+          source: "story",
+          sourceId: insertResult.data.id,
+          userId: currentUserId,
+        });
       }
 
       if (mediaPreview) {
@@ -875,7 +938,7 @@ export function StoriesBar({
 
   return (
     <>
-      <div className="mt-6 flex gap-4 overflow-x-auto pb-2 md:mt-8">
+      <div className="mt-6 flex gap-4 overflow-x-auto pb-2 [-webkit-overflow-scrolling:touch] md:mt-8">
         <button
           type="button"
           onClick={() => setIsCreateOpen(true)}
@@ -913,6 +976,8 @@ export function StoriesBar({
                       alt={group.display_name}
                       width={64}
                       height={64}
+                      loading="lazy"
+                      quality={70}
                       sizes="64px"
                       className="h-full w-full object-cover"
                     />
@@ -1058,6 +1123,8 @@ export function StoriesBar({
                         alt={activeGroup.display_name}
                         width={40}
                         height={40}
+                        loading="eager"
+                        quality={70}
                         sizes="40px"
                         className="h-full w-full object-cover"
                       />
@@ -1117,6 +1184,7 @@ export function StoriesBar({
                   width={720}
                   height={1280}
                   priority
+                  quality={82}
                   sizes="100vw"
                   className="max-h-full max-w-full object-contain"
                 />

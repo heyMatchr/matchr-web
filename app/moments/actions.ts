@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { getGiftCatalog } from "@/lib/economy";
 import { getGiftOption } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
+import {
+  createMediaModerationPlaceholder,
+  enforceTextSafety,
+} from "@/lib/safety-moderation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   MEDIA_ALLOWED_TYPES,
@@ -74,6 +78,14 @@ export async function createMoment(
 
   const { supabase, user } = await currentUser();
 
+  if (caption) {
+    const textSafety = await enforceTextSafety(supabase, user.id, caption);
+
+    if (!textSafety.allowed) {
+      return { message: textSafety.message };
+    }
+  }
+
   const allowed = await enforceActionLimit(
     supabase,
     user.id,
@@ -83,6 +95,18 @@ export async function createMoment(
   );
 
   if (!allowed) {
+    return { message: ACTION_LIMIT_MESSAGE };
+  }
+
+  const uploadAllowed = await enforceActionLimit(
+    supabase,
+    user.id,
+    "upload",
+    60,
+    30,
+  );
+
+  if (!uploadAllowed) {
     return { message: ACTION_LIMIT_MESSAGE };
   }
 
@@ -104,17 +128,28 @@ export async function createMoment(
     data: { publicUrl },
   } = supabase.storage.from(MEDIA_BUCKET_NAME).getPublicUrl(mediaPath);
 
-  const { error } = await supabase.from("moments").insert({
+  const { data: moment, error } = await supabase
+    .from("moments")
+    .insert({
     caption,
     media_type: mediaType,
     media_url: publicUrl,
     user_id: user.id,
-  });
+    })
+    .select("id")
+    .single();
 
   if (error) {
     await supabase.storage.from(MEDIA_BUCKET_NAME).remove([mediaPath]);
     return { message: error.message };
   }
+
+  await createMediaModerationPlaceholder(supabase, {
+    mediaUrl: publicUrl,
+    source: "moment",
+    sourceId: moment.id,
+    userId: user.id,
+  });
 
   revalidatePath("/moments");
   revalidatePath(`/profile/${user.id}`);
@@ -169,6 +204,13 @@ export async function commentOnMoment(
   }
 
   const { supabase, user } = await currentUser();
+
+  const textSafety = await enforceTextSafety(supabase, user.id, content);
+
+  if (!textSafety.allowed) {
+    return { message: textSafety.message };
+  }
+
   const allowed = await enforceActionLimit(
     supabase,
     user.id,

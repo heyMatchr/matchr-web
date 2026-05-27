@@ -10,11 +10,27 @@ export type ActionType =
   | "comment"
   | "follow"
   | "gift"
+  | "match_attempt"
   | "message"
   | "moment_post"
   | "report"
   | "story_post"
-  | "unfollow";
+  | "unfollow"
+  | "upload";
+
+export const ACTION_LIMIT_RULES = {
+  call_start: { maxCount: 5, windowMinutes: 10 },
+  comment: { maxCount: 15, windowMinutes: 10 },
+  follow: { maxCount: 30, windowMinutes: 60 },
+  gift: { maxCount: 30, windowMinutes: 60 },
+  match_attempt: { maxCount: 80, windowMinutes: 60 },
+  message: { maxCount: 20, windowMinutes: 10 },
+  moment_post: { maxCount: 10, windowMinutes: 60 },
+  report: { maxCount: 5, windowMinutes: 60 },
+  story_post: { maxCount: 10, windowMinutes: 60 },
+  unfollow: { maxCount: 30, windowMinutes: 60 },
+  upload: { maxCount: 30, windowMinutes: 60 },
+} satisfies Record<ActionType, { maxCount: number; windowMinutes: number }>;
 
 export async function checkActionLimit(
   supabase: SupabaseClient<Database>,
