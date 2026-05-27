@@ -72,11 +72,6 @@ export function AppShell({
             )}
             {children}
           </section>
-          {process.env.NODE_ENV === "production" ? (
-            <div className="pointer-events-none fixed bottom-2 left-2 z-[120] rounded-full border border-emerald-300/20 bg-black/75 px-2.5 py-1 text-[10px] font-medium text-emerald-100/75 shadow-[0_0_18px_rgba(16,185,129,0.12)] backdrop-blur-md">
-              build: mobile-layout-v2
-            </div>
-          ) : null}
         </InAppToastProvider>
       </GlobalPresenceProvider>
     </main>
