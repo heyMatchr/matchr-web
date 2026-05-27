@@ -65,7 +65,7 @@ export function OnboardingForm() {
   }
 
   const inputClass =
-    "rounded-full border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
+    "rounded-full border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-400 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60";
 
   return (
     <form
@@ -88,7 +88,7 @@ export function OnboardingForm() {
           ) : (
             <>
               <p className="text-sm font-medium text-white">Upload avatar</p>
-              <p className="mt-2 text-sm text-neutral-500">
+              <p className="mt-2 text-sm leading-6 text-neutral-400">
                 JPG, PNG, WebP, or GIF under 5 MB
               </p>
             </>
@@ -464,7 +464,7 @@ export function OnboardingForm() {
         maxLength={500}
         disabled={pending}
         placeholder="Bio"
-        className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
+        className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-6 py-4 text-white placeholder:text-neutral-400 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2"
       />
 
       <p

@@ -60,12 +60,12 @@ export function MessageTemplatesManager({
   return (
     <section
       id="message-templates"
-      className="rounded-3xl border border-neutral-800 bg-black/50 p-5"
+      className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-black">My Message Templates</h2>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
             Save reusable flirty lines for chat. Tap a saved template in chat to
             insert it into the composer.
           </p>
@@ -81,9 +81,9 @@ export function MessageTemplatesManager({
         ) : null}
       </div>
 
-      <form action={formAction} className="mt-5 grid gap-3">
+      <form action={formAction} className="mt-5 grid gap-4">
         <input name="template_id" type="hidden" value={draft.id} />
-        <label className="text-sm text-neutral-400">
+        <label className="text-[15px] leading-6 text-neutral-300">
           Title
           <input
             name="title"
@@ -91,10 +91,10 @@ export function MessageTemplatesManager({
             onChange={(event) => updateDraft("title", event.target.value)}
             placeholder="Late-night opener"
             maxLength={80}
-            className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-500"
+            className="mt-2.5 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-400"
           />
         </label>
-        <label className="text-sm text-neutral-400">
+        <label className="text-[15px] leading-6 text-neutral-300">
           Message
           <textarea
             name="message_text"
@@ -105,17 +105,17 @@ export function MessageTemplatesManager({
             placeholder="You seem like trouble in the best way."
             maxLength={500}
             rows={4}
-            className="mt-2 w-full resize-none rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-500"
+            className="mt-2.5 w-full resize-none rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-400"
           />
         </label>
         <div className="grid gap-3 sm:grid-cols-3">
-          <label className="text-sm text-neutral-400">
+          <label className="text-[15px] leading-6 text-neutral-300">
             Tone
             <select
               name="tone"
               value={draft.tone}
               onChange={(event) => updateDraft("tone", event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
+              className="mt-2.5 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
             >
               {MESSAGE_TEMPLATE_TONES.map((tone) => (
                 <option key={tone} value={tone}>
@@ -124,7 +124,7 @@ export function MessageTemplatesManager({
               ))}
             </select>
           </label>
-          <label className="text-sm text-neutral-400">
+          <label className="text-[15px] leading-6 text-neutral-300">
             Visibility
             <select
               name="visibility"
@@ -132,7 +132,7 @@ export function MessageTemplatesManager({
               onChange={(event) =>
                 updateDraft("visibility", event.target.value)
               }
-              className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
+              className="mt-2.5 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
             >
               {MESSAGE_TEMPLATE_VISIBILITIES.map((visibility) => (
                 <option key={visibility} value={visibility}>
@@ -141,7 +141,7 @@ export function MessageTemplatesManager({
               ))}
             </select>
           </label>
-          <label className="text-sm text-neutral-400">
+          <label className="text-[15px] leading-6 text-neutral-300">
             Pack price
             <input
               name="price_gold"
@@ -152,11 +152,11 @@ export function MessageTemplatesManager({
                 updateDraft("price_gold", event.target.value)
               }
               placeholder="Optional"
-              className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-500"
+              className="mt-2.5 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-400"
             />
           </label>
         </div>
-        <p className="text-xs text-neutral-500">
+        <p className="text-sm leading-6 text-neutral-400">
           Creator packs are a foundation for paid template collections. For now,
           your chat composer only shows your own active templates.
         </p>
@@ -189,20 +189,20 @@ export function MessageTemplatesManager({
           templates.map((template) => (
             <article
               key={template.id}
-              className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
+              className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 sm:p-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-black text-white">{template.title}</p>
-                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-xs text-emerald-100">
+                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[13px] text-emerald-100">
                       {template.tone}
                     </span>
-                    <span className="rounded-full border border-neutral-700 px-2.5 py-1 text-xs text-neutral-400">
+                    <span className="rounded-full border border-neutral-700 px-2.5 py-1 text-[13px] text-neutral-300">
                       {template.visibility.replace("_", " ")}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-neutral-300">
+                  <p className="mt-3 text-[15px] leading-6 text-neutral-200">
                     {template.message_text}
                   </p>
                 </div>

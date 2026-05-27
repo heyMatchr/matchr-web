@@ -36,7 +36,7 @@ export default async function EditProfilePage() {
       profileId={profile.id}
       title="Edit Profile"
     >
-      <div className="mt-5 max-w-2xl text-sm leading-6 text-neutral-400 md:mt-8">
+      <div className="mt-5 max-w-2xl text-[15px] leading-6 text-neutral-300 md:mt-8">
         Update the details people see across Discover, Matches, and Messages.
       </div>
 

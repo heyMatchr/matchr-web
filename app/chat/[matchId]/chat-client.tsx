@@ -1227,7 +1227,7 @@ export function ChatClient({
                 <p className="text-sm font-black text-emerald-50">
                   {isReviveSuggestion ? "Revive chat" : "Suggest opener"}
                 </p>
-                <p className="mt-0.5 text-xs text-emerald-100/65">
+                <p className="mt-1 text-sm leading-5 text-emerald-50/75">
                   Tap one to place it in your composer.
                 </p>
               </div>
@@ -1274,7 +1274,7 @@ export function ChatClient({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-black text-white">Templates</p>
-                <p className="mt-0.5 text-xs text-neutral-500">
+                <p className="mt-1 text-sm leading-5 text-neutral-400">
                   Insert a saved line. You still send it manually.
                 </p>
               </div>
@@ -1319,7 +1319,7 @@ export function ChatClient({
                 >
                   <span className="flex items-center gap-2 text-sm font-medium text-white">
                     {template.title}
-                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-100">
+                    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[12px] text-emerald-100">
                       {template.tone}
                     </span>
                   </span>
@@ -1332,7 +1332,7 @@ export function ChatClient({
           </div>
         ) : null}
         {messageGoldCost > 0 ? (
-          <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs text-amber-50">
+          <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm leading-5 text-amber-50">
             Send message for {messageGoldCost} Gold? Conversation becomes free
             after they reply.
           </p>
@@ -1352,11 +1352,11 @@ export function ChatClient({
           </button>
           {isMediaMenuOpen ? (
             <div className="absolute bottom-16 left-0 z-20 grid w-56 max-w-[calc(100vw-2rem)] gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
-              <p className="px-3 py-2 text-xs text-neutral-500">
+              <p className="px-3 py-2 text-sm leading-5 text-neutral-400">
                 {spendableGold} gold available
               </p>
               {messageGoldCost > 0 ? (
-                <p className="px-3 pb-2 text-xs text-amber-100/80">
+                <p className="px-3 pb-2 text-sm leading-5 text-amber-100/85">
                   First message costs {messageGoldCost} Gold until they reply.
                 </p>
               ) : null}
@@ -1381,7 +1381,7 @@ export function ChatClient({
               >
                 Voice note
               </button>
-              <p className="px-3 py-2 text-xs text-neutral-500">
+              <p className="px-3 py-2 text-sm leading-5 text-neutral-400">
                 Gifts use your Matchr Gold balance.
               </p>
               {giftCatalog.map((gift) => (
@@ -1394,7 +1394,7 @@ export function ChatClient({
                   <span className="text-xl">{gift.icon}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium text-white">{gift.name}</span>
-                    <span className="text-xs text-neutral-500">
+                    <span className="text-sm text-neutral-400">
                       {gift.coinPrice} coins
                     </span>
                   </span>
@@ -1462,7 +1462,7 @@ export function ChatClient({
         <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
             <p className="text-xl font-black">Send paid message?</p>
-            <p className="mt-2 text-sm leading-6 text-neutral-400">
+            <p className="mt-2 text-[15px] leading-6 text-neutral-300">
               This first message costs {messageGoldCost} Gold. If{" "}
               {receiverName} replies, this conversation unlocks and future
               messages are free.
@@ -1496,7 +1496,7 @@ export function ChatClient({
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
             <p className="text-4xl">{pendingGift.icon}</p>
             <p className="mt-3 text-xl font-black">Send {pendingGift.name}?</p>
-            <p className="mt-2 text-sm leading-6 text-neutral-400">
+            <p className="mt-2 text-[15px] leading-6 text-neutral-300">
               This gift costs {pendingGift.coinPrice} Gold.{" "}
               {receiverName} receives{" "}
               {Math.floor(
@@ -1534,7 +1534,7 @@ export function ChatClient({
         <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-amber-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(245,158,11,0.12)]">
             <p className="text-xl font-black">Not enough gold</p>
-            <p className="mt-2 text-sm leading-6 text-neutral-400">{goldModal}</p>
+            <p className="mt-2 text-[15px] leading-6 text-neutral-300">{goldModal}</p>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Link
                 href="/wallet"
@@ -1552,7 +1552,7 @@ export function ChatClient({
             <button
               type="button"
               onClick={() => setGoldModal("")}
-              className="mt-4 text-sm text-neutral-500"
+              className="mt-4 text-sm text-neutral-300"
             >
               Close
             </button>

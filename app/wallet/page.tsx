@@ -49,10 +49,10 @@ export default async function WalletPage() {
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.id} title="Wallet">
       <div className="mt-8 grid gap-5">
-        <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6">
+        <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
-          <p className="mt-3 text-sm text-neutral-400">Your Gold powers paid messages, gifts, and premium Matchr experiences.</p>
+          <p className="mt-3 text-[15px] leading-6 text-neutral-300">Your Gold powers paid messages, gifts, and premium Matchr experiences.</p>
           <div className="mt-5 flex flex-wrap gap-2">
             <form action={startGoldCheckout}>
               <input type="hidden" name="package" value="500" />
@@ -64,22 +64,22 @@ export default async function WalletPage() {
           </div>
         </section>
 
-        <section className="grid gap-3 rounded-3xl border border-neutral-800 bg-black/50 p-5">
+        <section className="grid gap-3.5 rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
           <h2 className="text-lg font-black">Gold packages</h2>
           {(packagesResult.data ?? []).map((pack, index) => (
             <form key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`} action={startGoldCheckout}>
               <input type="hidden" name="package" value={String(pack.gold_amount)} />
-              <button className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30">
+              <button className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30 sm:p-5">
                 <p className="font-black">{pack.name}</p>
-                <p className="mt-1 text-sm text-neutral-400">{pack.gold_amount} gold · ${pack.price_usd}</p>
+                <p className="mt-1.5 text-[15px] leading-6 text-neutral-300">{pack.gold_amount} gold · ${pack.price_usd}</p>
               </button>
             </form>
           ))}
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
           <h2 className="text-lg font-black">Premium</h2>
-          <p className="mt-2 text-sm text-neutral-400">
+          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
             {premiumResult.data ? `${premiumResult.data.plan_name} · ${premiumResult.data.status}` : "No active premium plan."}
           </p>
           <form action={startPremiumCheckout} className="mt-4">
@@ -89,7 +89,7 @@ export default async function WalletPage() {
           </form>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {["Cheaper messages", "Profile boost", "Advanced filters", "Read insights"].map((perk) => (
-              <div key={perk} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-300">{perk}</div>
+              <div key={perk} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">{perk}</div>
             ))}
           </div>
         </section>
@@ -127,12 +127,12 @@ function formatWalletTransaction(row: {
 
 function History({ rows, title }: { rows: string[]; title: string }) {
   return (
-    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
       <h2 className="text-lg font-black">{title}</h2>
-      <div className="mt-4 grid gap-2">
+      <div className="mt-4 grid gap-2.5">
         {rows.length ? rows.map((row, index) => (
-          <div key={`${row}-${index}`} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-300">{row}</div>
-        )) : <p className="text-sm text-neutral-500">No activity yet.</p>}
+          <div key={`${row}-${index}`} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">{row}</div>
+        )) : <p className="text-sm leading-6 text-neutral-400">No activity yet.</p>}
       </div>
     </section>
   );

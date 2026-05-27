@@ -137,7 +137,7 @@ export default async function SettingsPage() {
             name="relationship_intent_preference"
             defaultValue={settings.relationship_intent_preference ?? ""}
             placeholder="Relationship intent preference"
-            className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-500"
+            className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-400"
           />
         </SettingsSection>
 
@@ -179,16 +179,16 @@ export default async function SettingsPage() {
                     {profile?.display_name ?? "Reported user"} · {report.category} · {report.status}
                   </div>
                 );
-              }) : <p className="text-sm text-neutral-500">No reports submitted.</p>}
+              }) : <p className="text-sm leading-6 text-neutral-400">No reports submitted.</p>}
             </div>
           </div>
         </SettingsSection>
 
         <SettingsSection title="Premium">
           <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4">
-            <p className="text-sm text-neutral-400">Current plan</p>
+            <p className="text-[15px] leading-6 text-neutral-300">Current plan</p>
             <p className="mt-1 text-2xl font-black">{premiumResult.data?.plan_name ?? "Free"}</p>
-            <p className="mt-1 text-sm text-neutral-400">{walletResult.data?.gold_balance ?? 0} gold</p>
+            <p className="mt-1 text-[15px] leading-6 text-neutral-300">{walletResult.data?.gold_balance ?? 0} gold</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/wallet" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">Wallet</Link>
               <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Upgrade placeholder</button>
@@ -206,16 +206,16 @@ export default async function SettingsPage() {
 
 function SettingsSection({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
       <h2 className="text-lg font-black">{title}</h2>
-      <div className="mt-4 grid gap-3">{children}</div>
+      <div className="mt-4 grid gap-4">{children}</div>
     </section>
   );
 }
 
 function Toggle({ defaultChecked, name, title }: { defaultChecked: boolean; name: string; title: string }) {
   return (
-    <label className="flex items-center justify-between rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-200">
+    <label className="flex items-center justify-between gap-4 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3.5 text-[15px] leading-6 text-neutral-100">
       {title}
       <input name={name} type="checkbox" defaultChecked={defaultChecked} className="h-5 w-5 accent-emerald-300" />
     </label>
@@ -224,9 +224,9 @@ function Toggle({ defaultChecked, name, title }: { defaultChecked: boolean; name
 
 function Select({ defaultValue, label, name, options }: { defaultValue: string; label: string; name: string; options: string[] }) {
   return (
-    <label className="text-sm text-neutral-400">
+    <label className="text-[15px] leading-6 text-neutral-300">
       {label}
-      <select name={name} defaultValue={defaultValue} className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white">
+      <select name={name} defaultValue={defaultValue} className="mt-2.5 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white">
         {options.map((option) => <option key={option} value={option}>{option}</option>)}
       </select>
     </label>
@@ -248,15 +248,15 @@ function MultiSelect({
 
   return (
     <fieldset className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
-      <legend className="text-sm text-neutral-300">{label}</legend>
-      <p className="mt-1 text-xs text-neutral-500">
+      <legend className="text-[15px] leading-6 text-neutral-200">{label}</legend>
+      <p className="mt-1.5 text-sm leading-6 text-neutral-400">
         Leave empty to keep discovery broad.
       </p>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
         {options.map((option) => (
           <label
             key={option}
-            className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-black/40 px-3 py-2 text-sm text-neutral-200"
+            className="flex items-center gap-2.5 rounded-xl border border-neutral-800 bg-black/40 px-3.5 py-2.5 text-sm leading-5 text-neutral-100"
           >
             <input
               name={name}
@@ -275,9 +275,9 @@ function MultiSelect({
 
 function NumberInput({ defaultValue, label, name }: { defaultValue: number; label: string; name: string }) {
   return (
-    <label className="text-sm text-neutral-400">
+    <label className="text-[15px] leading-6 text-neutral-300">
       {label}
-      <input name={name} type="number" defaultValue={defaultValue} className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white" />
+      <input name={name} type="number" defaultValue={defaultValue} className="mt-2.5 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white" />
     </label>
   );
 }
@@ -304,21 +304,21 @@ function SafetyList({
           return (
             <div
               key={`${row[idKey]}-${row.created_at}`}
-              className="flex items-center justify-between gap-3 rounded-xl bg-black/40 p-3 text-sm text-neutral-300"
+              className="flex items-center justify-between gap-3 rounded-xl bg-black/40 p-3.5 text-sm leading-5 text-neutral-200"
             >
               <span className="min-w-0 truncate">
                 {profile?.display_name ?? "User"} · {new Date(row.created_at).toLocaleDateString()}
               </span>
               {allowUnblock ? (
                 <form action={unblockUser.bind(null, row[idKey])}>
-                  <button className="shrink-0 rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200 hover:border-emerald-300/40">
+                  <button className="shrink-0 rounded-full border border-neutral-700 px-3 py-1.5 text-[13px] text-neutral-100 hover:border-emerald-300/40">
                     Unblock
                   </button>
                 </form>
               ) : null}
             </div>
           );
-        }) : <p className="text-sm text-neutral-500">Nothing here yet.</p>}
+        }) : <p className="text-sm leading-6 text-neutral-400">Nothing here yet.</p>}
       </div>
     </div>
   );

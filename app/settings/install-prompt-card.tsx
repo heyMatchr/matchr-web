@@ -84,12 +84,12 @@ export function InstallPromptCard({ compact = false }: { compact?: boolean }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-black text-white">Install Matchr</p>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
             Add Matchr to your home screen for a faster app-style experience.
           </p>
         </div>
         {installed ? (
-          <span className="w-fit rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-100">
+          <span className="w-fit rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[13px] font-medium text-emerald-100">
             Installed
           </span>
         ) : null}
@@ -106,11 +106,11 @@ export function InstallPromptCard({ compact = false }: { compact?: boolean }) {
               Install Matchr
             </button>
           ) : ios ? (
-            <p className="rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
+            <p className="rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2.5 text-sm leading-6 text-neutral-300">
               On iPhone, open Share, then choose Add to Home Screen.
             </p>
           ) : (
-            <p className="rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
+            <p className="rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2.5 text-sm leading-6 text-neutral-300">
               If your browser supports installation, an install prompt will appear here.
             </p>
           )}

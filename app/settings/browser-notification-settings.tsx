@@ -67,12 +67,12 @@ export function BrowserNotificationSettings({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="font-black text-white">Browser notifications</p>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
             Messages, calls, matches, and gifts can alert you while Matchr is open.
           </p>
         </div>
         <span
-          className={`w-fit rounded-full border px-3 py-1 text-xs font-medium ${
+          className={`w-fit rounded-full border px-3 py-1 text-[13px] font-medium ${
             status === "enabled"
               ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
               : "border-neutral-700 text-neutral-300"
@@ -113,16 +113,16 @@ export function BrowserNotificationSettings({
       </div>
 
       {status === "blocked" ? (
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-sm leading-6 text-neutral-400">
           Notifications are blocked in your browser settings. Enable them there to receive Matchr alerts.
         </p>
       ) : null}
       {status === "unsupported" ? (
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-sm leading-6 text-neutral-400">
           This browser does not support web notifications.
         </p>
       ) : null}
-      <div className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-[11px] leading-5 text-neutral-500">
+      <div className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
         <span>Permission: {debugState.permission}</span>
         <span className="mx-2 text-neutral-700">/</span>
         <span>

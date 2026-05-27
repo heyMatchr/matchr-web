@@ -100,7 +100,7 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
   }
 
   const inputClass =
-    "rounded-full border border-neutral-700 bg-black/40 px-5 py-3.5 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 md:px-6 md:py-4";
+    "rounded-full border border-neutral-700 bg-black/40 px-5 py-3.5 text-white placeholder:text-neutral-400 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 md:px-6 md:py-4";
 
   return (
     <form
@@ -123,7 +123,7 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
           ) : (
             <>
               <p className="text-sm font-medium text-white">Upload avatar</p>
-              <p className="mt-2 text-sm text-neutral-500">
+              <p className="mt-2 text-sm leading-6 text-neutral-400">
                 JPG, PNG, WebP, or GIF under 5 MB
               </p>
             </>
@@ -505,7 +505,7 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
         disabled={pending}
         placeholder="Bio"
         defaultValue={profile.bio}
-        className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-white placeholder:text-neutral-500 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2 md:px-6"
+        className="min-h-32 rounded-3xl border border-neutral-700 bg-black/40 px-5 py-4 text-white placeholder:text-neutral-400 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 sm:col-span-2 md:px-6"
       />
 
       <p
