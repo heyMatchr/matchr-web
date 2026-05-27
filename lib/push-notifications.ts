@@ -1,8 +1,5 @@
 "use client";
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/types";
-
 const SERVICE_WORKER_PATH = "/matchr-sw.js";
 
 export type PushSupportState = {
@@ -115,12 +112,8 @@ export async function registerMatchrServiceWorker() {
 }
 
 export async function subscribeToMatchrPush({
-  anonKey,
-  supabaseUrl,
   userId,
 }: {
-  anonKey: string;
-  supabaseUrl: string;
   userId: string;
 }): Promise<PushSubscriptionResult> {
   const support = getPushSupportState();
@@ -159,29 +152,31 @@ export async function subscribeToMatchrPush({
     }));
 
   const serialized = subscription.toJSON();
-  const supabase = createClient<Database>(supabaseUrl, anonKey);
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      active: true,
+  const response = await fetch("/api/push/subscribe", {
+    body: JSON.stringify({
       auth: serialized.keys?.auth ?? null,
       browser: support.browser,
       device: support.isStandalone ? "pwa" : "browser",
       endpoint: subscription.endpoint,
-      last_seen_at: new Date().toISOString(),
       p256dh: serialized.keys?.p256dh ?? null,
       platform: support.platform,
-      user_id: userId,
+      userId,
+    }),
+    headers: {
+      "Content-Type": "application/json",
     },
-    {
-      onConflict: "user_id,endpoint",
-    },
-  );
+    method: "POST",
+  });
 
-  if (error) {
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+
     return {
       ok: false,
       message: "Push subscription could not be saved.",
-      reason: error.message,
+      reason: result?.error ?? "subscribe-failed",
     };
   }
 
@@ -192,12 +187,7 @@ export async function subscribeToMatchrPush({
 }
 
 export async function unsubscribeFromMatchrPush({
-  anonKey,
-  supabaseUrl,
-}: {
-  anonKey: string;
-  supabaseUrl: string;
-}) {
+}: Record<string, never> = {}) {
   if (!("serviceWorker" in navigator)) {
     return;
   }
@@ -211,12 +201,14 @@ export async function unsubscribeFromMatchrPush({
   const endpoint = subscription.endpoint;
   await subscription.unsubscribe();
 
-  const supabase = createClient<Database>(supabaseUrl, anonKey);
-  await supabase
-    .from("push_subscriptions")
-    .update({
+  await fetch("/api/push/subscribe", {
+    body: JSON.stringify({
       active: false,
-      last_seen_at: new Date().toISOString(),
-    })
-    .eq("endpoint", endpoint);
+      endpoint,
+    }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
 }

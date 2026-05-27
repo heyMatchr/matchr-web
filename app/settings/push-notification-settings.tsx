@@ -9,15 +9,11 @@ import {
 } from "@/lib/push-notifications";
 
 type PushNotificationSettingsProps = {
-  anonKey: string;
   currentUserId: string;
-  supabaseUrl: string;
 };
 
 export function PushNotificationSettings({
-  anonKey,
   currentUserId,
-  supabaseUrl,
 }: PushNotificationSettingsProps) {
   const [support, setSupport] = useState<PushSupportState | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -37,8 +33,6 @@ export function PushNotificationSettings({
     setIsBusy(true);
     setMessage("Preparing push alerts...");
     const result = await subscribeToMatchrPush({
-      anonKey,
-      supabaseUrl,
       userId: currentUserId,
     });
 
@@ -49,9 +43,22 @@ export function PushNotificationSettings({
 
   async function disablePush() {
     setIsBusy(true);
-    await unsubscribeFromMatchrPush({ anonKey, supabaseUrl });
+    await unsubscribeFromMatchrPush();
     setSupport(getPushSupportState());
     setMessage("This device will stop receiving Matchr push alerts.");
+    setIsBusy(false);
+  }
+
+  async function sendTestPush() {
+    setIsBusy(true);
+    const response = await fetch("/api/push/test", {
+      method: "POST",
+    });
+    setMessage(
+      response.ok
+        ? "Test push sent. If this device is subscribed, it should arrive shortly."
+        : "Test push could not be sent. Check VAPID and subscription setup.",
+    );
     setIsBusy(false);
   }
 
@@ -89,6 +96,16 @@ export function PushNotificationSettings({
         >
           {isBusy ? "Working..." : "Enable push alerts"}
         </button>
+        {isGranted ? (
+          <button
+            type="button"
+            onClick={() => void sendTestPush()}
+            disabled={isBusy}
+            className="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Test push
+          </button>
+        ) : null}
         {isGranted ? (
           <button
             type="button"

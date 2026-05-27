@@ -6,7 +6,6 @@ import {
   GENDER_IDENTITY_OPTIONS,
   SEXUAL_ORIENTATION_OPTIONS,
 } from "@/lib/identity";
-import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
@@ -47,8 +46,6 @@ const defaults = {
 
 export default async function SettingsPage() {
   const supabase = await createSupabaseServerClient();
-  const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
-  const anonKey = requiredSupabaseEnv("SUPABASE_ANON_KEY");
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -146,9 +143,7 @@ export default async function SettingsPage() {
           <InstallPromptCard />
           <BrowserNotificationSettings />
           <PushNotificationSettings
-            anonKey={anonKey}
             currentUserId={user.id}
-            supabaseUrl={supabaseUrl}
           />
           <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Allow PWA push alerts" />
           <Toggle defaultChecked={settings.push_messages} name="push_messages" title="Push message alerts" />

@@ -150,7 +150,6 @@ export function CallControls({
     },
     [currentUserId, matchId, receiverId, supabase],
   );
-
   useEffect(() => {
     function handleCallUpdate(call: CallSessionRow) {
       debugLog("[Matchr calls] status update", call.id, call.status);

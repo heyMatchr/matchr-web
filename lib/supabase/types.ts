@@ -284,6 +284,14 @@ export type PushSubscriptionRow = {
   last_seen_at: string;
 };
 
+export type PushDeliveryEventRow = {
+  id: string;
+  event_type: string;
+  source_id: string;
+  recipient_id: string;
+  created_at: string;
+};
+
 export type FollowRequestRow = {
   id: string;
   requester_id: string;
@@ -911,6 +919,18 @@ export type Database = {
           created_at?: string;
           last_seen_at?: string;
         };
+        Relationships: [];
+      };
+      push_delivery_events: {
+        Row: PushDeliveryEventRow;
+        Insert: {
+          id?: string;
+          event_type: string;
+          source_id: string;
+          recipient_id: string;
+          created_at?: string;
+        };
+        Update: never;
         Relationships: [];
       };
       muted_users: {
