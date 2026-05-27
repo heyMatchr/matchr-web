@@ -112,8 +112,10 @@ export async function registerMatchrServiceWorker() {
 }
 
 export async function subscribeToMatchrPush({
+  accessToken,
   userId,
 }: {
+  accessToken?: string | null;
   userId: string;
 }): Promise<PushSubscriptionResult> {
   const support = getPushSupportState();
@@ -152,6 +154,14 @@ export async function subscribeToMatchrPush({
     }));
 
   const serialized = subscription.toJSON();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
   const response = await fetch("/api/push/subscribe", {
     body: JSON.stringify({
       auth: serialized.keys?.auth ?? null,
@@ -162,9 +172,7 @@ export async function subscribeToMatchrPush({
       platform: support.platform,
       userId,
     }),
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     method: "POST",
   });
 
@@ -187,7 +195,10 @@ export async function subscribeToMatchrPush({
 }
 
 export async function unsubscribeFromMatchrPush({
-}: Record<string, never> = {}) {
+  accessToken,
+}: {
+  accessToken?: string | null;
+} = {}) {
   if (!("serviceWorker" in navigator)) {
     return;
   }
@@ -201,14 +212,20 @@ export async function unsubscribeFromMatchrPush({
   const endpoint = subscription.endpoint;
   await subscription.unsubscribe();
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
   await fetch("/api/push/subscribe", {
     body: JSON.stringify({
       active: false,
       endpoint,
     }),
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     method: "POST",
   });
 }

@@ -1,50 +1,100 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getPushSupportState,
   subscribeToMatchrPush,
   unsubscribeFromMatchrPush,
   type PushSupportState,
 } from "@/lib/push-notifications";
+import type { Database } from "@/lib/supabase/types";
 
 type PushNotificationSettingsProps = {
+  anonKey: string;
   currentUserId: string;
+  supabaseUrl: string;
 };
 
 export function PushNotificationSettings({
+  anonKey,
   currentUserId,
+  supabaseUrl,
 }: PushNotificationSettingsProps) {
   const [support, setSupport] = useState<PushSupportState | null>(null);
+  const [activeSubscriptionCount, setActiveSubscriptionCount] = useState<number | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState(
     "Get notified when someone messages you, sends a gift, or matches with you.",
   );
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(supabaseUrl, anonKey),
+    [anonKey, supabaseUrl],
+  );
+
+  const getAccessToken = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    return session?.access_token ?? null;
+  }, [supabase]);
+
+  const refreshSubscriptionStatus = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    const headers: Record<string, string> = {};
+
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+
+    const response = await fetch("/api/push/subscribe", {
+      headers,
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      setActiveSubscriptionCount(null);
+      return;
+    }
+
+    const result = (await response.json()) as {
+      activeCount?: number;
+      subscriptionSaved?: boolean;
+    };
+    setActiveSubscriptionCount(result.activeCount ?? 0);
+  }, [getAccessToken]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setSupport(getPushSupportState());
+      void refreshSubscriptionStatus();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [refreshSubscriptionStatus]);
 
   async function enablePush() {
     setIsBusy(true);
     setMessage("Preparing push alerts...");
+    const accessToken = await getAccessToken();
     const result = await subscribeToMatchrPush({
+      accessToken,
       userId: currentUserId,
     });
 
     setSupport(getPushSupportState());
     setMessage(result.message);
+    await refreshSubscriptionStatus();
     setIsBusy(false);
   }
 
   async function disablePush() {
     setIsBusy(true);
-    await unsubscribeFromMatchrPush();
+    const accessToken = await getAccessToken();
+    await unsubscribeFromMatchrPush({ accessToken });
     setSupport(getPushSupportState());
+    await refreshSubscriptionStatus();
     setMessage("This device will stop receiving Matchr push alerts.");
     setIsBusy(false);
   }
@@ -65,6 +115,12 @@ export function PushNotificationSettings({
   const permission = support?.permission ?? "unknown";
   const canInstall = support?.canInstallPush ?? false;
   const isGranted = permission === "granted";
+  const subscriptionStatus =
+    activeSubscriptionCount === null
+      ? "Checking subscription..."
+      : activeSubscriptionCount > 0
+        ? "Subscription saved"
+        : "No subscription found";
 
   return (
     <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4 sm:p-5">
@@ -84,6 +140,10 @@ export function PushNotificationSettings({
         <p>{message}</p>
         <p className="text-neutral-400">
           iPhone support depends on Safari Web Push from an installed Home Screen PWA. If your browser cannot subscribe, in-app toasts and badges still work.
+        </p>
+        <p className="font-medium text-emerald-100">
+          {subscriptionStatus}
+          {activeSubscriptionCount !== null ? ` (${activeSubscriptionCount} active)` : ""}
         </p>
       </div>
 

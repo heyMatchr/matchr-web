@@ -6,6 +6,7 @@ import {
   GENDER_IDENTITY_OPTIONS,
   SEXUAL_ORIENTATION_OPTIONS,
 } from "@/lib/identity";
+import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
 import { BrowserNotificationSettings } from "./browser-notification-settings";
@@ -143,7 +144,9 @@ export default async function SettingsPage() {
           <InstallPromptCard />
           <BrowserNotificationSettings />
           <PushNotificationSettings
+            anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
             currentUserId={user.id}
+            supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
           />
           <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Allow PWA push alerts" />
           <Toggle defaultChecked={settings.push_messages} name="push_messages" title="Push message alerts" />
