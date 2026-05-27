@@ -75,6 +75,10 @@ async function performLogout() {
   const supabase = await createSupabaseServerClient();
 
   try {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Logout] starting server action");
+    }
+
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -92,6 +96,10 @@ async function performLogout() {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[Logout] caught error", error);
+      }
+
       const normalizedMessage = error.message.toLowerCase();
 
       if (
@@ -107,9 +115,13 @@ async function performLogout() {
       };
     }
 
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Logout] signOut success");
+    }
+
     return { ok: true as const };
   } catch (error) {
-    console.error("[Auth] logout failed", error);
+    console.error("[Logout] caught error", error);
     return {
       ok: false as const,
       message: getLogoutErrorMessage(error),
@@ -195,13 +207,17 @@ export async function logOut() {
 
   if (!result.ok) {
     redirect(
-      `/login?message=${encodeURIComponent(
+      `/?message=${encodeURIComponent(
         "We could not log you out safely. Please try again.",
       )}`,
     );
   }
 
-  redirect("/login");
+  if (process.env.NODE_ENV === "development") {
+    console.log("[Logout] redirecting");
+  }
+
+  redirect("/");
 }
 
 export async function logOutWithState(
@@ -220,5 +236,9 @@ export async function logOutWithState(
     };
   }
 
-  redirect("/login");
+  if (process.env.NODE_ENV === "development") {
+    console.log("[Logout] redirecting");
+  }
+
+  redirect("/");
 }

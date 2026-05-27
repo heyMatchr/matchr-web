@@ -60,6 +60,13 @@ export async function updateSupabaseSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[Logout] middleware redirect", {
+        from: request.nextUrl.pathname,
+        to: "/login",
+      });
+    }
+
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", request.nextUrl.pathname);

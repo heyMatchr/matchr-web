@@ -22,7 +22,18 @@ export function LogoutButton({
   );
 
   return (
-    <form action={formAction} className="grid gap-2">
+    <form
+      action={formAction}
+      className="grid gap-2"
+      onSubmit={() => {
+        if (process.env.NODE_ENV === "development") {
+          console.log("[Logout] starting");
+          console.log("[Logout] clearing providers");
+        }
+
+        window.dispatchEvent(new CustomEvent("matchr:logout-starting"));
+      }}
+    >
       <button
         type="submit"
         disabled={pending}

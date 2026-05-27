@@ -290,9 +290,24 @@ export function InAppToastProvider({
       void pollToasts();
     }, POLL_INTERVAL_MS);
 
+    function handleLogoutStarting() {
+      active = false;
+      window.clearInterval(timer);
+      setToasts([]);
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Logout] clearing providers", {
+          provider: "InAppToastProvider",
+        });
+      }
+    }
+
+    window.addEventListener("matchr:logout-starting", handleLogoutStarting);
+
     return () => {
       active = false;
       window.clearInterval(timer);
+      window.removeEventListener("matchr:logout-starting", handleLogoutStarting);
     };
   }, [currentUserId, pushToast, supabase]);
 

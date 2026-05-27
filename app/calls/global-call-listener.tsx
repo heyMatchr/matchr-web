@@ -306,6 +306,25 @@ export function GlobalCallListener({
       )
       .subscribe();
 
+    function handleLogoutStarting() {
+      active = false;
+      stopRingtone();
+
+      if (missedTimerRef.current) {
+        clearTimeout(missedTimerRef.current);
+      }
+
+      void supabase.removeChannel(channel);
+
+      if (ENABLE_CALL_DEBUG) {
+        console.log("[Logout] clearing providers", {
+          provider: "GlobalCallListener",
+        });
+      }
+    }
+
+    window.addEventListener("matchr:logout-starting", handleLogoutStarting);
+
     return () => {
       active = false;
       stopRingtone();
@@ -314,6 +333,7 @@ export function GlobalCallListener({
         clearTimeout(missedTimerRef.current);
       }
 
+      window.removeEventListener("matchr:logout-starting", handleLogoutStarting);
       void supabase.removeChannel(channel);
     };
   }, [currentUserId, enterCallRoom, showIncomingCall, stopRingtone, supabase]);

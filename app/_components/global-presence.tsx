@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ReactNode } from "react";
@@ -69,6 +70,7 @@ export function GlobalPresenceProvider({
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(
     () => new Set([currentUserId]),
   );
+  const logoutRequestedRef = useRef(false);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -112,6 +114,10 @@ export function GlobalPresenceProvider({
 
   const writeHeartbeat = useCallback(
     async (online: boolean) => {
+      if (logoutRequestedRef.current && online) {
+        return;
+      }
+
       const timestamp = new Date().toISOString();
       setHeartbeatStatus(online ? "updating" : "offline");
       const { error } = await supabase
@@ -185,17 +191,38 @@ export function GlobalPresenceProvider({
       writeOfflineBestEffort();
     }
 
+    function handleLogoutStarting() {
+      logoutRequestedRef.current = true;
+      active = false;
+      window.clearInterval(heartbeatTimer);
+      setHeartbeatStatus("offline");
+      setOnlineUserIds((current) => {
+        const next = new Set(current);
+        next.delete(currentUserId);
+        return next;
+      });
+      writeOfflineBestEffort();
+
+      if (ENABLE_PRESENCE_DEBUG) {
+        console.log("[Logout] clearing providers", {
+          provider: "GlobalPresenceProvider",
+        });
+      }
+    }
+
     window.addEventListener("pagehide", markOffline);
     window.addEventListener("beforeunload", markOffline);
+    window.addEventListener("matchr:logout-starting", handleLogoutStarting);
 
     return () => {
       active = false;
       window.clearInterval(heartbeatTimer);
       window.removeEventListener("pagehide", markOffline);
       window.removeEventListener("beforeunload", markOffline);
+      window.removeEventListener("matchr:logout-starting", handleLogoutStarting);
       writeOfflineBestEffort();
     };
-  }, [refreshOnlineUsers, writeHeartbeat, writeOfflineBestEffort]);
+  }, [currentUserId, refreshOnlineUsers, writeHeartbeat, writeOfflineBestEffort]);
 
   const value = useMemo(
     () => ({

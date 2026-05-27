@@ -584,8 +584,22 @@ export function AuthNav({
       )
       .subscribe();
 
+    function handleLogoutStarting() {
+      active = false;
+      void supabase.removeChannel(channel);
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("[Logout] clearing providers", {
+          provider: "AuthNav",
+        });
+      }
+    }
+
+    window.addEventListener("matchr:logout-starting", handleLogoutStarting);
+
     return () => {
       active = false;
+      window.removeEventListener("matchr:logout-starting", handleLogoutStarting);
       void supabase.removeChannel(channel);
     };
   }, [currentUserId, seenMatchesKey, supabase]);
