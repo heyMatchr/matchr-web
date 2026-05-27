@@ -24,6 +24,7 @@ export const MEDIA_ALLOWED_TYPES = [
   "image/gif",
   "video/mp4",
   "video/webm",
+  "video/quicktime",
 ] as const;
 
 export const MEDIA_MAX_SIZE_BYTES = 50 * 1024 * 1024;

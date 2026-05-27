@@ -136,22 +136,30 @@ export function ChatClient({
   const [spendableGold, setSpendableGold] = useState(goldBalance);
   const [paidMessageDraft, setPaidMessageDraft] = useState("");
   const [pendingGift, setPendingGift] = useState<GiftOption | null>(null);
+  const [activeReportMessageId, setActiveReportMessageId] = useState<
+    string | null
+  >(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [mobileViewportHeight, setMobileViewportHeight] = useState<
     number | null
   >(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const giftListRef = useRef<HTMLDivElement>(null);
   const typingRef = useRef(false);
   const receiverTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
   const privateMediaInputRef = useRef<HTMLInputElement>(null);
+  const privatePhotoInputRef = useRef<HTMLInputElement>(null);
+  const privateVideoInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -209,8 +217,8 @@ export function ChatClient({
   });
   const mobileChatHeightStyle = mobileViewportHeight
     ? {
-        height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.75rem)`,
-        maxHeight: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.75rem)`,
+        height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - 0.5rem)`,
+        maxHeight: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - 0.5rem)`,
       }
     : undefined;
 
@@ -700,7 +708,7 @@ export function ChatClient({
     setError("");
 
     if (!MEDIA_ALLOWED_TYPES.includes(file.type as (typeof MEDIA_ALLOWED_TYPES)[number])) {
-      setError("Upload an image, GIF, MP4, or WebM file.");
+      setError("Upload an image, GIF, MP4, MOV, or WebM file.");
       return;
     }
 
@@ -714,8 +722,8 @@ export function ChatClient({
     if (mediaType === "video") {
       const duration = await getVideoDuration(file);
 
-      if (duration > 30) {
-        setError("Keep videos under 30 seconds.");
+      if (duration > 15) {
+        setError("Keep videos under 15 seconds.");
         return;
       }
     }
@@ -1109,7 +1117,7 @@ export function ChatClient({
 
   return (
     <div
-      className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.75rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
+      className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_0.5rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
       style={mobileChatHeightStyle}
     >
       <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
@@ -1159,7 +1167,7 @@ export function ChatClient({
 
       <div
         ref={messagesViewportRef}
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain p-2.5 pb-4 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain p-2.5 pb-3 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
       >
         {messages.length > 0 ? (
           messages.map((message) => {
@@ -1191,14 +1199,34 @@ export function ChatClient({
                         })}
                   </p>
                   {!isMine && !message.optimistic ? (
-                    <div className="mt-1 text-right">
-                      <ReportButton
-                        buttonClassName="text-[11px] text-neutral-600 hover:text-red-200"
-                        target={{
-                          targetMessageId: message.id,
-                          targetUserId: message.sender_id,
-                        }}
-                      />
+                    <div className="mt-1 flex justify-end">
+                      {activeReportMessageId === message.id ? (
+                        <div className="flex items-center gap-2 rounded-full border border-neutral-800 bg-black/35 px-2 py-1">
+                          <ReportButton
+                            buttonClassName="text-[11px] font-medium text-red-100 hover:text-red-50"
+                            target={{
+                              targetMessageId: message.id,
+                              targetUserId: message.sender_id,
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setActiveReportMessageId(null)}
+                            className="text-[11px] text-neutral-500 hover:text-white"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label="Message options"
+                          onClick={() => setActiveReportMessageId(message.id)}
+                          className="grid h-7 w-7 place-items-center rounded-full text-base leading-none text-neutral-600 transition-colors hover:bg-black/20 hover:text-neutral-300"
+                        >
+                          ...
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -1394,58 +1422,6 @@ export function ChatClient({
           >
             +
           </button>
-          {isMediaMenuOpen ? (
-            <div className="absolute bottom-16 left-0 z-20 grid w-56 max-w-[calc(100vw-2rem)] gap-1 rounded-2xl border border-neutral-800 bg-black/95 p-2 shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
-              <p className="px-3 py-2 text-sm leading-5 text-neutral-400">
-                {spendableGold} gold available
-              </p>
-              {messageGoldCost > 0 ? (
-                <p className="px-3 pb-2 text-sm leading-5 text-amber-100/85">
-                  First message costs {messageGoldCost} Gold until they reply.
-                </p>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => mediaInputRef.current?.click()}
-                className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
-              >
-                Image or video
-              </button>
-              <button
-                type="button"
-                onClick={() => privateMediaInputRef.current?.click()}
-                className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
-              >
-                Private media
-              </button>
-              <button
-                type="button"
-                onClick={() => setError("Voice notes are coming soon.")}
-                className="rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
-              >
-                Voice note
-              </button>
-              <p className="px-3 py-2 text-sm leading-5 text-neutral-400">
-                Gifts use your Matchr Gold balance.
-              </p>
-              {giftCatalog.map((gift) => (
-                <button
-                  key={gift.type}
-                  type="button"
-                  onClick={() => void sendGift(gift)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-neutral-200 hover:bg-white/[0.06]"
-                >
-                  <span className="text-xl">{gift.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-medium text-white">{gift.name}</span>
-                    <span className="text-sm text-neutral-400">
-                      {gift.coinPrice} coins
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
           <input
             ref={mediaInputRef}
             type="file"
@@ -1460,9 +1436,61 @@ export function ChatClient({
             className="sr-only"
           />
           <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadMediaMessage(file);
+              }
+              event.target.value = "";
+            }}
+            className="sr-only"
+          />
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadMediaMessage(file);
+              }
+              event.target.value = "";
+            }}
+            className="sr-only"
+          />
+          <input
             ref={privateMediaInputRef}
             type="file"
             accept="image/*,video/mp4,video/webm"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadMediaMessage(file, true);
+              }
+              event.target.value = "";
+            }}
+            className="sr-only"
+          />
+          <input
+            ref={privatePhotoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadMediaMessage(file, true);
+              }
+              event.target.value = "";
+            }}
+            className="sr-only"
+          />
+          <input
+            ref={privateVideoInputRef}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
@@ -1495,6 +1523,110 @@ export function ChatClient({
         </div>
         {error ? <p className="mt-3 text-sm text-red-300">{error}</p> : null}
       </form>
+
+      {isMediaMenuOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end bg-black/60 px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-sm sm:items-center sm:justify-center sm:p-5"
+          onClick={() => setIsMediaMenuOpen(false)}
+        >
+          <div
+            className="flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] border border-neutral-800 bg-black shadow-[0_-18px_60px_rgba(0,0,0,0.55)] sm:rounded-3xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-neutral-800 px-4 py-4">
+              <div>
+                <p className="text-lg font-black text-white">Add to chat</p>
+                <p className="mt-1 text-sm leading-5 text-neutral-400">
+                  {spendableGold} Gold available
+                  {messageGoldCost > 0
+                    ? ` · first message costs ${messageGoldCost} Gold`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMediaMenuOpen(false)}
+                className="rounded-full border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
+              <div className="grid gap-2">
+                <MediaMenuButton
+                  description="Open the Matchr gift catalog."
+                  label="Send Gift"
+                  onClick={() => giftListRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  })}
+                />
+                <MediaMenuButton
+                  description="Send a normal photo."
+                  label="Photo"
+                  onClick={() => photoInputRef.current?.click()}
+                />
+                <MediaMenuButton
+                  description="View-once photo with private media protection."
+                  label="Private Photo"
+                  onClick={() => privatePhotoInputRef.current?.click()}
+                />
+                <MediaMenuButton
+                  description="Send a video clip up to 15 seconds."
+                  label="Video max 15s"
+                  onClick={() => videoInputRef.current?.click()}
+                />
+                <MediaMenuButton
+                  description="View-once private video up to 15 seconds."
+                  label="Private Video max 15s"
+                  onClick={() => privateVideoInputRef.current?.click()}
+                />
+                <MediaMenuButton
+                  description="Not available yet."
+                  label="Voice Note"
+                  onClick={() => {
+                    setError("Voice notes are coming soon.");
+                    setIsMediaMenuOpen(false);
+                  }}
+                />
+              </div>
+
+              <div
+                ref={giftListRef}
+                className="mt-4 rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-3"
+              >
+                <p className="px-1 text-sm font-black text-emerald-50">
+                  Gifts
+                </p>
+                <p className="mt-1 px-1 text-sm leading-5 text-emerald-50/75">
+                  Gifts use your Matchr Gold balance.
+                </p>
+                <div className="mt-3 grid max-h-[34dvh] gap-2 overflow-y-auto pr-1">
+                  {giftCatalog.map((gift) => (
+                    <button
+                      key={gift.type}
+                      type="button"
+                      onClick={() => void sendGift(gift)}
+                      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-3 py-3 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+                    >
+                      <span className="text-xl">{gift.icon}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium text-white">
+                          {gift.name}
+                        </span>
+                        <span className="text-sm text-neutral-400">
+                          {gift.coinPrice} coins
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {privacyWarning ? (
         <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
@@ -1670,5 +1802,28 @@ export function ChatClient({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function MediaMenuButton({
+  description,
+  label,
+  onClick,
+}: {
+  description: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-left transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+    >
+      <span className="block text-sm font-black text-white">{label}</span>
+      <span className="mt-1 block text-sm leading-5 text-neutral-400">
+        {description}
+      </span>
+    </button>
   );
 }
