@@ -1167,7 +1167,7 @@ export function ChatClient({
 
       <div
         ref={messagesViewportRef}
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain p-2.5 pb-3 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-y-auto p-2.5 pb-3 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
       >
         {messages.length > 0 ? (
           messages.map((message) => {

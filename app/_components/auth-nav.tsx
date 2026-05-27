@@ -632,13 +632,13 @@ export function AuthNav({
 
   return (
     <>
-      <header className="matchr-mobile-header fixed left-0 right-0 top-0 z-40 border-b border-white/5 bg-black/70 px-4 pb-3 backdrop-blur-xl md:hidden">
+      <header className="matchr-mobile-header fixed left-0 right-0 top-0 z-40 border-b border-white/5 bg-black/55 px-4 pb-1.5 backdrop-blur-xl md:hidden">
         <div className="flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/matchr-logo.png"
             alt="Matchr"
-            className="h-9 w-9 object-contain drop-shadow-[0_0_18px_rgba(74,222,128,0.22)]"
+            className="h-5 w-5 object-contain drop-shadow-[0_0_14px_rgba(74,222,128,0.20)]"
           />
         </div>
       </header>
