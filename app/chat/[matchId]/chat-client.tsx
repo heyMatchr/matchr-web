@@ -217,8 +217,8 @@ export function ChatClient({
   });
   const mobileChatHeightStyle = mobileViewportHeight
     ? {
-        height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - 0.5rem)`,
-        maxHeight: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - 0.5rem)`,
+        height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.25rem)`,
+        maxHeight: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.25rem)`,
       }
     : undefined;
 
@@ -1117,7 +1117,7 @@ export function ChatClient({
 
   return (
     <div
-      className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_0.5rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
+      className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.25rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
       style={mobileChatHeightStyle}
     >
       <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
@@ -1259,7 +1259,7 @@ export function ChatClient({
 
       <form
         onSubmit={sendMessage}
-        className="relative z-20 shrink-0 border-t border-neutral-800 bg-black/90 p-2 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-4"
+        className="relative z-20 shrink-0 border-t border-neutral-800 bg-black/90 p-2 backdrop-blur-xl sm:p-4"
       >
         <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
           <button
