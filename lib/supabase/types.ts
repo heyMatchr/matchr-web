@@ -33,6 +33,9 @@ export type ProfileRow = {
   smoking: string | null;
   looking_for: string | null;
   verified: boolean;
+  phone_verified: boolean;
+  identity_verified: boolean;
+  premium: boolean;
   onboarding_completed: boolean;
   last_seen_at: string | null;
   is_online: boolean;
@@ -876,6 +879,9 @@ export type Database = {
           smoking?: string | null;
           looking_for?: string | null;
           verified?: boolean;
+          phone_verified?: boolean;
+          identity_verified?: boolean;
+          premium?: boolean;
           onboarding_completed?: boolean;
           last_seen_at?: string | null;
           is_online?: boolean;
@@ -918,6 +924,9 @@ export type Database = {
           smoking?: string | null;
           looking_for?: string | null;
           verified?: boolean;
+          phone_verified?: boolean;
+          identity_verified?: boolean;
+          premium?: boolean;
           onboarding_completed?: boolean;
           last_seen_at?: string | null;
           is_online?: boolean;

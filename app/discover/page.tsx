@@ -1,7 +1,9 @@
 import { AppShell } from "@/app/_components/app-shell";
+import {
+  canUserAppearInDiscover,
+  scoreProfileForUser,
+} from "@/lib/discovery-ranking";
 import { getGiftCatalog } from "@/lib/economy";
-import { profileMatchesIdentityPreferences } from "@/lib/identity";
-import { canAppearInDiscover } from "@/lib/moderation";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
@@ -24,13 +26,14 @@ export default async function DiscoverPage() {
     passesResult,
     blocksResult,
     currentSettingsResult,
+    incomingLikesResult,
   ] =
     await timeAsync("[Perf] Discover base profile filters", () =>
       Promise.all([
         supabase
           .from("profiles")
           .select(
-            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, discover_hidden, shadow_restricted, trusted_user, created_at",
+            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at",
           )
           .eq("onboarding_completed", true)
           .neq("id", user.id)
@@ -52,6 +55,10 @@ export default async function DiscoverPage() {
           )
           .eq("user_id", user.id)
           .maybeSingle(),
+        supabase
+          .from("likes")
+          .select("liker_id")
+          .eq("liked_profile_id", user.id),
       ]),
     );
 
@@ -79,23 +86,20 @@ export default async function DiscoverPage() {
     ),
   ]);
   const identityPreferences = currentSettingsResult.data;
+  const viewerRankingContext = {
+    id: user.id,
+    inclusiveDiscovery: identityPreferences?.inclusive_discovery ?? true,
+    interestedInGenderIdentities:
+      identityPreferences?.interested_in_gender_identities ?? [],
+    interestedInOrientations:
+      identityPreferences?.interested_in_orientations ?? [],
+    relationshipIntentPreference:
+      identityPreferences?.relationship_intent_preference ?? null,
+  };
   const visibleProfiles =
     profilesResult.data.filter(
       (profile) =>
-        !excludedUserIds.has(profile.id) &&
-        canAppearInDiscover(profile) &&
-        profileMatchesIdentityPreferences({
-          inclusiveMode: identityPreferences?.inclusive_discovery ?? true,
-          interestedInGenderIdentities:
-            identityPreferences?.interested_in_gender_identities ?? [],
-          interestedInOrientations:
-            identityPreferences?.interested_in_orientations ?? [],
-          targetGenderIdentity: profile.gender_identity,
-          targetSexualOrientation: profile.sexual_orientation,
-        }) &&
-        (!identityPreferences?.relationship_intent_preference ||
-          profile.relationship_intent ===
-            identityPreferences.relationship_intent_preference),
+        !excludedUserIds.has(profile.id),
     ) ??
     [];
   const { data: stories, error: storiesError } = await timeAsync(
@@ -196,6 +200,8 @@ export default async function DiscoverPage() {
     followersResult,
     momentsResult,
     giftTransactionsResult,
+    profileViewsResult,
+    premiumResult,
   ] = await timeAsync("[Perf] Discover profile enrichment", () =>
     Promise.all([
       visibleProfileIds.length
@@ -217,6 +223,20 @@ export default async function DiscoverPage() {
             .from("gift_transactions")
             .select("receiver_id")
             .in("receiver_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase
+            .from("profile_views")
+            .select("viewed_user_id, created_at")
+            .eq("viewer_id", user.id)
+            .in("viewed_user_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase
+            .from("premium_subscriptions")
+            .select("user_id")
+            .eq("status", "active")
+            .in("user_id", visibleProfileIds)
         : Promise.resolve({ data: [] }),
     ]),
   );
@@ -258,25 +278,57 @@ export default async function DiscoverPage() {
     }
   });
   const giftCounts = countBy(giftTransactionsResult.data, "receiver_id");
+  const incomingLikeIds = new Set(
+    incomingLikesResult.data?.map((like) => like.liker_id) ?? [],
+  );
+  const premiumUserIds = new Set(
+    premiumResult.data?.map((subscription) => subscription.user_id) ?? [],
+  );
+  const profileViewCounts = countBy(profileViewsResult.data, "viewed_user_id");
+  const latestViewerViewByUser = new Map<string, string>();
+  profileViewsResult.data?.forEach((view) => {
+    const current = latestViewerViewByUser.get(view.viewed_user_id);
+
+    if (!current || new Date(view.created_at) > new Date(current)) {
+      latestViewerViewByUser.set(view.viewed_user_id, view.created_at);
+    }
+  });
   const discoverProfiles: DiscoverProfile[] = visibleProfiles.map((profile) => {
-    const sharedInterests = profile.interests?.length ?? 0;
     const momentCount = momentCounts.get(profile.id) ?? 0;
     const followerCount = followerCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
     const isOnline = profile.is_online;
+    const engagementCount = engagementByUser.get(profile.id) ?? 0;
+    const giftCount = giftCounts.get(profile.id) ?? 0;
     const trendingScore =
       followerCount * 3 +
       momentCount * 4 +
-      (engagementByUser.get(profile.id) ?? 0) * 2 +
-      (giftCounts.get(profile.id) ?? 0) * 6 +
+      engagementCount * 2 +
+      giftCount * 6 +
       (hasStories ? 8 : 0);
+    const compatibility = scoreProfileForUser({
+      candidate: profile,
+      candidateId: profile.id,
+      signals: {
+        engagementCount,
+        followerCount,
+        giftCount,
+        hasIncomingLike: incomingLikeIds.has(profile.id),
+        hasPremium: premiumUserIds.has(profile.id),
+        hasStories,
+        momentCount,
+        profileViewCount: profileViewCounts.get(profile.id) ?? 0,
+        viewedByViewerAt: latestViewerViewByUser.get(profile.id) ?? null,
+      },
+      viewer: viewerRankingContext,
+    });
 
     return {
       accepting_dating: profile.accepting_dating,
       age: profile.age,
       avatar_url: profile.avatar_url,
       bio: profile.bio,
-      compatibility: Math.min(98, 58 + sharedInterests * 4 + (hasStories ? 8 : 0) + Math.min(18, momentCount * 3)),
+      compatibility,
       country: profile.country,
       display_name: profile.display_name,
       followerCount,
@@ -300,7 +352,15 @@ export default async function DiscoverPage() {
     };
   }).filter((profile) => {
     const setting = settingsByUser.get(profile.id);
-    return setting?.show_in_discover !== false && !setting?.private_profile;
+    const sourceProfile = visibleProfiles.find((candidate) => candidate.id === profile.id);
+
+    return sourceProfile
+      ? canUserAppearInDiscover({
+          candidate: sourceProfile,
+          settings: setting,
+          viewer: viewerRankingContext,
+        })
+      : false;
   }).sort((a, b) => b.compatibility - a.compatibility);
   const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
   const trendingProfiles = [...discoverProfiles].sort((a, b) => b.trendingScore - a.trendingScore).slice(0, 10);
