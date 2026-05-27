@@ -9,6 +9,11 @@ export type AuthFormState = {
   message: string;
 };
 
+export type LogoutFormState = {
+  status: "idle" | "error";
+  message: string;
+};
+
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -56,6 +61,60 @@ function getAuthErrorMessage(message: string, status?: number) {
   }
 
   return message || "Something went wrong. Please try again.";
+}
+
+function getLogoutErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "We could not log you out. Check your connection and try again.";
+}
+
+async function performLogout() {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({
+          is_online: false,
+          last_seen_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
+    }
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      const normalizedMessage = error.message.toLowerCase();
+
+      if (
+        normalizedMessage.includes("session") ||
+        normalizedMessage.includes("jwt")
+      ) {
+        return { ok: true as const };
+      }
+
+      return {
+        ok: false as const,
+        message: getLogoutErrorMessage(error),
+      };
+    }
+
+    return { ok: true as const };
+  } catch (error) {
+    console.error("[Auth] logout failed", error);
+    return {
+      ok: false as const,
+      message: getLogoutErrorMessage(error),
+    };
+  }
 }
 
 export async function signUp(
@@ -132,7 +191,34 @@ export async function logIn(
 }
 
 export async function logOut() {
-  const supabase = await createSupabaseServerClient();
-  await supabase.auth.signOut();
+  const result = await performLogout();
+
+  if (!result.ok) {
+    redirect(
+      `/login?message=${encodeURIComponent(
+        "We could not log you out safely. Please try again.",
+      )}`,
+    );
+  }
+
+  redirect("/login");
+}
+
+export async function logOutWithState(
+  _previousState: LogoutFormState,
+  _formData: FormData,
+): Promise<LogoutFormState> {
+  void _previousState;
+  void _formData;
+
+  const result = await performLogout();
+
+  if (!result.ok) {
+    return {
+      status: "error",
+      message: result.message,
+    };
+  }
+
   redirect("/login");
 }

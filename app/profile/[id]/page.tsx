@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
-import { logOut } from "@/app/auth/actions";
+import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { BrowserNotificationSettings } from "@/app/settings/browser-notification-settings";
 import { InstallPromptCard } from "@/app/settings/install-prompt-card";
@@ -367,14 +367,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   >
                     Wallet
                   </Link>
-                  <form action={logOut} className="md:hidden">
-                    <button
-                      type="submit"
-                      className="rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
-                    >
+                  <div className="md:hidden">
+                    <LogoutButton className="rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900">
                       Logout
-                    </button>
-                  </form>
+                    </LogoutButton>
+                  </div>
                 </>
               ) : (
                 <>

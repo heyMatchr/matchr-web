@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { logOut } from "@/app/auth/actions";
+import { LogoutButton } from "@/app/auth/logout-button";
 import {
   sanitizeNotificationPreview,
   showBrowserNotification,
@@ -654,15 +654,10 @@ export function AuthNav({
           ))}
         </nav>
 
-        <form action={logOut}>
-          <button
-            type="submit"
-            className="flex w-full items-center gap-3 rounded-full border border-neutral-900 px-4 py-3 text-sm text-neutral-400 transition-all duration-300 hover:border-neutral-700 hover:bg-white/[0.03] hover:text-white"
-          >
+        <LogoutButton className="flex w-full items-center gap-3 rounded-full border border-neutral-900 px-4 py-3 text-sm text-neutral-400 transition-all duration-300 hover:border-neutral-700 hover:bg-white/[0.03] hover:text-white">
             <LogoutIcon />
             Logout
-          </button>
-        </form>
+        </LogoutButton>
       </aside>
 
       <nav className="matchr-bottom-nav fixed bottom-0 left-0 right-0 z-40 max-w-full overflow-hidden border-t border-white/10 bg-black/75 px-2 pt-2 shadow-[0_-16px_45px_rgba(0,0,0,0.45)] backdrop-blur-xl md:hidden">
