@@ -11,6 +11,7 @@ import { likeProfile } from "@/app/discover/actions";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getProfileCompletion } from "@/lib/profile-completion";
+import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileOnlineStatus } from "./profile-online-status";
@@ -25,6 +26,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const perfStartedAt = startPerfTimer();
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
+  const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
+  const anonKey = requiredSupabaseEnv("SUPABASE_ANON_KEY");
   const { currentProfile, user } = await timeAsync(
     "[Perf] Profile auth/profile",
     () => getCurrentUserProfile(supabase, `/profile/${id}`),
@@ -368,7 +371,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     Wallet
                   </Link>
                   <div className="md:hidden">
-                    <LogoutButton className="rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900">
+                    <LogoutButton
+                      anonKey={anonKey}
+                      className="rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900"
+                      currentUserId={user.id}
+                      supabaseUrl={supabaseUrl}
+                    >
                       Logout
                     </LogoutButton>
                   </div>

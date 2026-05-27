@@ -668,7 +668,12 @@ export function AuthNav({
           ))}
         </nav>
 
-        <LogoutButton className="flex w-full items-center gap-3 rounded-full border border-neutral-900 px-4 py-3 text-sm text-neutral-400 transition-all duration-300 hover:border-neutral-700 hover:bg-white/[0.03] hover:text-white">
+        <LogoutButton
+          anonKey={anonKey}
+          className="flex w-full items-center gap-3 rounded-full border border-neutral-900 px-4 py-3 text-sm text-neutral-400 transition-all duration-300 hover:border-neutral-700 hover:bg-white/[0.03] hover:text-white"
+          currentUserId={currentUserId}
+          supabaseUrl={supabaseUrl}
+        >
             <LogoutIcon />
             Logout
         </LogoutButton>
