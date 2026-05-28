@@ -871,6 +871,25 @@ export function StoriesBar({
 
     setInteractionMessage("");
     await recordAction(supabase, currentUserId, "gift", activeStory.id);
+    const { error: transactionError } = await supabase.rpc(
+      "record_social_gift_with_economy",
+      {
+        gift_source: "story",
+        receiver_user_id: activeStory.user_id,
+        selected_gift_type: gift.type,
+        source_uuid: activeStory.id,
+      },
+    );
+
+    if (transactionError) {
+      setInteractionMessage(
+        transactionError.message.includes("insufficient_gold")
+          ? "Not enough gold. Add gold to continue."
+          : transactionError.message,
+      );
+      return;
+    }
+
     const { error } = await supabase.from("story_gifts").insert({
       gift_type: gift.type,
       receiver_id: activeStory.user_id,
@@ -889,16 +908,6 @@ export function StoriesBar({
       `Sent ${gift.icon} ${gift.name} from your story.`,
       { giftType: gift.type },
     );
-
-    await supabase.from("gift_transactions").insert({
-      coin_price: gift.coinPrice,
-      gold_cost: gift.coinPrice,
-      gift_type: gift.type,
-      receiver_id: activeStory.user_id,
-      sender_id: currentUserId,
-      source: "story",
-      source_id: activeStory.id,
-    });
 
     await supabase.from("notifications").insert({
       actor_id: currentUserId,

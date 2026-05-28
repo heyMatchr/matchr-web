@@ -284,6 +284,25 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
     } satisfies GiftActionState;
   }
 
+  const { error: transactionError } = await supabase.rpc(
+    "record_social_gift_with_economy",
+    {
+      gift_source: "moment",
+      receiver_user_id: ownerId,
+      selected_gift_type: gift.type,
+      source_uuid: momentId,
+    },
+  );
+
+  if (transactionError) {
+    return {
+      message: transactionError.message.includes("insufficient_gold")
+        ? "Not enough gold. Add gold to continue."
+        : transactionError.message,
+      status: "error",
+    } satisfies GiftActionState;
+  }
+
   const { error } = await supabase.from("moment_gifts").insert({
     gift_type: gift.type,
     moment_id: momentId,
@@ -294,16 +313,6 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
   if (error) {
     throw new Error(error.message);
   }
-
-  await supabase.from("gift_transactions").insert({
-    coin_price: gift.coinPrice,
-    gold_cost: gift.coinPrice,
-    gift_type: gift.type,
-    receiver_id: ownerId,
-    sender_id: user.id,
-    source: "moment",
-    source_id: momentId,
-  });
 
   await supabase.from("notifications").insert({
     actor_id: user.id,

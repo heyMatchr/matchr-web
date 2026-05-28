@@ -49,6 +49,7 @@ export function PushNotificationSettings({
     }
 
     const response = await fetch("/api/push/subscribe", {
+      credentials: "include",
       headers,
       method: "GET",
     });
@@ -77,16 +78,35 @@ export function PushNotificationSettings({
   async function enablePush() {
     setIsBusy(true);
     setMessage("Preparing push alerts...");
-    const accessToken = await getAccessToken();
-    const result = await subscribeToMatchrPush({
-      accessToken,
-      userId: currentUserId,
+    console.info("[PushSettings] Enable push alerts clicked", {
+      currentUserId,
     });
 
-    setSupport(getPushSupportState());
-    setMessage(result.message);
-    await refreshSubscriptionStatus();
-    setIsBusy(false);
+    try {
+      const accessToken = await getAccessToken();
+      const result = await subscribeToMatchrPush({
+        accessToken,
+        userId: currentUserId,
+      });
+
+      setSupport(getPushSupportState());
+      setMessage(result.message);
+      if (result.ok) {
+        setActiveSubscriptionCount(result.activeCount);
+      } else {
+        await refreshSubscriptionStatus();
+      }
+    } catch (error) {
+      console.error("[PushSettings] Enable push alerts failed", error);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Push alerts could not be enabled. Try again.",
+      );
+      await refreshSubscriptionStatus();
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function disablePush() {
@@ -179,6 +199,12 @@ export function PushNotificationSettings({
       </div>
 
       <div className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
+        <span>Permission granted: {isGranted ? "yes" : "no"}</span>
+        <span className="mx-2 text-neutral-700">/</span>
+        <span>Subscription saved: {activeSubscriptionCount && activeSubscriptionCount > 0 ? "yes" : "no"}</span>
+        <span className="mx-2 text-neutral-700">/</span>
+        <span>Active subscriptions: {activeSubscriptionCount ?? "unknown"}</span>
+        <br />
         <span>Service worker: {support?.serviceWorkerSupported ? "yes" : "no"}</span>
         <span className="mx-2 text-neutral-700">/</span>
         <span>Secure: {support?.isSecureContext ? "yes" : "no"}</span>

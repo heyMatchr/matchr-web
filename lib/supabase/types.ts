@@ -1303,10 +1303,7 @@ export type Database = {
         Returns: undefined;
       };
       grant_starter_gold_once: {
-        Args: {
-          target_user_id: string;
-          gold_amount: number;
-        };
+        Args: Record<string, never>;
         Returns: number;
       };
       send_text_message_with_economy: {
@@ -1314,7 +1311,6 @@ export type Database = {
           receiver_user_id: string;
           active_match_id: string;
           message_body: string;
-          gold_amount: number;
         };
         Returns: MessageRow;
       };
@@ -1323,12 +1319,17 @@ export type Database = {
           receiver_user_id: string;
           active_match_id: string;
           selected_gift_type: string;
-          gift_name: string;
-          gift_icon: string;
-          gift_price: number;
-          receiver_gold: number;
         };
         Returns: MessageRow;
+      };
+      record_social_gift_with_economy: {
+        Args: {
+          receiver_user_id: string;
+          selected_gift_type: string;
+          gift_source: string;
+          source_uuid: string;
+        };
+        Returns: Record<string, unknown>;
       };
       users_are_blocked: {
         Args: {

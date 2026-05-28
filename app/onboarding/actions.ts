@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getStarterGoldForProfile } from "@/lib/economy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   AVATAR_ALLOWED_TYPES,
@@ -183,17 +182,7 @@ export async function saveOnboarding(
     return { message: error.message };
   }
 
-  const starterGold = await getStarterGoldForProfile(supabase, {
-    gender,
-    gender_identity: genderIdentity || null,
-  });
-
-  if (starterGold > 0) {
-    await supabase.rpc("grant_starter_gold_once", {
-      gold_amount: starterGold,
-      target_user_id: user.id,
-    });
-  }
+  await supabase.rpc("grant_starter_gold_once");
 
   redirect("/discover");
 }

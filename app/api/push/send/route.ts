@@ -31,8 +31,15 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as PushSendBody;
 
-  if (!body.userId || !body.type) {
+  if (!body.type) {
     return Response.json({ error: "Missing push target" }, { status: 400 });
+  }
+
+  if (body.userId && body.userId !== user.id) {
+    return Response.json(
+      { error: "Push sends are restricted to the current user." },
+      { status: 403 },
+    );
   }
 
   const adminSupabase = createSupabaseAdminClient();
@@ -45,7 +52,7 @@ export async function POST(request: Request) {
     type: body.type,
     url: body.url,
   });
-  const result = await sendPushNotification(adminSupabase, body.userId, payload);
+  const result = await sendPushNotification(adminSupabase, user.id, payload);
 
   return Response.json(result, { status: result.ok ? 200 : 500 });
 }

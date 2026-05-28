@@ -40,6 +40,7 @@ import {
   MEDIA_ALLOWED_TYPES,
   MEDIA_BUCKET_NAME,
   MEDIA_MAX_SIZE_BYTES,
+  PRIVATE_MEDIA_BUCKET_NAME,
 } from "@/lib/supabase/storage";
 
 type LocalMessage = MessageRow & {
@@ -129,6 +130,7 @@ export function ChatClient({
   const [templatesError, setTemplatesError] = useState("");
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
+  const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
   const [now, setNow] = useState(0);
   const [privacyWarning, setPrivacyWarning] = useState("");
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
@@ -650,7 +652,6 @@ export function ChatClient({
       "send_text_message_with_economy",
       {
         active_match_id: matchId,
-        gold_amount: messageGoldCost,
         message_body: trimmedContent,
         receiver_user_id: receiverId,
       },
@@ -752,8 +753,9 @@ export function ChatClient({
     setSending(true);
     const extension = file.name.split(".").pop() || (mediaType === "video" ? "mp4" : "jpg");
     const path = `${currentUserId}/chat-${Date.now()}.${extension}`;
+    const uploadBucket = isPrivate ? PRIVATE_MEDIA_BUCKET_NAME : MEDIA_BUCKET_NAME;
     const { error: uploadError } = await supabase.storage
-      .from(MEDIA_BUCKET_NAME)
+      .from(uploadBucket)
       .upload(path, file, {
         cacheControl: "3600",
         contentType: file.type,
@@ -765,9 +767,10 @@ export function ChatClient({
       return;
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(MEDIA_BUCKET_NAME).getPublicUrl(path);
+    const publicUrl = isPrivate
+      ? ""
+      : supabase.storage.from(MEDIA_BUCKET_NAME).getPublicUrl(path).data.publicUrl;
+    const storedMediaUrl = isPrivate ? path : publicUrl;
 
     const { data: savedMessage, error: sendError } = await supabase
       .from("messages")
@@ -775,7 +778,7 @@ export function ChatClient({
         content: "",
         match_id: matchId,
         media_type: mediaType,
-        media_url: publicUrl,
+        media_url: storedMediaUrl,
         message_type: isPrivate ? "private_media" : mediaType,
         receiver_id: receiverId,
         sender_id: currentUserId,
@@ -787,7 +790,7 @@ export function ChatClient({
       setError(sendError.message);
     } else {
       await createMediaModerationPlaceholder(supabase, {
-        mediaUrl: publicUrl,
+        mediaUrl: storedMediaUrl,
         source: isPrivate ? "private_media_message" : "chat_media_message",
         sourceId: savedMessage.id,
         userId: currentUserId,
@@ -821,18 +824,10 @@ export function ChatClient({
 
     setSending(true);
     setPendingGift(null);
-    const receiverGold = Math.floor(
-      gift.coinPrice *
-        ((creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent / 100),
-    );
     const { data: savedMessage, error: sendError } = await supabase.rpc(
       "send_chat_gift_with_economy",
       {
         active_match_id: matchId,
-        gift_icon: gift.icon,
-        gift_name: gift.name,
-        gift_price: gift.coinPrice,
-        receiver_gold: receiverGold,
         receiver_user_id: receiverId,
         selected_gift_type: gift.type,
       },
@@ -883,6 +878,28 @@ export function ChatClient({
     }
   }
 
+  async function getPrivateMediaSignedUrl(messageId: string) {
+    const response = await fetch(`/api/private-media/${messageId}`, {
+      credentials: "include",
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      const result = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(result?.error ?? "Private media could not be opened.");
+    }
+
+    const result = (await response.json()) as { url?: string };
+
+    if (!result.url) {
+      throw new Error("Private media could not be opened.");
+    }
+
+    return result.url;
+  }
+
   async function openPrivateMedia(message: MessageRow) {
     const expired =
       message.viewed_at &&
@@ -908,6 +925,18 @@ export function ChatClient({
       .single();
 
     if (updatedMessage) {
+      try {
+        const signedUrl = await getPrivateMediaSignedUrl(updatedMessage.id);
+        setActivePrivateMediaUrl(signedUrl);
+      } catch (signedUrlError) {
+        setError(
+          signedUrlError instanceof Error
+            ? signedUrlError.message
+            : "Private media could not be opened.",
+        );
+        return;
+      }
+
       updateReadReceipt(updatedMessage);
       setNow(openedAt.getTime());
       setActivePrivateMessage(updatedMessage);
@@ -921,6 +950,7 @@ export function ChatClient({
           ),
         );
         setActivePrivateMessage(null);
+        setActivePrivateMediaUrl("");
         void insertSystemMessage("private_media_expired", "Private media expired.");
       }, 15500);
     }
@@ -1029,35 +1059,7 @@ export function ChatClient({
           }}
           className="group relative h-32 w-36 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
         >
-          {message.media_type === "video" ? (
-            <video
-              src={message.media_url}
-              playsInline
-              muted
-              preload="metadata"
-              disablePictureInPicture
-              controlsList="nodownload noplaybackrate"
-              onContextMenu={(event) => {
-                event.preventDefault();
-                showPrivacyWarning();
-              }}
-              className="absolute inset-0 h-full w-full scale-105 object-cover blur-xl brightness-50"
-            />
-          ) : (
-            <Image
-              src={message.media_url}
-              alt=""
-              fill
-              quality={62}
-              sizes="192px"
-              draggable={false}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                showPrivacyWarning();
-              }}
-              className="scale-105 object-cover blur-xl brightness-50"
-            />
-          )}
+          <span className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.22),_rgba(0,0,0,0.88)_62%)]" />
           <span className="absolute inset-0 bg-black/30" />
           <span className="relative flex h-full flex-col items-center justify-center px-4 text-white">
             <span className="grid h-10 w-10 place-items-center rounded-full border border-white/20 bg-black/45 text-lg backdrop-blur">
@@ -1736,7 +1738,7 @@ export function ChatClient({
         </div>
       ) : null}
 
-      {activePrivateMessage?.media_url && activePrivateSeconds > 0 ? (
+      {activePrivateMessage && activePrivateMediaUrl && activePrivateSeconds > 0 ? (
         <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
           <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
             <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
@@ -1756,7 +1758,7 @@ export function ChatClient({
             <div className="flex flex-1 items-center justify-center bg-black">
               {activePrivateMessage.media_type === "video" ? (
                 <video
-                  src={activePrivateMessage.media_url}
+                  src={activePrivateMediaUrl}
                   autoPlay
                   muted
                   playsInline
@@ -1771,7 +1773,7 @@ export function ChatClient({
                 />
               ) : (
                 <Image
-                  src={activePrivateMessage.media_url}
+                  src={activePrivateMediaUrl}
                   alt=""
                   width={900}
                   height={1200}

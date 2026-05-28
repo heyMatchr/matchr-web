@@ -15,7 +15,7 @@ export type PushSupportState = {
 };
 
 export type PushSubscriptionResult =
-  | { ok: true; message: string }
+  | { activeCount: number; ok: true; message: string; subscriptionSaved: boolean }
   | { ok: false; message: string; reason: string };
 
 function isBrowser() {
@@ -106,9 +106,15 @@ export async function registerMatchrServiceWorker() {
     throw new Error("Service workers are not supported on this device.");
   }
 
-  return navigator.serviceWorker.register(SERVICE_WORKER_PATH, {
+  const registration = await navigator.serviceWorker.register(SERVICE_WORKER_PATH, {
     scope: "/",
   });
+
+  console.info("[PushSubscribe] service worker registered", {
+    scope: registration.scope,
+  });
+
+  return registration;
 }
 
 export async function subscribeToMatchrPush({
@@ -121,6 +127,11 @@ export async function subscribeToMatchrPush({
   const support = getPushSupportState();
 
   if (!support.canInstallPush) {
+    console.warn("[PushSubscribe] push support check failed", {
+      reason: support.reason,
+      support,
+    });
+
     return {
       ok: false,
       message:
@@ -133,6 +144,8 @@ export async function subscribeToMatchrPush({
 
   if (Notification.permission !== "granted") {
     const permission = await Notification.requestPermission();
+    console.info("[PushSubscribe] permission result", { permission });
+
     if (permission !== "granted") {
       return {
         ok: false,
@@ -140,10 +153,15 @@ export async function subscribeToMatchrPush({
         reason: permission,
       };
     }
+  } else {
+    console.info("[PushSubscribe] permission already granted");
   }
 
   const registration = await registerMatchrServiceWorker();
   const existingSubscription = await registration.pushManager.getSubscription();
+  console.info("[PushSubscribe] existing subscription", {
+    exists: Boolean(existingSubscription),
+  });
   const subscription =
     existingSubscription ??
     (await registration.pushManager.subscribe({
@@ -152,6 +170,10 @@ export async function subscribeToMatchrPush({
       ),
       userVisibleOnly: true,
     }));
+  console.info("[PushSubscribe] pushManager subscription ready", {
+    endpoint: subscription.endpoint ? `${subscription.endpoint.slice(0, 18)}...` : null,
+    wasExisting: Boolean(existingSubscription),
+  });
 
   const serialized = subscription.toJSON();
   const headers: Record<string, string> = {
@@ -161,6 +183,12 @@ export async function subscribeToMatchrPush({
   if (accessToken) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
+
+  console.info("[PushSubscribe] POST /api/push/subscribe started", {
+    hasAuth: Boolean(serialized.keys?.auth),
+    hasBearer: Boolean(accessToken),
+    hasP256dh: Boolean(serialized.keys?.p256dh),
+  });
 
   const response = await fetch("/api/push/subscribe", {
     body: JSON.stringify({
@@ -172,6 +200,7 @@ export async function subscribeToMatchrPush({
       platform: support.platform,
       userId,
     }),
+    credentials: "include",
     headers,
     method: "POST",
   });
@@ -181,6 +210,11 @@ export async function subscribeToMatchrPush({
       error?: string;
     } | null;
 
+    console.error("[PushSubscribe] POST /api/push/subscribe failed", {
+      error: result?.error,
+      status: response.status,
+    });
+
     return {
       ok: false,
       message: "Push subscription could not be saved.",
@@ -188,9 +222,33 @@ export async function subscribeToMatchrPush({
     };
   }
 
+  const result = (await response.json().catch(() => null)) as {
+    activeCount?: number;
+    subscriptionSaved?: boolean;
+  } | null;
+
+  if (!result?.subscriptionSaved) {
+    console.error("[PushSubscribe] POST /api/push/subscribe did not save row", {
+      activeCount: result?.activeCount ?? 0,
+    });
+
+    return {
+      ok: false,
+      message: "Notification permission is enabled, but this device was not saved for push alerts.",
+      reason: "subscription-not-saved",
+    };
+  }
+
+  console.info("[PushSubscribe] POST /api/push/subscribe success", {
+    activeCount: result.activeCount ?? 0,
+    subscriptionSaved: result.subscriptionSaved,
+  });
+
   return {
+    activeCount: result.activeCount ?? 0,
     ok: true,
-    message: "Push notifications are ready for Matchr.",
+    message: "Push alerts are saved for this device.",
+    subscriptionSaved: true,
   };
 }
 
@@ -225,6 +283,7 @@ export async function unsubscribeFromMatchrPush({
       active: false,
       endpoint,
     }),
+    credentials: "include",
     headers,
     method: "POST",
   });
