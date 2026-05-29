@@ -6,6 +6,7 @@ import {
   getPushSupportState,
   subscribeToMatchrPush,
   unsubscribeFromMatchrPush,
+  type PushSubscribeDebugEvent,
   type PushSupportState,
 } from "@/lib/push-notifications";
 import type { Database } from "@/lib/supabase/types";
@@ -27,6 +28,14 @@ export function PushNotificationSettings({
   const [message, setMessage] = useState(
     "Get notified when someone messages you, sends a gift, or matches with you.",
   );
+  const [pushDebug, setPushDebug] = useState({
+    apiCalled: false,
+    apiSuccess: false,
+    lastStep: "not started",
+    serviceWorkerReady: false,
+    subscriptionCreated: false,
+  });
+  const [pushDebugLog, setPushDebugLog] = useState<string[]>([]);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -78,14 +87,49 @@ export function PushNotificationSettings({
   async function enablePush() {
     setIsBusy(true);
     setMessage("Preparing push alerts...");
+    setPushDebug({
+      apiCalled: false,
+      apiSuccess: false,
+      lastStep: "starting",
+      serviceWorkerReady: false,
+      subscriptionCreated: false,
+    });
+    setPushDebugLog([]);
     console.info("[PushSettings] Enable push alerts clicked", {
       currentUserId,
     });
 
     try {
       const accessToken = await getAccessToken();
+      const handleDebugEvent = (event: PushSubscribeDebugEvent) => {
+        setPushDebug((current) => ({
+          apiCalled:
+            current.apiCalled ||
+            event.step === "BEFORE fetch /api/push/subscribe" ||
+            event.step === "AFTER fetch /api/push/subscribe" ||
+            event.step === "POST /api/push/subscribe success",
+          apiSuccess:
+            current.apiSuccess ||
+            event.step === "POST /api/push/subscribe success",
+          lastStep: event.step,
+          serviceWorkerReady:
+            current.serviceWorkerReady ||
+            event.step === "service worker ready success",
+          subscriptionCreated:
+            current.subscriptionCreated ||
+            event.step === "subscription object created" ||
+            event.step === "pushManager.subscribe success",
+        }));
+        setPushDebugLog((current) =>
+          [
+            `${new Date().toLocaleTimeString()} ${event.step}`,
+            ...current,
+          ].slice(0, 8),
+        );
+      };
       const result = await subscribeToMatchrPush({
         accessToken,
+        onDebug: handleDebugEvent,
         userId: currentUserId,
       });
 
@@ -133,7 +177,6 @@ export function PushNotificationSettings({
   }
 
   const permission = support?.permission ?? "unknown";
-  const canInstall = support?.canInstallPush ?? false;
   const isGranted = permission === "granted";
   const subscriptionStatus =
     activeSubscriptionCount === null
@@ -171,7 +214,7 @@ export function PushNotificationSettings({
         <button
           type="button"
           onClick={() => void enablePush()}
-          disabled={isBusy || (!canInstall && !isGranted)}
+          disabled={isBusy}
           className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isBusy ? "Working..." : "Enable push alerts"}
@@ -212,6 +255,26 @@ export function PushNotificationSettings({
         <span>Installed: {support?.isStandalone ? "yes" : "no"}</span>
         <span className="mx-2 text-neutral-700">/</span>
         <span>VAPID key: {support?.vapidPublicKeyExists ? "yes" : "no"}</span>
+      </div>
+
+      <div className="mt-3 rounded-xl border border-emerald-300/15 bg-black/45 px-3 py-2 text-xs leading-5 text-neutral-300">
+        <p className="font-semibold text-emerald-100">Push subscription debug</p>
+        <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+          <span>Permission: {permission}</span>
+          <span>Standalone: {support?.isStandalone ? "yes" : "no"}</span>
+          <span>Service worker ready: {pushDebug.serviceWorkerReady ? "yes" : "no"}</span>
+          <span>Subscription object: {pushDebug.subscriptionCreated ? "yes" : "no"}</span>
+          <span>Subscribe API called: {pushDebug.apiCalled ? "yes" : "no"}</span>
+          <span>Subscribe API success: {pushDebug.apiSuccess ? "yes" : "no"}</span>
+        </div>
+        <p className="mt-1 text-neutral-400">Last step: {pushDebug.lastStep}</p>
+        {pushDebugLog.length ? (
+          <div className="mt-2 space-y-1 text-[11px] text-neutral-500">
+            {pushDebugLog.map((entry) => (
+              <p key={entry}>{entry}</p>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );

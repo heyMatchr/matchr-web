@@ -18,6 +18,11 @@ export type PushSubscriptionResult =
   | { activeCount: number; ok: true; message: string; subscriptionSaved: boolean }
   | { ok: false; message: string; reason: string };
 
+export type PushSubscribeDebugEvent = {
+  data?: Record<string, unknown>;
+  step: string;
+};
+
 function isBrowser() {
   return typeof window !== "undefined";
 }
@@ -117,17 +122,41 @@ export async function registerMatchrServiceWorker() {
   return registration;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }),
+  ]);
+}
+
 export async function subscribeToMatchrPush({
   accessToken,
+  onDebug,
   userId,
 }: {
   accessToken?: string | null;
+  onDebug?: (event: PushSubscribeDebugEvent) => void;
   userId: string;
 }): Promise<PushSubscriptionResult> {
+  const debug = (step: string, data?: Record<string, unknown>) => {
+    console.info(`[PushSubscribe] ${step}`, data ?? {});
+    onDebug?.({ data, step });
+  };
+  const debugError = (step: string, data?: Record<string, unknown>) => {
+    console.error(`[PushSubscribe] ${step}`, data ?? {});
+    onDebug?.({ data, step });
+  };
+
+  debug("entered subscribeToMatchrPush", { userId });
   const support = getPushSupportState();
+  debug("support state", support as unknown as Record<string, unknown>);
 
   if (!support.canInstallPush) {
-    console.warn("[PushSubscribe] push support check failed", {
+    debugError("support checks failed", {
       reason: support.reason,
       support,
     });
@@ -142,11 +171,21 @@ export async function subscribeToMatchrPush({
     };
   }
 
+  debug("support checks passed", {
+    browser: support.browser,
+    platform: support.platform,
+    standalone: support.isStandalone,
+  });
+
   if (Notification.permission !== "granted") {
+    debug("permission request starting", {
+      permission: Notification.permission,
+    });
     const permission = await Notification.requestPermission();
-    console.info("[PushSubscribe] permission result", { permission });
+    debug("permission result", { permission });
 
     if (permission !== "granted") {
+      debugError("permission not granted", { permission });
       return {
         ok: false,
         message: "Notifications were not enabled.",
@@ -154,26 +193,82 @@ export async function subscribeToMatchrPush({
       };
     }
   } else {
-    console.info("[PushSubscribe] permission already granted");
+    debug("permission already granted", {
+      permission: Notification.permission,
+    });
   }
 
-  const registration = await registerMatchrServiceWorker();
+  let registration: ServiceWorkerRegistration;
+
+  try {
+    debug("service worker registration starting");
+    registration = await registerMatchrServiceWorker();
+    debug("service worker registration success", {
+      scope: registration.scope,
+    });
+  } catch (error) {
+    debugError("service worker registration failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      message: "Service worker registration failed.",
+      reason: error instanceof Error ? error.message : "service-worker-failed",
+    };
+  }
+
+  try {
+    debug("service worker ready wait starting");
+    await withTimeout(navigator.serviceWorker.ready, 8000, "Service worker ready");
+    debug("service worker ready success");
+  } catch (error) {
+    debugError("service worker ready failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      message: "Service worker was not ready for push alerts.",
+      reason: error instanceof Error ? error.message : "service-worker-not-ready",
+    };
+  }
+
   const existingSubscription = await registration.pushManager.getSubscription();
-  console.info("[PushSubscribe] existing subscription", {
+  debug("existing push subscription checked", {
     exists: Boolean(existingSubscription),
   });
-  const subscription =
-    existingSubscription ??
-    (await registration.pushManager.subscribe({
-      applicationServerKey: urlBase64ToUint8Array(
-        process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
-      ),
-      userVisibleOnly: true,
-    }));
-  console.info("[PushSubscribe] pushManager subscription ready", {
-    endpoint: subscription.endpoint ? `${subscription.endpoint.slice(0, 18)}...` : null,
-    wasExisting: Boolean(existingSubscription),
-  });
+
+  let subscription: PushSubscription;
+
+  try {
+    if (existingSubscription) {
+      subscription = existingSubscription;
+    } else {
+      debug("pushManager.subscribe starting");
+      subscription = await registration.pushManager.subscribe({
+        applicationServerKey: urlBase64ToUint8Array(
+          process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
+        ),
+        userVisibleOnly: true,
+      });
+    }
+
+    debug("pushManager.subscribe success", {
+      endpoint: subscription.endpoint ? `${subscription.endpoint.slice(0, 18)}...` : null,
+      wasExisting: Boolean(existingSubscription),
+    });
+    debug("subscription object created", {
+      hasEndpoint: Boolean(subscription.endpoint),
+    });
+  } catch (error) {
+    debugError("pushManager.subscribe failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      message: "This device could not create a push subscription.",
+      reason: error instanceof Error ? error.message : "push-subscribe-failed",
+    };
+  }
 
   const serialized = subscription.toJSON();
   const headers: Record<string, string> = {
@@ -184,33 +279,50 @@ export async function subscribeToMatchrPush({
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  console.info("[PushSubscribe] POST /api/push/subscribe started", {
+  debug("BEFORE fetch /api/push/subscribe", {
     hasAuth: Boolean(serialized.keys?.auth),
     hasBearer: Boolean(accessToken),
     hasP256dh: Boolean(serialized.keys?.p256dh),
   });
 
-  const response = await fetch("/api/push/subscribe", {
-    body: JSON.stringify({
-      auth: serialized.keys?.auth ?? null,
-      browser: support.browser,
-      device: support.isStandalone ? "pwa" : "browser",
-      endpoint: subscription.endpoint,
-      p256dh: serialized.keys?.p256dh ?? null,
-      platform: support.platform,
-      userId,
-    }),
-    credentials: "include",
-    headers,
-    method: "POST",
-  });
+  let response: Response;
+
+  try {
+    response = await fetch("/api/push/subscribe", {
+      body: JSON.stringify({
+        auth: serialized.keys?.auth ?? null,
+        browser: support.browser,
+        device: support.isStandalone ? "pwa" : "browser",
+        endpoint: subscription.endpoint,
+        p256dh: serialized.keys?.p256dh ?? null,
+        platform: support.platform,
+        userId,
+      }),
+      credentials: "include",
+      headers,
+      method: "POST",
+    });
+    debug("AFTER fetch /api/push/subscribe", {
+      ok: response.ok,
+      status: response.status,
+    });
+  } catch (error) {
+    debugError("fetch /api/push/subscribe threw", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      ok: false,
+      message: "Push subscription request could not reach Matchr.",
+      reason: error instanceof Error ? error.message : "subscribe-fetch-failed",
+    };
+  }
 
   if (!response.ok) {
     const result = (await response.json().catch(() => null)) as {
       error?: string;
     } | null;
 
-    console.error("[PushSubscribe] POST /api/push/subscribe failed", {
+    debugError("POST /api/push/subscribe failed", {
       error: result?.error,
       status: response.status,
     });
@@ -228,7 +340,7 @@ export async function subscribeToMatchrPush({
   } | null;
 
   if (!result?.subscriptionSaved) {
-    console.error("[PushSubscribe] POST /api/push/subscribe did not save row", {
+    debugError("POST /api/push/subscribe did not save row", {
       activeCount: result?.activeCount ?? 0,
     });
 
@@ -239,7 +351,7 @@ export async function subscribeToMatchrPush({
     };
   }
 
-  console.info("[PushSubscribe] POST /api/push/subscribe success", {
+  debug("POST /api/push/subscribe success", {
     activeCount: result.activeCount ?? 0,
     subscriptionSaved: result.subscriptionSaved,
   });
