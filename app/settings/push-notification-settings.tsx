@@ -29,11 +29,15 @@ export function PushNotificationSettings({
     "Get notified when someone messages you, sends a gift, or matches with you.",
   );
   const [pushDebug, setPushDebug] = useState({
-    apiCalled: false,
-    apiSuccess: false,
-    lastStep: "not started",
+    permissionGranted: false,
+    pushSubscriptionCreated: false,
     serviceWorkerReady: false,
-    subscriptionCreated: false,
+    subscribeApiCalled: false,
+    subscribeApiError: "",
+    subscribeApiResponse: "",
+    subscribeApiSuccess: false,
+    supportDetected: false,
+    lastStep: "not started",
   });
   const [pushDebugLog, setPushDebugLog] = useState<string[]>([]);
   const supabase = useMemo(
@@ -88,11 +92,15 @@ export function PushNotificationSettings({
     setIsBusy(true);
     setMessage("Preparing push alerts...");
     setPushDebug({
-      apiCalled: false,
-      apiSuccess: false,
-      lastStep: "starting",
+      permissionGranted: false,
+      pushSubscriptionCreated: false,
       serviceWorkerReady: false,
-      subscriptionCreated: false,
+      subscribeApiCalled: false,
+      subscribeApiError: "",
+      subscribeApiResponse: "",
+      subscribeApiSuccess: false,
+      supportDetected: false,
+      lastStep: "starting",
     });
     setPushDebugLog([]);
     console.info("[PushSettings] Enable push alerts clicked", {
@@ -103,22 +111,37 @@ export function PushNotificationSettings({
       const accessToken = await getAccessToken();
       const handleDebugEvent = (event: PushSubscribeDebugEvent) => {
         setPushDebug((current) => ({
-          apiCalled:
-            current.apiCalled ||
-            event.step === "BEFORE fetch /api/push/subscribe" ||
-            event.step === "AFTER fetch /api/push/subscribe" ||
-            event.step === "POST /api/push/subscribe success",
-          apiSuccess:
-            current.apiSuccess ||
-            event.step === "POST /api/push/subscribe success",
-          lastStep: event.step,
+          permissionGranted:
+            current.permissionGranted ||
+            event.step === "permission result" ||
+            event.step === "permission already granted",
+          pushSubscriptionCreated:
+            current.pushSubscriptionCreated ||
+            event.step === "subscription object created" ||
+            event.step === "pushManager.subscribe success",
           serviceWorkerReady:
             current.serviceWorkerReady ||
             event.step === "service worker ready success",
-          subscriptionCreated:
-            current.subscriptionCreated ||
-            event.step === "subscription object created" ||
-            event.step === "pushManager.subscribe success",
+          subscribeApiCalled:
+            current.subscribeApiCalled ||
+            event.step === "BEFORE fetch /api/push/subscribe" ||
+            event.step === "AFTER fetch /api/push/subscribe" ||
+            event.step === "POST /api/push/subscribe success",
+          subscribeApiError:
+            event.step.includes("failed") || event.step.includes("threw")
+              ? String(event.data?.error ?? event.data?.reason ?? event.step)
+              : current.subscribeApiError,
+          subscribeApiResponse:
+            event.step === "AFTER fetch /api/push/subscribe"
+              ? `status ${String(event.data?.status ?? "unknown")}`
+              : current.subscribeApiResponse,
+          subscribeApiSuccess:
+            current.subscribeApiSuccess ||
+            event.step === "POST /api/push/subscribe success",
+          supportDetected:
+            current.supportDetected ||
+            event.step === "support checks passed",
+          lastStep: event.step,
         }));
         setPushDebugLog((current) =>
           [
@@ -260,13 +283,19 @@ export function PushNotificationSettings({
       <div className="mt-3 rounded-xl border border-emerald-300/15 bg-black/45 px-3 py-2 text-xs leading-5 text-neutral-300">
         <p className="font-semibold text-emerald-100">Push subscription debug</p>
         <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
-          <span>Permission: {permission}</span>
-          <span>Standalone: {support?.isStandalone ? "yes" : "no"}</span>
-          <span>Service worker ready: {pushDebug.serviceWorkerReady ? "yes" : "no"}</span>
-          <span>Subscription object: {pushDebug.subscriptionCreated ? "yes" : "no"}</span>
-          <span>Subscribe API called: {pushDebug.apiCalled ? "yes" : "no"}</span>
-          <span>Subscribe API success: {pushDebug.apiSuccess ? "yes" : "no"}</span>
+          <span>supportDetected: {pushDebug.supportDetected ? "yes" : "no"}</span>
+          <span>permissionGranted: {pushDebug.permissionGranted || isGranted ? "yes" : "no"}</span>
+          <span>serviceWorkerReady: {pushDebug.serviceWorkerReady ? "yes" : "no"}</span>
+          <span>pushSubscriptionCreated: {pushDebug.pushSubscriptionCreated ? "yes" : "no"}</span>
+          <span>subscribeApiCalled: {pushDebug.subscribeApiCalled ? "yes" : "no"}</span>
+          <span>subscribeApiSuccess: {pushDebug.subscribeApiSuccess ? "yes" : "no"}</span>
         </div>
+        <p className="mt-1 text-neutral-400">
+          subscribeApiResponse: {pushDebug.subscribeApiResponse || "none"}
+        </p>
+        <p className="mt-1 text-neutral-400">
+          subscribeApiError: {pushDebug.subscribeApiError || "none"}
+        </p>
         <p className="mt-1 text-neutral-400">Last step: {pushDebug.lastStep}</p>
         {pushDebugLog.length ? (
           <div className="mt-2 space-y-1 text-[11px] text-neutral-500">

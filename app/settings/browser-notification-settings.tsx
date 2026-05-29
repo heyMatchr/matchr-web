@@ -12,7 +12,7 @@ import {
 
 const statusLabel: Record<BrowserNotificationStatus, string> = {
   blocked: "Blocked",
-  enabled: "Enabled",
+  enabled: "Permission enabled",
   "not-enabled": "Not enabled",
   unsupported: "Unsupported",
 };
@@ -68,7 +68,7 @@ export function BrowserNotificationSettings({
         <div>
           <p className="font-black text-white">Browser notifications</p>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            Messages, calls, matches, and gifts can alert you while Matchr is open.
+            Local browser permission only. Use PWA push alerts below to save this device for background notifications.
           </p>
         </div>
         <span
@@ -90,7 +90,7 @@ export function BrowserNotificationSettings({
             disabled={status === "unsupported"}
             className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Enable notifications
+            Enable local permission
           </button>
         ) : (
           <>
@@ -99,7 +99,7 @@ export function BrowserNotificationSettings({
               onClick={sendTestNotification}
               className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
             >
-              Test notification
+              Test local notification
             </button>
             <button
               type="button"
