@@ -342,6 +342,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           >
             Users
           </Link>
+          <Link
+            href="/admin/revenue"
+            className="rounded-full border border-amber-200/40 px-4 py-2 text-sm font-medium text-amber-50"
+          >
+            Revenue
+          </Link>
         </div>
       </div>
 
