@@ -16,6 +16,7 @@ import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileOnlineStatus } from "./profile-online-status";
+import { CopyPublicIdButton } from "./copy-public-id-button";
 
 type ProfilePageProps = {
   params: Promise<{
@@ -346,9 +347,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   {profile.country ? `, ${profile.country}` : ""}
                 </p>
                 <p className="mt-1 text-neutral-400">{profile.occupation}</p>
-                <p className="mt-2 text-sm font-medium text-emerald-100">
-                  ID: {profile.public_id}
-                </p>
+                {profile.public_id ? (
+                  <CopyPublicIdButton publicId={profile.public_id} />
+                ) : null}
               </div>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">

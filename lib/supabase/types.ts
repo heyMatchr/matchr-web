@@ -65,6 +65,15 @@ export type AdminUserRow = {
   created_at: string;
 };
 
+export type AdminAuditLogRow = {
+  id: string;
+  admin_user_id: string;
+  action: string;
+  target_user_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type LikeRow = {
   id: string;
   liker_id: string;
@@ -586,6 +595,19 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      admin_audit_logs: {
+        Row: AdminAuditLogRow;
+        Insert: {
+          id?: string;
+          admin_user_id: string;
+          action: string;
+          target_user_id?: string | null;
+          metadata?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       likes: {
         Row: LikeRow;
         Insert: {
@@ -981,7 +1003,9 @@ export type Database = {
           status?: string;
           created_at?: string;
         };
-        Update: never;
+        Update: {
+          status?: string;
+        };
         Relationships: [];
       };
       passes: {
@@ -1151,7 +1175,9 @@ export type Database = {
           status?: string;
           created_at?: string;
         };
-        Update: never;
+        Update: {
+          status?: string;
+        };
         Relationships: [];
       };
       stories: {
