@@ -57,6 +57,19 @@ type PremiumSubscription = {
   user_id: string;
 };
 
+type PaymentOrder = {
+  amount: number | null;
+  amount_usd: number | null;
+  created_at: string;
+  currency: string;
+  gold_amount: number | null;
+  order_type: string;
+  paid_at: string | null;
+  provider: string;
+  status: string;
+  user_id: string;
+};
+
 type SeriesPoint = {
   date: string;
   label: string;
@@ -90,6 +103,7 @@ type RankedRow = {
 type RevenueDashboardClientProps = {
   gifts: GiftTransaction[];
   messageCharges: MessageCharge[];
+  paymentOrders: PaymentOrder[];
   premiumSubscriptions: PremiumSubscription[];
   profiles: ProfileSummary[];
   walletTransactions: WalletTransaction[];
@@ -632,6 +646,7 @@ function RankingTable({ emptyLabel, rows, title }: { emptyLabel: string; rows: R
 export function RevenueDashboardClient({
   gifts,
   messageCharges,
+  paymentOrders,
   premiumSubscriptions,
   profiles,
   walletTransactions,
@@ -652,6 +667,10 @@ export function RevenueDashboardClient({
     [gifts, range],
   );
   const activePremium = premiumSubscriptions.filter((row) => row.status === "active");
+  const activePaymentOrders = useMemo(
+    () => filterByRange(paymentOrders, range, (row) => row.created_at),
+    [paymentOrders, range],
+  );
   const currentGoldHeld = useMemo(
     () => wallets.reduce((total, row) => total + (row.gold_balance ?? 0), 0),
     [wallets],
@@ -666,6 +685,13 @@ export function RevenueDashboardClient({
     (total, row) => total + Number(row.price_usd ?? 0),
     0,
   );
+  const paidPaymentOrders = activePaymentOrders.filter((row) => row.status === "paid");
+  const pendingPaymentOrders = activePaymentOrders.filter((row) => row.status === "pending");
+  const failedPaymentOrders = activePaymentOrders.filter((row) => row.status === "failed");
+  const paymentConversionRate =
+    activePaymentOrders.length > 0
+      ? (paidPaymentOrders.length / activePaymentOrders.length) * 100
+      : 0;
 
   const kpis = useMemo(
     () => [
@@ -691,8 +717,16 @@ export function RevenueDashboardClient({
         previousValue: 0,
         subtitle: `${formatCurrency(projectedWeeklyPremiumRevenue)}/wk placeholder`,
       },
+      {
+        change: null,
+        color: "emerald" as Tone,
+        label: "Paid orders",
+        periodValue: paidPaymentOrders.length,
+        previousValue: pendingPaymentOrders.length,
+        subtitle: `${formatPercent(paymentConversionRate)} conversion`,
+      },
     ],
-    [activePremium.length, currentGoldHeld, gifts, issuedRows, messageCharges, projectedWeeklyPremiumRevenue, range, spentRows, starterRows],
+    [activePremium.length, currentGoldHeld, gifts, issuedRows, messageCharges, paidPaymentOrders.length, paymentConversionRate, pendingPaymentOrders.length, projectedWeeklyPremiumRevenue, range, spentRows, starterRows],
   );
 
   const series = useMemo(
@@ -703,8 +737,18 @@ export function RevenueDashboardClient({
       goldSpent: countByDay(spentRows, keys, (row) => row.created_at, (row) => Math.abs(row.gold_delta)),
       messageCharges: countByDay(messageCharges, keys, (row) => row.created_at, (row) => row.gold_cost),
       starter: countByDay(starterRows, keys, (row) => row.created_at, (row) => row.gold_delta),
+      paidOrders: countByDay(
+        paymentOrders.filter((row) => row.status === "paid"),
+        keys,
+        (row) => row.paid_at ?? row.created_at,
+      ),
+      pendingOrders: countByDay(
+        paymentOrders.filter((row) => row.status === "pending"),
+        keys,
+        (row) => row.created_at,
+      ),
     }),
-    [gifts, issuedRows, keys, messageCharges, spentRows, starterRows],
+    [gifts, issuedRows, keys, messageCharges, paymentOrders, spentRows, starterRows],
   );
 
   const mostSentGifts = useMemo(
@@ -819,6 +863,20 @@ export function RevenueDashboardClient({
               <p className="mt-1 text-2xl font-black text-white">{formatCurrency(projectedWeeklyPremiumRevenue * 4.33)}</p>
             </div>
           </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+              <p className="text-sm text-emerald-100">Paid orders</p>
+              <p className="mt-1 text-2xl font-black text-white">{formatNumber(paidPaymentOrders.length)}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
+              <p className="text-sm text-amber-100">Pending</p>
+              <p className="mt-1 text-2xl font-black text-white">{formatNumber(pendingPaymentOrders.length)}</p>
+            </div>
+            <div className="rounded-2xl border border-rose-300/20 bg-rose-300/10 p-4">
+              <p className="text-sm text-rose-100">Failed</p>
+              <p className="mt-1 text-2xl font-black text-white">{formatNumber(failedPaymentOrders.length)}</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -835,6 +893,10 @@ export function RevenueDashboardClient({
           { color: "rose", id: "messages", label: "Message Charges", points: series.messageCharges },
           { color: "amber", id: "starter", label: "Starter Gold", points: series.starter },
         ]} title="Charges & Starter Gold" />
+        <EconomyChart datasets={[
+          { color: "emerald", id: "paid-orders", label: "Paid Orders", points: series.paidOrders },
+          { color: "amber", id: "pending-orders", label: "Pending Orders", points: series.pendingOrders },
+        ]} title="Payment Orders" type="bar" />
         <EconomyChart datasets={[
           { color: "violet", id: "top-gifts", label: "Top Gifts", points: topGiftSeries },
         ]} title="Top Gifts" type="bar" />

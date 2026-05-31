@@ -360,14 +360,19 @@ export type WalletTransactionRow = {
 export type PaymentOrderRow = {
   id: string;
   user_id: string;
+  provider: string;
   order_type: string;
   status: string;
+  amount: number | null;
   amount_usd: number;
+  currency: string;
   gold_amount: number | null;
   plan_name: string | null;
   stripe_checkout_session_id: string | null;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+  paid_at: string | null;
 };
 
 export type PremiumPlanRow = {
@@ -1024,19 +1029,26 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          provider?: string;
           order_type: string;
           status?: string;
+          amount?: number | null;
           amount_usd: number;
+          currency?: string;
           gold_amount?: number | null;
           plan_name?: string | null;
           stripe_checkout_session_id?: string | null;
+          metadata?: Record<string, unknown>;
           created_at?: string;
           updated_at?: string;
+          paid_at?: string | null;
         };
         Update: {
           status?: string;
           stripe_checkout_session_id?: string | null;
+          metadata?: Record<string, unknown>;
           updated_at?: string;
+          paid_at?: string | null;
         };
         Relationships: [];
       };
@@ -1347,6 +1359,36 @@ export type Database = {
       };
       grant_starter_gold_once: {
         Args: Record<string, never>;
+        Returns: number;
+      };
+      create_payment_order: {
+        Args: {
+          selected_provider: string;
+          selected_order_type: string;
+          selected_amount: number;
+          selected_currency?: string;
+          selected_gold_amount?: number | null;
+          selected_metadata?: Record<string, unknown>;
+        };
+        Returns: PaymentOrderRow;
+      };
+      mark_payment_paid: {
+        Args: {
+          target_order_id: string;
+        };
+        Returns: PaymentOrderRow;
+      };
+      mark_payment_failed: {
+        Args: {
+          target_order_id: string;
+          failure_metadata?: Record<string, unknown>;
+        };
+        Returns: PaymentOrderRow;
+      };
+      credit_gold_after_payment: {
+        Args: {
+          target_order_id: string;
+        };
         Returns: number;
       };
       send_text_message_with_economy: {

@@ -42,7 +42,7 @@ export default async function WalletPage() {
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
-    supabase.from("payment_orders").select("order_type, status, amount_usd, gold_amount, plan_name, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
+    supabase.from("payment_orders").select("provider, order_type, status, amount, amount_usd, currency, gold_amount, metadata, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     getEconomyConfig<number>(supabase, "premium_weekly_price_usd"),
   ]);
 
@@ -53,6 +53,10 @@ export default async function WalletPage() {
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">Your Gold powers paid messages, gifts, and premium Matchr experiences.</p>
+          <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
+            Payment provider coming next. Purchases create pending orders now;
+            Gold is credited only after a provider confirms payment.
+          </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <form action={startGoldCheckout}>
               <input type="hidden" name="package" value="500" />
@@ -95,7 +99,12 @@ export default async function WalletPage() {
         </section>
 
         <History title="Wallet transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
-        <History title="Payment orders" rows={(paymentOrdersResult.data ?? []).map((row) => `${row.order_type} · ${row.status} · $${row.amount_usd}`)} />
+        <History title="Payment orders" rows={(paymentOrdersResult.data ?? []).map((row) => {
+          const amount = row.amount ?? row.amount_usd ?? 0;
+          const currency = row.currency ?? "USD";
+          const gold = row.gold_amount ? ` · ${row.gold_amount} Gold` : "";
+          return `${row.order_type} · ${row.status} · ${currency} ${amount}${gold} · ${row.provider}`;
+        })} />
         <History title="Incoming gifts" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0} gold value`)} />
         <History title="Outgoing gifts" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0} gold`)} />
         <History title="Message charges" rows={(messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost} gold`)} />

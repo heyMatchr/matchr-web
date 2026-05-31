@@ -3,13 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getEconomyConfig } from "@/lib/economy";
+import { createPaymentOrder } from "@/lib/payments";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-const goldPackages = new Map([
-  ["500", { amount: 500, price: 4.99 }],
-  ["1200", { amount: 1200, price: 9.99 }],
-  ["3000", { amount: 3000, price: 19.99 }],
-]);
 
 async function currentUser() {
   const supabase = await createSupabaseServerClient();
@@ -26,63 +21,52 @@ async function currentUser() {
 
 export async function startGoldCheckout(formData: FormData) {
   const packageKey = String(formData.get("package") ?? "");
-  const pack = goldPackages.get(packageKey);
-
-  if (!pack) {
-    return;
-  }
-
-  const { supabase, user } = await currentUser();
-  const stripeReady = Boolean(
-    process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-  );
-  const { data: order, error } = await supabase
-    .from("payment_orders")
-    .insert({
-      amount_usd: pack.price,
-      gold_amount: pack.amount,
-      order_type: "gold",
-      status: stripeReady ? "pending" : "checkout_placeholder",
-      user_id: user.id,
-    })
-    .select("id")
-    .single();
+  const { supabase } = await currentUser();
+  const { data: pack, error } = await supabase
+    .from("gold_packages")
+    .select("id, name, gold_amount, price_usd")
+    .eq("gold_amount", Number(packageKey))
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);
   }
 
-  await supabase.from("gold_purchases").insert({
-    gold_amount: pack.amount,
-    payment_order_id: order.id,
-    price_usd: pack.price,
-    status: stripeReady ? "pending" : "checkout_placeholder",
-    user_id: user.id,
+  if (!pack) {
+    return;
+  }
+
+  await createPaymentOrder(supabase, {
+    amount: pack.price_usd,
+    goldAmount: pack.gold_amount,
+    metadata: {
+      package_id: pack.id,
+      package_name: pack.name,
+      provider_message: "Payment provider coming next",
+    },
+    orderType: "gold_purchase",
+    provider: "manual",
   });
 
   revalidatePath("/wallet");
 }
 
 export async function startPremiumCheckout() {
-  const { supabase, user } = await currentUser();
+  const { supabase } = await currentUser();
   const premiumWeeklyPrice = await getEconomyConfig<number>(
     supabase,
     "premium_weekly_price_usd",
   );
-  const stripeReady = Boolean(
-    process.env.STRIPE_SECRET_KEY && process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-  );
-  const { error } = await supabase.from("payment_orders").insert({
-    amount_usd: premiumWeeklyPrice,
-    order_type: "premium",
-    plan_name: "Matchr Premium",
-    status: stripeReady ? "pending" : "checkout_placeholder",
-    user_id: user.id,
-  });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  await createPaymentOrder(supabase, {
+    amount: premiumWeeklyPrice,
+    metadata: {
+      plan_name: "Matchr Premium",
+      provider_message: "Payment provider coming next",
+    },
+    orderType: "premium_subscription",
+    provider: "manual",
+  });
 
   revalidatePath("/wallet");
 }

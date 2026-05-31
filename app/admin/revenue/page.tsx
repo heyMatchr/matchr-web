@@ -23,6 +23,7 @@ export default async function AdminRevenuePage() {
     giftsResult,
     messageChargesResult,
     premiumResult,
+    paymentOrdersResult,
   ] = await Promise.all([
     supabase.from("user_wallets").select("user_id, gold_balance").limit(50000),
     supabase
@@ -45,6 +46,11 @@ export default async function AdminRevenuePage() {
       .select("user_id, plan_name, status, price_usd, interval, created_at")
       .order("created_at", { ascending: false })
       .limit(50000),
+    supabase
+      .from("payment_orders")
+      .select("user_id, provider, order_type, status, amount, amount_usd, currency, gold_amount, created_at, paid_at")
+      .order("created_at", { ascending: false })
+      .limit(50000),
   ]);
 
   const firstError = [
@@ -53,6 +59,7 @@ export default async function AdminRevenuePage() {
     giftsResult,
     messageChargesResult,
     premiumResult,
+    paymentOrdersResult,
   ].find((result) => result.error)?.error;
 
   if (firstError) {
@@ -64,6 +71,7 @@ export default async function AdminRevenuePage() {
       ...(giftsResult.data ?? []).flatMap((row) => [row.sender_id, row.receiver_id]),
       ...(walletTransactionsResult.data ?? []).map((row) => row.user_id),
       ...(messageChargesResult.data ?? []).map((row) => row.sender_id),
+      ...(paymentOrdersResult.data ?? []).map((row) => row.user_id),
     ]),
   ].filter((id): id is string => Boolean(id));
   const { data: profiles, error: profileError } = profileIds.length
@@ -87,6 +95,7 @@ export default async function AdminRevenuePage() {
       <RevenueDashboardClient
         gifts={giftsResult.data ?? []}
         messageCharges={messageChargesResult.data ?? []}
+        paymentOrders={paymentOrdersResult.data ?? []}
         premiumSubscriptions={premiumResult.data ?? []}
         profiles={profiles ?? []}
         walletTransactions={walletTransactionsResult.data ?? []}
