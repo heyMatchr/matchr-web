@@ -319,10 +319,26 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       profileId={currentProfile.public_id ?? currentProfile.id}
       title="Admin"
     >
-      <div className="mt-6 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-5 text-sm leading-6 text-emerald-50">
-        Admin access is restricted to users listed in
-        <span className="font-mono"> public.admin_users</span>. Actions are
-        recorded in <span className="font-mono">public.admin_audit_logs</span>.
+      <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-5 text-sm leading-6 text-emerald-50 md:flex-row md:items-center md:justify-between">
+        <p>
+          Admin access is restricted to users listed in
+          <span className="font-mono"> public.admin_users</span>. Actions are
+          recorded in <span className="font-mono">public.admin_audit_logs</span>.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/analytics"
+            className="rounded-full bg-emerald-200 px-4 py-2 text-sm font-black text-black"
+          >
+            Analytics
+          </Link>
+          <Link
+            href="/admin/users"
+            className="rounded-full border border-emerald-200/40 px-4 py-2 text-sm font-medium text-emerald-50"
+          >
+            Users
+          </Link>
+        </div>
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
