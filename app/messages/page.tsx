@@ -196,7 +196,7 @@ export default async function MessagesPage() {
     <AppShell
       currentUserId={user.id}
       maxWidth="max-w-4xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Messages"
     >
         <MessagesClient

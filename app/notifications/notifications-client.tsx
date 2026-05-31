@@ -3,10 +3,12 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { getProfileHref } from "@/lib/profile-public-id";
 import type { Database, NotificationRow } from "@/lib/supabase/types";
 
 type NotificationActor = {
   id: string;
+  public_id: string | null;
   avatar_url: string | null;
   display_name: string;
 };
@@ -73,7 +75,7 @@ export function NotificationsClient({
 
       const { data: actor } = await supabase
         .from("profiles")
-        .select("id, display_name, avatar_url")
+        .select("id, public_id, display_name, avatar_url")
         .eq("id", notification.actor_id)
         .maybeSingle();
 
@@ -185,7 +187,7 @@ export function NotificationsClient({
                 <Link
                   href={
                     notification.actor
-                      ? `/profile/${notification.actor.id}`
+                      ? getProfileHref(notification.actor)
                       : "/notifications"
                   }
                   className="flex min-w-0 flex-1 items-start gap-4"

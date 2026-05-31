@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { FollowButton } from "@/app/social/follow-button";
+import { getProfileHref } from "@/lib/profile-public-id";
 
 export type SocialListProfile = {
   id: string;
+  public_id: string | null;
   avatar_url: string | null;
   display_name: string;
   age: number;
@@ -37,7 +39,7 @@ export function SocialList({
           className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-black/50 p-3 transition-colors hover:border-neutral-700"
         >
           <Link
-            href={`/profile/${profile.id}`}
+            href={getProfileHref(profile)}
             className="flex min-w-0 flex-1 items-center gap-3"
           >
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-neutral-950">

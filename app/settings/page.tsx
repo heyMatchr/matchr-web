@@ -9,7 +9,6 @@ import {
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
-import { BrowserNotificationSettings } from "./browser-notification-settings";
 import { InstallPromptCard } from "./install-prompt-card";
 import { PushNotificationSettings } from "./push-notification-settings";
 
@@ -57,7 +56,7 @@ export default async function SettingsPage() {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -98,7 +97,7 @@ export default async function SettingsPage() {
   const profilesById = new Map(relatedProfiles?.map((profile) => [profile.id, profile]));
 
   return (
-    <AppShell currentUserId={user.id} profileId={currentProfile.id} title="Settings">
+    <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Settings">
       <form action={saveSettings} className="mt-6 grid gap-5 md:mt-8">
         <SettingsSection title="Privacy">
           <Toggle defaultChecked={settings.private_profile} name="private_profile" title="Private profile" />
@@ -142,7 +141,6 @@ export default async function SettingsPage() {
 
         <SettingsSection title="Notifications">
           <InstallPromptCard />
-          <BrowserNotificationSettings />
           <PushNotificationSettings
             anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
             currentUserId={user.id}

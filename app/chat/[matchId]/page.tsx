@@ -34,7 +34,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const { data: currentProfile } = await timeAsync("[Perf] Chat profile", () =>
     supabase
       .from("profiles")
-      .select("id, gender, gender_identity, onboarding_completed")
+      .select("id, public_id, gender, gender_identity, onboarding_completed")
       .eq("id", user.id)
       .maybeSingle(),
   );
@@ -85,7 +85,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
       Promise.all([
         supabase
           .from("profiles")
-          .select("display_name, avatar_url, gender, gender_identity")
+          .select("public_id, display_name, avatar_url, gender, gender_identity")
           .eq("id", receiverId)
           .maybeSingle(),
         supabase
@@ -133,7 +133,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
       currentUserId={user.id}
       hideHeader
       maxWidth="max-w-4xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title={receiverProfile?.display_name ?? "Chat"}
     >
         <ChatClient
@@ -171,6 +171,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           receiverGenderIdentity={receiverProfile?.gender_identity ?? null}
           receiverId={receiverId}
           receiverName={receiverProfile?.display_name ?? "Chat"}
+          receiverPublicId={receiverProfile?.public_id ?? null}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
         />
     </AppShell>

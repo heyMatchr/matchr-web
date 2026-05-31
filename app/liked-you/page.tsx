@@ -14,7 +14,7 @@ export default async function LikedYouPage() {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -23,7 +23,7 @@ export default async function LikedYouPage() {
   }
 
   return (
-    <AppShell currentUserId={user.id} profileId={currentProfile.id} title="Who liked you">
+    <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Who liked you">
       <div className="mt-8 rounded-3xl border border-neutral-800 bg-black/50 p-8 text-center">
         <p className="text-2xl font-black">Attraction insights are warming up</p>
         <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-neutral-400">

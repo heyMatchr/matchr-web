@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { getProfileHref } from "@/lib/profile-public-id";
 import { likeProfile, passProfile } from "./actions";
 
 export type DiscoverProfile = {
@@ -24,6 +25,7 @@ export type DiscoverProfile = {
   location: string;
   momentCount: number;
   pronouns: string | null;
+  public_id: string | null;
   relationship_intent: string;
   sexual_orientation: string | null;
   trendingScore: number;
@@ -47,6 +49,7 @@ export function DiscoverClient({
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState("compatible");
+  const [searchText, setSearchText] = useState("");
   const { isUserOnline } = useGlobalPresence();
   const [filters, setFilters] = useState({
     acceptingDating: false,
@@ -60,8 +63,16 @@ export function DiscoverClient({
   });
   const visibleProfiles = useMemo(() => {
     const dismissed = new Set(dismissedIds);
+    const normalizedSearch = searchText.trim().toLowerCase();
     const filtered = profiles.filter((profile) => {
       if (dismissed.has(profile.id)) return false;
+      if (
+        normalizedSearch &&
+        !profile.display_name.toLowerCase().includes(normalizedSearch) &&
+        !profile.public_id?.toLowerCase().includes(normalizedSearch)
+      ) {
+        return false;
+      }
       if (profile.age < filters.minAge || profile.age > filters.maxAge) return false;
       if (filters.onlineNow && !(profile.isOnline || isUserOnline(profile.id))) return false;
       if (filters.hasStories && !profile.hasStories) return false;
@@ -83,7 +94,7 @@ export function DiscoverClient({
       }
       return b.compatibility - a.compatibility;
     });
-  }, [dismissedIds, filters, isUserOnline, profiles, sortBy]);
+  }, [dismissedIds, filters, isUserOnline, profiles, searchText, sortBy]);
   const liveRecentlyActive = useMemo(
     () =>
       profiles
@@ -118,6 +129,16 @@ export function DiscoverClient({
           Filters
         </button>
       </div>
+      <label className="mt-4 block">
+        <span className="sr-only">Search by name or Matchr ID</span>
+        <input
+          type="search"
+          value={searchText}
+          onChange={(event) => setSearchText(event.target.value)}
+          placeholder="Search name or ID"
+          className="w-full rounded-2xl border border-neutral-800 bg-black/70 px-4 py-3 text-[15px] text-white placeholder:text-neutral-500 focus:border-emerald-300/50 focus:outline-none"
+        />
+      </label>
 
       <ProfileRail title="Recently Active" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />
       <ProfileRail title="Trending Profiles" profiles={trending} />
@@ -241,7 +262,7 @@ const ProfileRail = memo(function ProfileRail({ profiles, title }: { profiles: D
         {profiles.map((profile) => (
           <Link
             key={`${title}-${profile.id}`}
-            href={`/profile/${profile.id}`}
+            href={getProfileHref(profile)}
             className="w-36 shrink-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3"
           >
             <div className={`relative aspect-square overflow-hidden rounded-xl bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
@@ -359,7 +380,7 @@ const SwipeCard = memo(function SwipeCard({
         ) : null}
         <div className="mt-5 grid grid-cols-3 gap-2">
           <button disabled={disabled} onClick={onPass} className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300">Pass</button>
-          <Link href={`/profile/${profile.id}`} className="rounded-full border border-neutral-700 px-3 py-2 text-center text-sm text-neutral-300">View</Link>
+          <Link href={getProfileHref(profile)} className="rounded-full border border-neutral-700 px-3 py-2 text-center text-sm text-neutral-300">View</Link>
           <button disabled={disabled} onClick={onLike} className="rounded-full bg-white px-3 py-2 text-sm font-medium text-black">Like</button>
         </div>
       </div>

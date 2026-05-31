@@ -26,6 +26,7 @@ import {
 } from "@/lib/conversation-assist";
 import { getGiftOption, type GiftOption } from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
+import { getProfileHref } from "@/lib/profile-public-id";
 import {
   createMediaModerationPlaceholder,
   enforceTextSafety,
@@ -72,6 +73,7 @@ type ChatClientProps = {
   receiverGenderIdentity: string | null;
   receiverId: string;
   receiverName: string;
+  receiverPublicId: string | null;
   supabaseUrl: string;
 };
 
@@ -113,6 +115,7 @@ export function ChatClient({
   receiverGenderIdentity,
   receiverId,
   receiverName,
+  receiverPublicId,
   supabaseUrl,
 }: ChatClientProps) {
   const [messages, setMessages] = useState(initialMessages);
@@ -1124,7 +1127,7 @@ export function ChatClient({
     >
       <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
         <Link
-          href={`/profile/${receiverId}`}
+          href={getProfileHref({ id: receiverId, public_id: receiverPublicId })}
           className="flex min-w-0 flex-1 items-center gap-2 rounded-full pr-1 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:pr-2"
         >
           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-10 sm:w-10">

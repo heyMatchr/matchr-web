@@ -56,7 +56,7 @@ export default async function MomentsPage() {
       userIds.length
         ? supabase
             .from("profiles")
-            .select("id, display_name, avatar_url, age, location")
+            .select("id, public_id, display_name, avatar_url, age, location")
             .in("id", userIds)
         : Promise.resolve({ data: [] }),
       momentIds.length
@@ -129,7 +129,7 @@ export default async function MomentsPage() {
     <AppShell
       currentUserId={user.id}
       maxWidth="max-w-3xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Moments"
     >
       <MomentsClient

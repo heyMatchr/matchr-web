@@ -25,7 +25,7 @@ export default async function DebugCallRoomPage({ params }: DebugCallPageProps) 
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -52,7 +52,7 @@ export default async function DebugCallRoomPage({ params }: DebugCallPageProps) 
     .maybeSingle();
 
   return (
-    <AppShell currentUserId={user.id} hideHeader hideNav maxWidth="max-w-none" profileId={currentProfile.id} title="Debug Call">
+    <AppShell currentUserId={user.id} hideHeader hideNav maxWidth="max-w-none" profileId={currentProfile.public_id ?? currentProfile.id} title="Debug Call">
       <LiveKitCallRoom
         anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
         currentUserId={user.id}

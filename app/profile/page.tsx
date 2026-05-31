@@ -11,5 +11,11 @@ export default async function ProfileIndexPage() {
     redirect("/login?next=/profile");
   }
 
-  redirect(`/profile/${user.id}`);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("public_id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  redirect(`/profile/${profile?.public_id ?? user.id}`);
 }

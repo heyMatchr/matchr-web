@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { SocialList, type SocialListProfile } from "../social-list";
 
@@ -22,7 +23,7 @@ export default async function FollowingPage({ params }: FollowingPageProps) {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -30,17 +31,30 @@ export default async function FollowingPage({ params }: FollowingPageProps) {
     redirect("/onboarding");
   }
 
+  const { data: targetProfile } = await (
+    isMatchrPublicId(id)
+      ? supabase
+          .from("profiles")
+          .select("id")
+          .eq("public_id", normalizePublicId(id))
+      : supabase.from("profiles").select("id").eq("id", id)
+  ).maybeSingle();
+
+  if (!targetProfile) {
+    redirect("/discover");
+  }
+
   const { data: follows } = await supabase
     .from("follows")
     .select("following_id")
-    .eq("follower_id", id)
+    .eq("follower_id", targetProfile.id)
     .order("created_at", { ascending: false });
   const followingIds = follows?.map((follow) => follow.following_id) ?? [];
 
   const { data: profiles } = followingIds.length
     ? await supabase
         .from("profiles")
-        .select("id, display_name, age, location, avatar_url")
+        .select("id, public_id, display_name, age, location, avatar_url")
         .in("id", followingIds)
     : { data: [] };
 
@@ -69,7 +83,7 @@ export default async function FollowingPage({ params }: FollowingPageProps) {
     <AppShell
       currentUserId={user.id}
       maxWidth="max-w-3xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Following"
     >
       <SocialList

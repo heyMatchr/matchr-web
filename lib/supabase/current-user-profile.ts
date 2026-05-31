@@ -17,7 +17,7 @@ export async function getCurrentUserProfile(
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 

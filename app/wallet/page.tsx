@@ -16,7 +16,7 @@ export default async function WalletPage() {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -47,7 +47,7 @@ export default async function WalletPage() {
   ]);
 
   return (
-    <AppShell currentUserId={user.id} profileId={currentProfile.id} title="Wallet">
+    <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
       <div className="mt-8 grid gap-5">
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>

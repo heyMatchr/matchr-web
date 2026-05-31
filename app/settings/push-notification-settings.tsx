@@ -40,6 +40,13 @@ export function PushNotificationSettings({
     lastStep: "not started",
   });
   const [pushDebugLog, setPushDebugLog] = useState<string[]>([]);
+  const [forceSaveDebug, setForceSaveDebug] = useState({
+    apiCalled: false,
+    errorText: "",
+    responseBody: "",
+    responseStatus: "",
+  });
+  const [showDebugTools, setShowDebugTools] = useState(false);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -176,6 +183,82 @@ export function PushNotificationSettings({
     }
   }
 
+  async function forceSaveTestSubscription() {
+    setIsBusy(true);
+    setForceSaveDebug({
+      apiCalled: true,
+      errorText: "",
+      responseBody: "",
+      responseStatus: "calling",
+    });
+    setMessage("Calling /api/push/subscribe directly...");
+    console.info("[PushSettings] Force Save Test Subscription clicked", {
+      currentUserId,
+    });
+
+    try {
+      const accessToken = await getAccessToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+
+      if (accessToken) {
+        headers.Authorization = `Bearer ${accessToken}`;
+      }
+
+      console.info("[PushSettings] force save BEFORE fetch /api/push/subscribe", {
+        hasBearer: Boolean(accessToken),
+      });
+
+      const response = await fetch("/api/push/subscribe", {
+        body: JSON.stringify({
+          auth: "force-save-test-auth",
+          browser: "debug",
+          device: "force-save-test",
+          endpoint: `https://matchr.local/force-save-test/${currentUserId}/${Date.now()}`,
+          p256dh: "force-save-test-p256dh",
+          platform: "debug",
+          userId: currentUserId,
+        }),
+        credentials: "include",
+        headers,
+        method: "POST",
+      });
+      const responseText = await response.text();
+
+      console.info("[PushSettings] force save AFTER fetch /api/push/subscribe", {
+        body: responseText,
+        ok: response.ok,
+        status: response.status,
+      });
+
+      setForceSaveDebug({
+        apiCalled: true,
+        errorText: response.ok ? "" : responseText,
+        responseBody: responseText,
+        responseStatus: `${response.status} ${response.statusText}`,
+      });
+      setMessage(
+        response.ok
+          ? "Force save reached /api/push/subscribe. Check push_subscriptions now."
+          : "Force save reached the API, but the API rejected it.",
+      );
+      await refreshSubscriptionStatus();
+    } catch (error) {
+      const errorText = error instanceof Error ? error.message : String(error);
+      console.error("[PushSettings] force save fetch failed", error);
+      setForceSaveDebug({
+        apiCalled: true,
+        errorText,
+        responseBody: "",
+        responseStatus: "fetch failed",
+      });
+      setMessage("Force save could not reach /api/push/subscribe.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function disablePush() {
     setIsBusy(true);
     const accessToken = await getAccessToken();
@@ -201,6 +284,21 @@ export function PushNotificationSettings({
 
   const permission = support?.permission ?? "unknown";
   const isGranted = permission === "granted";
+  const backgroundPushUnavailable = Boolean(support && !support.canInstallPush);
+  const backgroundPushMessage =
+    support?.reason === "push-unsupported"
+      ? "Background push is not supported on this device/browser."
+      : support?.reason === "missing-vapid-key"
+        ? "Background push is not configured yet."
+        : support?.reason === "notifications-unsupported"
+          ? "Notifications are not supported on this device/browser."
+          : support?.reason === "service-worker-unsupported"
+            ? "Background push needs service worker support, which is unavailable here."
+            : support?.reason === "insecure-context"
+              ? "Background push requires a secure HTTPS context."
+              : "Background push is not available in this browser session.";
+  const showPushActions = !backgroundPushUnavailable;
+  const isDevelopment = process.env.NODE_ENV !== "production";
   const subscriptionStatus =
     activeSubscriptionCount === null
       ? "Checking subscription..."
@@ -227,6 +325,11 @@ export function PushNotificationSettings({
         <p className="text-neutral-400">
           iPhone support depends on Safari Web Push from an installed Home Screen PWA. If your browser cannot subscribe, in-app toasts and badges still work.
         </p>
+        {backgroundPushUnavailable ? (
+          <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 font-medium text-amber-100">
+            {backgroundPushMessage} Matchr will still use in-app notification toasts and unread badges while you are inside the app.
+          </p>
+        ) : null}
         <p className="font-medium text-emerald-100">
           {subscriptionStatus}
           {activeSubscriptionCount !== null ? ` (${activeSubscriptionCount} active)` : ""}
@@ -234,15 +337,45 @@ export function PushNotificationSettings({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => void enablePush()}
-          disabled={isBusy}
-          className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isBusy ? "Working..." : "Enable push alerts"}
-        </button>
-        {isGranted ? (
+        {showPushActions ? (
+          <button
+            type="button"
+            onClick={() => void enablePush()}
+            disabled={isBusy}
+            className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isBusy ? "Working..." : "Enable push alerts"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-500"
+          >
+            Background push unavailable
+          </button>
+        )}
+        {isDevelopment ? (
+          <button
+            type="button"
+            onClick={() => setShowDebugTools((current) => !current)}
+            disabled={isBusy}
+            className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-100 transition-colors hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {showDebugTools ? "Hide push debug tools" : "Show push debug tools"}
+          </button>
+        ) : null}
+        {showDebugTools && isDevelopment ? (
+          <button
+            type="button"
+            onClick={() => void forceSaveTestSubscription()}
+            disabled={isBusy}
+            className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-100 transition-colors hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Force Save Test Subscription
+          </button>
+        ) : null}
+        {isGranted && showPushActions ? (
           <button
             type="button"
             onClick={() => void sendTestPush()}
@@ -252,7 +385,7 @@ export function PushNotificationSettings({
             Test push
           </button>
         ) : null}
-        {isGranted ? (
+        {isGranted && showPushActions ? (
           <button
             type="button"
             onClick={() => void disablePush()}
@@ -272,6 +405,8 @@ export function PushNotificationSettings({
         <span>Active subscriptions: {activeSubscriptionCount ?? "unknown"}</span>
         <br />
         <span>Service worker: {support?.serviceWorkerSupported ? "yes" : "no"}</span>
+        <span className="mx-2 text-neutral-700">/</span>
+        <span>PushManager: {support?.pushSupported ? "yes" : "no"}</span>
         <span className="mx-2 text-neutral-700">/</span>
         <span>Secure: {support?.isSecureContext ? "yes" : "no"}</span>
         <span className="mx-2 text-neutral-700">/</span>
@@ -305,6 +440,22 @@ export function PushNotificationSettings({
           </div>
         ) : null}
       </div>
+
+      {showDebugTools && isDevelopment ? (
+      <div className="mt-3 rounded-xl border border-amber-300/20 bg-black/45 px-3 py-2 text-xs leading-5 text-neutral-300">
+        <p className="font-semibold text-amber-100">Force save debug</p>
+        <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+          <span>apiCalled: {forceSaveDebug.apiCalled ? "yes" : "no"}</span>
+          <span>response status: {forceSaveDebug.responseStatus || "none"}</span>
+        </div>
+        <p className="mt-1 break-words text-neutral-400">
+          response body: {forceSaveDebug.responseBody || "none"}
+        </p>
+        <p className="mt-1 break-words text-neutral-400">
+          error text: {forceSaveDebug.errorText || "none"}
+        </p>
+      </div>
+      ) : null}
     </div>
   );
 }

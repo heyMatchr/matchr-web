@@ -17,6 +17,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import type { GiftOption } from "@/lib/gifts";
 import { compressImageFile } from "@/lib/client-media";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
+import { getProfileHref } from "@/lib/profile-public-id";
 import type { Database } from "@/lib/supabase/types";
 import { ReportButton } from "@/app/safety/report-button";
 import {
@@ -33,6 +34,7 @@ import {
 type MomentProfile = {
   age: number;
   id: string;
+  public_id: string | null;
   avatar_url: string | null;
   display_name: string;
   location: string;
@@ -188,7 +190,7 @@ export function MomentsClient({
             >
               <div className="flex min-w-0 items-center gap-3 p-4">
                 <Link
-                  href={`/profile/${moment.profile.id}`}
+                  href={getProfileHref(moment.profile)}
                   className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-neutral-950"
                 >
                   {moment.profile.avatar_url ? (
@@ -206,7 +208,7 @@ export function MomentsClient({
                 </Link>
                 <div className="min-w-0 flex-1">
                   <Link
-                    href={`/profile/${moment.profile.id}`}
+                    href={getProfileHref(moment.profile)}
                     className="block truncate font-black text-white"
                   >
                     {moment.profile.display_name}
@@ -468,6 +470,7 @@ function CommentsSheet({
     created_at: string;
     display_name: string;
     id: string;
+    public_id: string | null;
     user_id: string;
   };
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -518,7 +521,7 @@ function CommentsSheet({
       const { data: profiles } = userIds.length
         ? await supabase
             .from("profiles")
-            .select("id, display_name, avatar_url")
+            .select("id, public_id, display_name, avatar_url")
             .in("id", userIds)
         : { data: [] };
       const profilesById = new Map(profiles?.map((profile) => [profile.id, profile]));
@@ -536,6 +539,7 @@ function CommentsSheet({
             created_at: comment.created_at,
             display_name: profile?.display_name ?? "Someone",
             id: comment.id,
+            public_id: profile?.public_id ?? null,
             user_id: comment.user_id,
           };
         }) ?? [],
@@ -597,7 +601,7 @@ function CommentsSheet({
         </div>
         <div className="mt-3 flex shrink-0 items-center gap-3 rounded-2xl border border-neutral-900 bg-white/[0.03] p-3">
           <Link
-            href={`/profile/${moment.profile.id}`}
+            href={getProfileHref(moment.profile)}
             className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950"
           >
             {moment.profile.avatar_url ? (
@@ -649,7 +653,7 @@ function CommentsSheet({
             comments.map((comment) => (
               <div key={comment.id} className="flex gap-3 rounded-2xl bg-white/[0.03] p-3">
                 <Link
-                  href={`/profile/${comment.user_id}`}
+                  href={getProfileHref({ id: comment.user_id, public_id: comment.public_id })}
                   className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-900"
                 >
                   {comment.avatar_url ? (
@@ -665,7 +669,7 @@ function CommentsSheet({
                 </Link>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Link href={`/profile/${comment.user_id}`} className="text-sm font-black">
+                    <Link href={getProfileHref({ id: comment.user_id, public_id: comment.public_id })} className="text-sm font-black">
                       {comment.display_name}
                     </Link>
                     <span className="text-xs text-neutral-600">
@@ -760,7 +764,7 @@ function LikesSheet({
       const { data: profiles } = userIds.length
         ? await supabase
             .from("profiles")
-            .select("id, display_name, avatar_url, age, location")
+            .select("id, public_id, display_name, avatar_url, age, location")
             .in("id", userIds)
         : { data: [] };
 
@@ -797,7 +801,7 @@ function LikesSheet({
             likers.map((profile) => (
               <Link
                 key={profile.id}
-                href={`/profile/${profile.id}`}
+                href={getProfileHref(profile)}
                 className="flex items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3 transition-colors hover:border-emerald-300/30"
               >
                 <span className="h-11 w-11 overflow-hidden rounded-full bg-neutral-900">

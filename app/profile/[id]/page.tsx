@@ -10,6 +10,7 @@ import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+import { getProfileHref, isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
@@ -32,38 +33,42 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     "[Perf] Profile auth/profile",
     () => getCurrentUserProfile(supabase, `/profile/${id}`),
   );
-  const [blockResult, profileResult] = await timeAsync(
-    "[Perf] Profile block/profile",
+  const profileQuery = supabase
+    .from("profiles")
+    .select(
+      "id, public_id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
+    )
+    .eq("onboarding_completed", true);
+  const profileResult = await timeAsync(
+    "[Perf] Profile lookup",
     () =>
-      Promise.all([
-        id !== user.id
-          ? supabase
-              .from("blocks")
-              .select("id")
-              .or(
-                `and(blocker_id.eq.${user.id},blocked_user_id.eq.${id}),and(blocker_id.eq.${id},blocked_user_id.eq.${user.id})`,
-              )
-              .maybeSingle()
-          : Promise.resolve({ data: null }),
-        supabase
-          .from("profiles")
-          .select(
-            "id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
-          )
-          .eq("id", id)
-          .eq("onboarding_completed", true)
-          .maybeSingle(),
-      ]),
+      (isMatchrPublicId(id)
+        ? profileQuery.eq("public_id", normalizePublicId(id))
+        : profileQuery.eq("id", id)
+      ).maybeSingle(),
   );
-
-  if (blockResult.data) {
-    redirect("/discover");
-  }
 
   const { data: profile } = profileResult;
 
   if (!profile) {
     notFound();
+  }
+
+  const { data: block } =
+    profile.id !== user.id
+      ? await timeAsync("[Perf] Profile block guard", () =>
+          supabase
+            .from("blocks")
+            .select("id")
+            .or(
+              `and(blocker_id.eq.${user.id},blocked_user_id.eq.${profile.id}),and(blocker_id.eq.${profile.id},blocked_user_id.eq.${user.id})`,
+            )
+            .maybeSingle(),
+        )
+      : { data: null };
+
+  if (block) {
+    redirect("/discover");
   }
 
   if (profile.id !== user.id) {
@@ -236,7 +241,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         socialProfileIds.length
           ? supabase
               .from("profiles")
-              .select("id, display_name, age, avatar_url, location")
+              .select("id, public_id, display_name, age, avatar_url, location")
               .in("id", socialProfileIds)
           : Promise.resolve({ data: [] }),
         socialProfileIds.length
@@ -297,7 +302,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   return (
     <AppShell
       currentUserId={user.id}
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Profile"
     >
         <div className="mt-6 grid overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-10 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
@@ -341,6 +346,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   {profile.country ? `, ${profile.country}` : ""}
                 </p>
                 <p className="mt-1 text-neutral-400">{profile.occupation}</p>
+                <p className="mt-2 text-sm font-medium text-emerald-100">
+                  ID: {profile.public_id}
+                </p>
               </div>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -415,14 +423,14 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
             <div className="mt-6 grid grid-cols-3 gap-2">
               <Link
-                href={`/profile/${profile.id}/followers`}
+                href={`${getProfileHref(profile)}/followers`}
                 className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 transition-colors hover:border-neutral-700"
               >
                 <p className="text-xl font-black">{followersResult.count ?? 0}</p>
                 <p className="mt-1 text-xs text-neutral-500">Followers</p>
               </Link>
               <Link
-                href={`/profile/${profile.id}/following`}
+                href={`${getProfileHref(profile)}/following`}
                 className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 transition-colors hover:border-neutral-700"
               >
                 <p className="text-xl font-black">{followingResult.count ?? 0}</p>
@@ -701,7 +709,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       className="flex items-center gap-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-3 transition-colors hover:border-neutral-700"
                     >
                       <Link
-                        href={`/profile/${visitor?.id}`}
+                        href={visitor ? getProfileHref(visitor) : "#"}
                         className="flex min-w-0 flex-1 items-center gap-3"
                       >
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-950">
@@ -770,7 +778,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     followers.map((follower) => (
                       <Link
                         key={follower?.id}
-                        href={`/profile/${follower?.id}`}
+                        href={follower ? getProfileHref(follower) : "#"}
                         className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 text-sm text-neutral-200 transition-colors hover:border-neutral-700"
                       >
                         {follower?.display_name}
@@ -790,7 +798,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     following.map((followedProfile) => (
                       <Link
                         key={followedProfile?.id}
-                        href={`/profile/${followedProfile?.id}`}
+                        href={followedProfile ? getProfileHref(followedProfile) : "#"}
                         className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 text-sm text-neutral-200 transition-colors hover:border-neutral-700"
                       >
                         {followedProfile?.display_name}

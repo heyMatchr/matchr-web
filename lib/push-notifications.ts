@@ -9,6 +9,7 @@ export type PushSupportState = {
   isStandalone: boolean;
   permission: NotificationPermission | "unsupported";
   platform: string;
+  pushSupported: boolean;
   reason?: string;
   serviceWorkerSupported: boolean;
   vapidPublicKeyExists: boolean;
@@ -65,6 +66,7 @@ export function getPushSupportState(): PushSupportState {
       isStandalone: false,
       permission: "unsupported",
       platform: "Unknown",
+      pushSupported: false,
       reason: "server",
       serviceWorkerSupported: false,
       vapidPublicKeyExists: false,
@@ -100,6 +102,7 @@ export function getPushSupportState(): PushSupportState {
     isStandalone,
     permission: notificationSupported ? Notification.permission : "unsupported",
     platform: detectPlatform(userAgent),
+    pushSupported,
     reason,
     serviceWorkerSupported,
     vapidPublicKeyExists,

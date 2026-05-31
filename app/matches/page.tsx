@@ -23,7 +23,7 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -100,7 +100,7 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
   return (
     <AppShell
       currentUserId={user.id}
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Matches"
     >
         <MatchesClient

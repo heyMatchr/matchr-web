@@ -16,7 +16,7 @@ export default async function NotificationsPage() {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -45,7 +45,7 @@ export default async function NotificationsPage() {
   const { data: actors } = actorIds.length
     ? await supabase
         .from("profiles")
-        .select("id, display_name, avatar_url")
+        .select("id, public_id, display_name, avatar_url")
         .in("id", actorIds)
     : { data: [] };
   const actorsById = new Map(
@@ -63,7 +63,7 @@ export default async function NotificationsPage() {
     <AppShell
       currentUserId={user.id}
       maxWidth="max-w-4xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Notifications"
     >
       <NotificationsClient

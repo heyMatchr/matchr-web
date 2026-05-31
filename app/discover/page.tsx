@@ -33,7 +33,7 @@ export default async function DiscoverPage() {
         supabase
           .from("profiles")
           .select(
-            "id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at",
+            "id, public_id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at",
           )
           .eq("onboarding_completed", true)
           .neq("id", user.id)
@@ -335,6 +335,7 @@ export default async function DiscoverPage() {
       hasMoments: momentCount > 0,
       hasStories,
       id: profile.id,
+      public_id: profile.public_id,
       interests: profile.interests ?? [],
       isOnline,
       location: profile.location,
@@ -371,7 +372,7 @@ export default async function DiscoverPage() {
     <AppShell
       currentUserId={user.id}
       maxWidth="max-w-6xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Discover"
     >
         <StoriesBarLazy

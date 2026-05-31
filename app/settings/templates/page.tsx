@@ -16,7 +16,7 @@ export default async function MessageTemplatesPage() {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, onboarding_completed")
+    .select("id, public_id, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -38,7 +38,7 @@ export default async function MessageTemplatesPage() {
       currentUserId={user.id}
       hideHeader
       maxWidth="max-w-3xl"
-      profileId={currentProfile.id}
+      profileId={currentProfile.public_id ?? currentProfile.id}
       title="Message Templates"
     >
       <div className="sticky top-0 z-30 -mx-4 border-b border-neutral-900 bg-black/90 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] backdrop-blur-xl sm:-mx-6 sm:px-6 md:static md:mx-0 md:border-b-0 md:bg-transparent md:px-0 md:pb-0 md:pt-0 md:backdrop-blur-0">

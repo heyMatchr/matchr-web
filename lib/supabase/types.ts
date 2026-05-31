@@ -6,6 +6,7 @@ export type WaitlistRow = {
 
 export type ProfileRow = {
   id: string;
+  public_id: string | null;
   display_name: string;
   age: number;
   gender: string;
@@ -56,6 +57,11 @@ export type ActionLimitRow = {
   user_id: string;
   action_type: string;
   target_id: string | null;
+  created_at: string;
+};
+
+export type AdminUserRow = {
+  user_id: string;
   created_at: string;
 };
 
@@ -571,6 +577,15 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      admin_users: {
+        Row: AdminUserRow;
+        Insert: {
+          user_id: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       likes: {
         Row: LikeRow;
         Insert: {
@@ -1019,6 +1034,7 @@ export type Database = {
         Row: ProfileRow;
         Insert: {
           id: string;
+          public_id?: string | null;
           display_name: string;
           age: number;
           gender: string;
@@ -1065,6 +1081,7 @@ export type Database = {
         };
         Update: {
           id?: string;
+          public_id?: string | null;
           display_name?: string;
           age?: number;
           gender?: string;
