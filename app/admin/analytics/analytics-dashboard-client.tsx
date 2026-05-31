@@ -450,6 +450,7 @@ const TradingChart = memo(function TradingChart({
 }) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const width = 720;
   const height = 260;
   const pad = { bottom: 34, left: 38, right: 20, top: 18 };
@@ -459,18 +460,22 @@ const TradingChart = memo(function TradingChart({
     1,
     ...visible.flatMap((dataset) => dataset.points.map((point) => point.value)),
   );
-  const selectedIndex = activeIndex ?? Math.max(0, pointCount - 1);
-  const selectedDate = datasets[0]?.points[selectedIndex]?.date;
-  const selectedRows = visible.map((dataset) => {
-    const point = dataset.points[selectedIndex];
-    const previous = point?.previous ?? 0;
-    return {
-      change: change(point?.value ?? 0, previous),
-      dataset,
-      point,
-      previous,
-    };
-  });
+  const selectedIndex = activeIndex;
+  const selectedDate =
+    selectedIndex === null ? null : datasets[0]?.points[selectedIndex]?.date;
+  const selectedRows =
+    selectedIndex === null
+      ? []
+      : visible.map((dataset) => {
+          const point = dataset.points[selectedIndex];
+          const previous = point?.previous ?? 0;
+          return {
+            change: change(point?.value ?? 0, previous),
+            dataset,
+            point,
+            previous,
+          };
+        });
   const primaryChange = change(
     sumSeries(datasets[0]?.points ?? []),
     (datasets[0]?.points ?? []).reduce((total, point) => total + point.previous, 0),
@@ -483,10 +488,37 @@ const TradingChart = memo(function TradingChart({
   const yFor = (value: number) =>
     height - pad.bottom - (value / maxValue) * (height - pad.top - pad.bottom);
 
+  const clearHideTimer = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  const hideInteraction = () => {
+    clearHideTimer();
+    setActiveIndex(null);
+  };
+
+  const scheduleTouchHide = () => {
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => {
+      setActiveIndex(null);
+      hideTimerRef.current = null;
+    }, 900);
+  };
+
+  useEffect(() => () => clearHideTimer(), []);
+
   const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
+    clearHideTimer();
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
     setActiveIndex(Math.round(ratio * Math.max(0, pointCount - 1)));
+
+    if (event.pointerType === "touch" || event.pointerType === "pen") {
+      scheduleTouchHide();
+    }
   };
 
   return (
@@ -546,9 +578,15 @@ const TradingChart = memo(function TradingChart({
       <div className="relative mt-4 overflow-hidden rounded-2xl border border-neutral-900 bg-black/60">
         <svg
           className="h-[300px] w-full touch-none"
-          onPointerLeave={() => setActiveIndex(null)}
+          onPointerCancel={hideInteraction}
+          onPointerLeave={hideInteraction}
           onPointerMove={onPointerMove}
           onPointerDown={onPointerMove}
+          onPointerUp={(event) => {
+            if (event.pointerType === "touch" || event.pointerType === "pen") {
+              scheduleTouchHide();
+            }
+          }}
           role="img"
           viewBox={`0 0 ${width} ${height}`}
         >
@@ -634,7 +672,7 @@ const TradingChart = memo(function TradingChart({
             );
           })}
 
-          {selectedDate ? (
+          {selectedIndex !== null && selectedDate ? (
             <g>
               <line
                 stroke="rgba(255,255,255,0.36)"
