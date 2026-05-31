@@ -3,6 +3,11 @@ import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  buildAdminProfileSearchFilter,
+  cleanAdminSearchQuery,
+  getAdminEmailSearchUserIds,
+} from "./admin-search";
 import { adminUserHref } from "./admin-shared";
 import { setUserModerationFlag, updateReportStatus } from "./actions";
 
@@ -46,10 +51,6 @@ const moderationActions = [
   ["messaging_limited", "Messaging Limited"],
   ["calls_limited", "Calls Limited"],
 ] as const;
-
-function cleanSearchQuery(value?: string) {
-  return (value ?? "").trim().replace(/[%,()]/g, "").slice(0, 80);
-}
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString([], {
@@ -142,7 +143,7 @@ function ReportActionForm({
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
   const params = await searchParams;
-  const searchQuery = cleanSearchQuery(params?.q);
+  const searchQuery = cleanAdminSearchQuery(params?.q);
   const user = await requireAdmin();
   const supabase = createSupabaseAdminClient();
   const { data: currentProfile } = await supabase
@@ -161,6 +162,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   weekStartDate.setDate(weekStartDate.getDate() - 7);
   const dayStart = dayStartDate.toISOString();
   const weekStart = weekStartDate.toISOString();
+  const emailMatchedUserIds = searchQuery
+    ? await getAdminEmailSearchUserIds(supabase, searchQuery)
+    : [];
   let userQuery = supabase
     .from("profiles")
     .select(
@@ -171,7 +175,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
   if (searchQuery) {
     userQuery = userQuery.or(
-      `public_id.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`,
+      buildAdminProfileSearchFilter(searchQuery, emailMatchedUserIds),
     );
   }
 
@@ -363,14 +367,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <div>
             <h2 className="text-xl font-black">User Management</h2>
             <p className="mt-1 text-sm text-neutral-400">
-              Search by public ID or display name.
+              Search by public ID, display name, UUID, or email.
             </p>
           </div>
           <form className="flex w-full max-w-md gap-2">
             <input
               name="q"
               defaultValue={searchQuery}
-              placeholder="Search M84729163 or name"
+              placeholder="Search ID, name, UUID, or email"
               className="min-w-0 flex-1 rounded-full border border-neutral-800 bg-black px-4 py-2 text-sm text-white placeholder:text-neutral-500"
             />
             <button

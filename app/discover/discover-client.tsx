@@ -4,7 +4,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { memo, useCallback, useMemo, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
-import { getProfileHref } from "@/lib/profile-public-id";
+import {
+  getProfileHref,
+  isMatchrPublicId,
+  normalizePublicId,
+} from "@/lib/profile-public-id";
 import { likeProfile, passProfile } from "./actions";
 
 export type DiscoverProfile = {
@@ -63,16 +67,16 @@ export function DiscoverClient({
   });
   const visibleProfiles = useMemo(() => {
     const dismissed = new Set(dismissedIds);
-    const normalizedSearch = searchText.trim().toLowerCase();
+    const trimmedSearch = searchText.trim();
+    const normalizedPublicIdSearch = normalizePublicId(trimmedSearch);
+    const hasInvalidPublicIdSearch =
+      trimmedSearch.length > 0 && !isMatchrPublicId(trimmedSearch);
     const filtered = profiles.filter((profile) => {
       if (dismissed.has(profile.id)) return false;
-      if (
-        normalizedSearch &&
-        !profile.display_name.toLowerCase().includes(normalizedSearch) &&
-        !profile.public_id?.toLowerCase().includes(normalizedSearch)
-      ) {
+      if (hasInvalidPublicIdSearch) {
         return false;
       }
+      if (normalizedPublicIdSearch && profile.public_id !== normalizedPublicIdSearch) return false;
       if (profile.age < filters.minAge || profile.age > filters.maxAge) return false;
       if (filters.onlineNow && !(profile.isOnline || isUserOnline(profile.id))) return false;
       if (filters.hasStories && !profile.hasStories) return false;
@@ -130,14 +134,17 @@ export function DiscoverClient({
         </button>
       </div>
       <label className="mt-4 block">
-        <span className="sr-only">Search by name or Matchr ID</span>
+        <span className="sr-only">Search by Matchr ID</span>
         <input
           type="search"
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
-          placeholder="Search name or ID"
+          placeholder="Enter their Matchr ID to find them"
           className="w-full rounded-2xl border border-neutral-800 bg-black/70 px-4 py-3 text-[15px] text-white placeholder:text-neutral-500 focus:border-emerald-300/50 focus:outline-none"
         />
+        <p className="mt-2 text-sm leading-6 text-neutral-400">
+          Enter their Matchr ID to find them.
+        </p>
       </label>
 
       <ProfileRail title="Recently Active" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />

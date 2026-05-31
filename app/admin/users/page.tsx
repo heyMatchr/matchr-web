@@ -3,6 +3,11 @@ import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  buildAdminProfileSearchFilter,
+  cleanAdminSearchQuery,
+  getAdminEmailSearchUserIds,
+} from "../admin-search";
 import { AdminUserCard, type AdminProfileSummary } from "../admin-shared";
 
 type AdminUsersPageProps = {
@@ -11,13 +16,9 @@ type AdminUsersPageProps = {
   }>;
 };
 
-function cleanSearchQuery(value?: string) {
-  return (value ?? "").trim().replace(/[%,()]/g, "").slice(0, 80);
-}
-
 export default async function AdminUsersPage({ searchParams }: AdminUsersPageProps) {
   const params = await searchParams;
-  const searchQuery = cleanSearchQuery(params?.q);
+  const searchQuery = cleanAdminSearchQuery(params?.q);
   const user = await requireAdmin();
   const supabase = createSupabaseAdminClient();
   const { data: currentProfile } = await supabase
@@ -30,6 +31,9 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
     redirect("/onboarding");
   }
 
+  const emailMatchedUserIds = searchQuery
+    ? await getAdminEmailSearchUserIds(supabase, searchQuery)
+    : [];
   let usersQuery = supabase
     .from("profiles")
     .select(
@@ -40,7 +44,7 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
 
   if (searchQuery) {
     usersQuery = usersQuery.or(
-      `public_id.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`,
+      buildAdminProfileSearchFilter(searchQuery, emailMatchedUserIds),
     );
   }
 
@@ -64,14 +68,14 @@ export default async function AdminUsersPage({ searchParams }: AdminUsersPagePro
           </Link>
           <h2 className="mt-3 text-xl font-black">User Management</h2>
           <p className="mt-1 text-sm text-neutral-400">
-            Search by Matchr public ID or display name.
+            Search by Matchr public ID, display name, UUID, or email.
           </p>
         </div>
         <form className="flex w-full max-w-md gap-2">
           <input
             name="q"
             defaultValue={searchQuery}
-            placeholder="Search M84729163 or name"
+            placeholder="Search ID, name, UUID, or email"
             className="min-w-0 flex-1 rounded-full border border-neutral-800 bg-black px-4 py-2 text-sm text-white placeholder:text-neutral-500"
           />
           <button
