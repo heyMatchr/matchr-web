@@ -99,6 +99,8 @@ export async function setUserModerationFlag(formData: FormData) {
     targetUserId,
   });
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${targetUserId}`);
 }
 
 export async function updateReportStatus(formData: FormData) {
@@ -134,4 +136,8 @@ export async function updateReportStatus(formData: FormData) {
     targetUserId,
   });
   revalidatePath("/admin");
+  revalidatePath("/admin/users");
+  if (targetUserId) {
+    revalidatePath(`/admin/users/${targetUserId}`);
+  }
 }

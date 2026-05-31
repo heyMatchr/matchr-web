@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
 import { requireAdmin } from "@/lib/admin-auth";
-import { getProfileHref } from "@/lib/profile-public-id";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { adminUserHref } from "./admin-shared";
 import { setUserModerationFlag, updateReportStatus } from "./actions";
 
 type AdminPageProps = {
@@ -383,12 +384,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     ) : null}
                   </div>
                   <div className="min-w-0">
-                    <a
-                      href={getProfileHref(profile)}
+                    <Link
+                      href={adminUserHref(profile)}
                       className="font-black text-white hover:text-emerald-100"
                     >
                       {profile.display_name}
-                    </a>
+                    </Link>
                     <p className="mt-1 text-sm text-neutral-400">
                       {profile.public_id ?? "No public ID"} · Joined{" "}
                       {formatDate(profile.created_at)}
@@ -451,9 +452,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                         <p className="mt-2 text-sm text-neutral-300">
                           Target:{" "}
                           {target ? (
-                            <a href={getProfileHref(target)} className="text-emerald-100">
+                            <Link href={adminUserHref(target)} className="text-emerald-100">
                               {target.display_name} ({target.public_id})
-                            </a>
+                            </Link>
                           ) : (
                             "Non-user target"
                           )}
@@ -490,9 +491,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <h2 className="text-xl font-black">Recent Users</h2>
           <div className="mt-5 space-y-3">
             {((recentUsersResult.data ?? []) as AdminProfile[]).map((profile) => (
-              <a
+              <Link
                 key={profile.id}
-                href={getProfileHref(profile)}
+                href={adminUserHref(profile)}
                 className="flex items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3 transition-colors hover:border-emerald-300/30"
               >
                 <div className="h-10 w-10 overflow-hidden rounded-full bg-neutral-900">
@@ -513,7 +514,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     {profile.public_id} · {formatDate(profile.created_at)}
                   </p>
                 </div>
-              </a>
+              </Link>
             ))}
           </div>
         </section>
@@ -542,9 +543,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                     <>
                       {" "}
                       on{" "}
-                      <a href={getProfileHref(targetProfile)} className="text-emerald-100">
+                      <Link href={adminUserHref(targetProfile)} className="text-emerald-100">
                         {targetProfile.display_name}
-                      </a>
+                      </Link>
                     </>
                   ) : null}
                   <span className="text-neutral-500"> · {formatDate(log.created_at)}</span>
