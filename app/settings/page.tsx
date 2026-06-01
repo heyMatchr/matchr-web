@@ -114,27 +114,27 @@ export default async function SettingsPage() {
 
         <SettingsSection title="Discovery">
           <Toggle defaultChecked={settings.show_in_discover} name="show_in_discover" title="Show me in Discover" />
-          <NumberInput defaultValue={settings.distance_preference} label="Distance preference" name="distance_preference" />
-          <NumberInput defaultValue={settings.min_age_preference} label="Minimum age" name="min_age_preference" />
-          <NumberInput defaultValue={settings.max_age_preference} label="Maximum age" name="max_age_preference" />
-          <Select defaultValue={settings.gender_preference} label="Gender preference" name="gender_preference" options={["any", "women", "men", "nonbinary"]} />
-          <Toggle defaultChecked={settings.inclusive_discovery} name="inclusive_discovery" title="Inclusive discovery mode" />
+          <NumberInput defaultValue={settings.distance_preference} label="Distance" name="distance_preference" />
+          <NumberInput defaultValue={settings.min_age_preference} label="Min age" name="min_age_preference" />
+          <NumberInput defaultValue={settings.max_age_preference} label="Max age" name="max_age_preference" />
+          <Select defaultValue={settings.gender_preference} label="Gender" name="gender_preference" options={["any", "women", "men", "nonbinary"]} />
+          <Toggle defaultChecked={settings.inclusive_discovery} name="inclusive_discovery" title="Inclusive mode" />
           <MultiSelect
             defaultValues={settings.interested_in_gender_identities ?? []}
-            label="Interested in gender identities"
+            label="Gender interests"
             name="interested_in_gender_identities"
             options={[...GENDER_IDENTITY_OPTIONS]}
           />
           <MultiSelect
             defaultValues={settings.interested_in_orientations ?? []}
-            label="Interested in orientations"
+            label="Orientation interests"
             name="interested_in_orientations"
             options={[...SEXUAL_ORIENTATION_OPTIONS]}
           />
           <input
             name="relationship_intent_preference"
             defaultValue={settings.relationship_intent_preference ?? ""}
-            placeholder="Relationship intent preference"
+            placeholder="Intent"
             className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white placeholder:text-neutral-400"
           />
         </SettingsSection>
@@ -146,12 +146,12 @@ export default async function SettingsPage() {
             currentUserId={user.id}
             supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
           />
-          <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Allow PWA push alerts" />
-          <Toggle defaultChecked={settings.push_messages} name="push_messages" title="Push message alerts" />
-          <Toggle defaultChecked={settings.push_matches} name="push_matches" title="Push match alerts" />
-          <Toggle defaultChecked={settings.push_gifts} name="push_gifts" title="Push gift alerts" />
-          <Toggle defaultChecked={settings.push_calls} name="push_calls" title="Push missed call alerts" />
-          <Toggle defaultChecked={settings.push_marketing} name="push_marketing" title="Gentle re-engagement reminders" />
+          <Toggle defaultChecked={settings.push_notifications} name="push_notifications" title="Push alerts" />
+          <Toggle defaultChecked={settings.push_messages} name="push_messages" title="Messages" />
+          <Toggle defaultChecked={settings.push_matches} name="push_matches" title="Matches" />
+          <Toggle defaultChecked={settings.push_gifts} name="push_gifts" title="Gifts" />
+          <Toggle defaultChecked={settings.push_calls} name="push_calls" title="Missed calls" />
+          <Toggle defaultChecked={settings.push_marketing} name="push_marketing" title="Reminders" />
           <Toggle defaultChecked={settings.story_notifications} name="story_notifications" title="Story notifications" />
           <Toggle defaultChecked={settings.message_notifications} name="message_notifications" title="Message notifications" />
           <Toggle defaultChecked={settings.gift_notifications} name="gift_notifications" title="Gift notifications" />
@@ -173,15 +173,14 @@ export default async function SettingsPage() {
               <div>
                 <p className="font-black text-white">My Message Templates</p>
                 <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-                  Manage reusable openers and creator-pack foundations on a
-                  dedicated screen.
+                  Saved openers.
                 </p>
               </div>
               <Link
                 href="/settings/templates"
                 className="inline-flex w-fit rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
               >
-                Open templates
+                Templates
               </Link>
             </div>
           </div>
@@ -219,8 +218,8 @@ export default async function SettingsPage() {
             <p className="mt-1 text-[15px] leading-6 text-neutral-300">{walletResult.data?.gold_balance ?? 0} gold</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/wallet" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">Wallet</Link>
-              <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Upgrade placeholder</button>
-              <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Buy gold placeholder</button>
+              <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Upgrade</button>
+              <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Buy Gold</button>
             </div>
           </div>
           {["Cheaper messages", "Profile boost", "Advanced filters", "Unlimited story viewers", "Read insights", "Profile analytics", "Priority discover ranking"].map((perk) => (

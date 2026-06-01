@@ -74,10 +74,9 @@ export default async function WalletPage() {
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
-          <p className="mt-3 text-[15px] leading-6 text-neutral-300">Your Gold powers paid messages, gifts, and premium Matchr experiences.</p>
+          <p className="mt-3 text-[15px] leading-6 text-neutral-300">Messages · Gifts · Premium</p>
           <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
-            Payment provider coming next. Purchases create pending orders now;
-            Gold is credited only after a provider confirms payment.
+            Payments are pending until confirmed.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <form action={startGoldCheckout}>
@@ -122,7 +121,7 @@ export default async function WalletPage() {
                   ))}
                 </div>
                 <button className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
-                  Create payment order
+                  Continue
                 </button>
               </div>
             </form>
@@ -144,7 +143,7 @@ export default async function WalletPage() {
             <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
               {premiumPlansResult.data?.[0]
                 ? `Start ${premiumPlansResult.data[0].name ?? premiumPlansResult.data[0].plan_name} · $${premiumPlansResult.data[0].price_usd}`
-                : "Premium provider coming next"}
+                : "Premium soon"}
             </button>
           </form>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -179,7 +178,7 @@ export default async function WalletPage() {
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
           <h2 className="text-lg font-black">Payment providers</h2>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            Available for {currentProfile.country ?? "your region"}.
+            Available here: {currentProfile.country ?? "your region"}.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {availableProviders.length ? (
@@ -205,8 +204,7 @@ export default async function WalletPage() {
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
           <h2 className="text-lg font-black">Elite levels</h2>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            Priority messages are currently {priorityMessageCost} Gold. Profile
-            boosts are currently {profileBoostCost} Gold.
+            Priority: {priorityMessageCost} Gold · Boost: {profileBoostCost} Gold
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
             {(eliteLevelsResult.data ?? []).map((level) => (
@@ -221,23 +219,23 @@ export default async function WalletPage() {
                   {level.monthly_gold_requirement.toLocaleString()} Gold/month
                 </p>
                 <p className="mt-1 text-sm text-neutral-500">
-                  {Object.keys(level.benefits_json ?? {}).join(", ") || "Benefits coming soon"}
+                  {Object.keys(level.benefits_json ?? {}).join(", ") || "Soon"}
                 </p>
               </div>
             ))}
           </div>
         </section>
 
-        <History title="Wallet transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
-        <History title="Payment orders" rows={(paymentOrdersResult.data ?? []).map((row) => {
+        <History title="Transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
+        <History title="Payments" rows={(paymentOrdersResult.data ?? []).map((row) => {
           const amount = row.amount ?? row.amount_usd ?? 0;
           const currency = row.currency ?? "USD";
           const gold = row.gold_amount ? ` · ${row.gold_amount} Gold` : "";
           return `${row.order_type} · ${row.status} · ${currency} ${amount}${gold} · ${row.provider}`;
         })} />
-        <History title="Incoming gifts" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0} gold value`)} />
-        <History title="Outgoing gifts" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0} gold`)} />
-        <History title="Message charges" rows={(messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost} gold`)} />
+        <History title="Gifts in" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0}`)} />
+        <History title="Gifts out" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0}`)} />
+        <History title="Messages" rows={(messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost}`)} />
       </div>
     </AppShell>
   );

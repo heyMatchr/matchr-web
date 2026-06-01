@@ -60,8 +60,7 @@ export default async function MessageTemplatesPage() {
           </div>
         </div>
         <p className="mt-3 text-[15px] leading-6 text-neutral-300">
-          Create reusable lines for your chats. Templates insert into the
-          composer only, so you always stay in control before sending.
+          Save lines. Send manually.
         </p>
       </div>
 

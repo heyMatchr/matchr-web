@@ -1251,8 +1251,7 @@ export function ChatClient({
             <div className="max-w-xs rounded-3xl border border-neutral-800 bg-black/45 p-5">
               <p className="text-lg font-black text-white">Say hi first</p>
               <p className="mt-2 text-sm leading-6 text-neutral-300">
-                Open with one detail from their profile, or use Suggest opener
-                if your brain has left the chat.
+                Use a detail. Or get a nudge.
               </p>
             </div>
           </div>
@@ -1360,7 +1359,7 @@ export function ChatClient({
               <div>
                 <p className="text-sm font-black text-white">Templates</p>
                 <p className="mt-1 text-sm leading-5 text-neutral-400">
-                  Insert a saved line. You still send it manually.
+                  Insert only. You send.
                 </p>
               </div>
               <button
@@ -1418,8 +1417,7 @@ export function ChatClient({
         ) : null}
         {messageGoldCost > 0 ? (
           <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm leading-5 text-amber-50">
-            Send message for {messageGoldCost} Gold? Conversation becomes free
-            after they reply.
+            {messageGoldCost} Gold to send · Free after reply
           </p>
         ) : null}
         <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">
@@ -1550,9 +1548,9 @@ export function ChatClient({
               <div>
                 <p className="text-lg font-black text-white">Add to chat</p>
                 <p className="mt-1 text-sm leading-5 text-neutral-400">
-                  {spendableGold} Gold available
+                  {spendableGold} Gold
                   {messageGoldCost > 0
-                    ? ` · first message costs ${messageGoldCost} Gold`
+                    ? ` · ${messageGoldCost} to send`
                     : ""}
                 </p>
               </div>
@@ -1568,7 +1566,7 @@ export function ChatClient({
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
               <div className="grid gap-2">
                 <MediaMenuButton
-                  description="Open the Matchr gift catalog."
+                  description="Catalog"
                   label="Send Gift"
                   onClick={() => giftListRef.current?.scrollIntoView({
                     behavior: "smooth",
@@ -1576,27 +1574,27 @@ export function ChatClient({
                   })}
                 />
                 <MediaMenuButton
-                  description="Send a normal photo."
+                  description="Image"
                   label="Photo"
                   onClick={() => photoInputRef.current?.click()}
                 />
                 <MediaMenuButton
-                  description="View-once photo with private media protection."
+                  description="View once"
                   label="Private Photo"
                   onClick={() => privatePhotoInputRef.current?.click()}
                 />
                 <MediaMenuButton
-                  description="Send a video clip up to 15 seconds."
+                  description="15 seconds"
                   label="Video max 15s"
                   onClick={() => videoInputRef.current?.click()}
                 />
                 <MediaMenuButton
-                  description="View-once private video up to 15 seconds."
+                  description="View once · 15s"
                   label="Private Video max 15s"
                   onClick={() => privateVideoInputRef.current?.click()}
                 />
                 <MediaMenuButton
-                  description="Not available yet."
+                  description="Soon"
                   label="Voice Note"
                   onClick={() => {
                     setError("Voice notes are coming soon.");
@@ -1611,9 +1609,6 @@ export function ChatClient({
               >
                 <p className="px-1 text-sm font-black text-emerald-50">
                   Gifts
-                </p>
-                <p className="mt-1 px-1 text-sm leading-5 text-emerald-50/75">
-                  Gifts use your Matchr Gold balance.
                 </p>
                 <div className="mt-3 grid max-h-[34dvh] gap-4 overflow-y-auto pr-1">
                   {groupedGiftCatalog.map(([category, gifts]) => (
@@ -1662,9 +1657,7 @@ export function ChatClient({
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
             <p className="text-xl font-black">Send paid message?</p>
             <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-              This first message costs {messageGoldCost} Gold. If{" "}
-              {receiverName} replies, this conversation unlocks and future
-              messages are free.
+              First message: {messageGoldCost} Gold. Free after reply.
             </p>
             <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
               {spendableGold} Gold available
@@ -1696,15 +1689,14 @@ export function ChatClient({
             <p className="text-4xl">{pendingGift.icon}</p>
             <p className="mt-3 text-xl font-black">Send {pendingGift.name}?</p>
             <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-              This gift costs {pendingGift.coinPrice} Gold.{" "}
-              {receiverName} receives{" "}
+              {pendingGift.coinPrice} Gold ·{" "}
               {Math.floor(
                 pendingGift.coinPrice *
                   ((pendingGift.creatorPercentage ??
                     (creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent) /
                     100),
               )}{" "}
-              Diamonds from the creator split.
+              Diamonds earned
             </p>
             <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
               {spendableGold} Gold available

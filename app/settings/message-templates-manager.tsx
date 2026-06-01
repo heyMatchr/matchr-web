@@ -66,8 +66,7 @@ export function MessageTemplatesManager({
         <div>
           <h2 className="text-lg font-black">My Message Templates</h2>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            Save reusable flirty lines for chat. Tap a saved template in chat to
-            insert it into the composer.
+            Saved chat lines.
           </p>
         </div>
         {draft.id ? (
@@ -156,10 +155,6 @@ export function MessageTemplatesManager({
             />
           </label>
         </div>
-        <p className="text-sm leading-6 text-neutral-400">
-          Creator packs are a foundation for paid template collections. For now,
-          your chat composer only shows your own active templates.
-        </p>
         {state.message ? (
           <p
             className={`rounded-2xl border px-4 py-3 text-sm ${
@@ -230,8 +225,7 @@ export function MessageTemplatesManager({
           <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 sm:p-5">
             <p className="font-black text-white">No saved templates yet</p>
             <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-              Save a few lines you would actually say. Start with one playful
-              opener and one sweet follow-up.
+              Start with one opener.
             </p>
           </div>
         )}

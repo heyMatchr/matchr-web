@@ -105,27 +105,25 @@ export default async function EarningsPage() {
       title="Creator Earnings"
     >
       <div className="mt-6 rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-5 text-sm leading-6 text-emerald-50">
-        Gifts now earn Diamonds. Withdrawals are request-only for now; no real
-        payout is sent until Matchr reviews and marks the request paid.
+        Gifts earn Diamonds. Payouts are reviewed.
       </div>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Diamonds Balance" value={formatDiamonds(wallet.diamonds_balance)} />
-        <StatCard label="Estimated Cash Value" value={formatCurrency(cashEstimate)} />
-        <StatCard label="Lifetime Earnings" value={formatDiamonds(wallet.diamonds_lifetime)} />
-        <StatCard label="Pending Earnings" value={formatDiamonds(wallet.diamonds_pending)} />
+        <StatCard label="Diamonds" value={formatDiamonds(wallet.diamonds_balance)} />
+        <StatCard label="Est. cash" value={formatCurrency(cashEstimate)} />
+        <StatCard label="Lifetime" value={formatDiamonds(wallet.diamonds_lifetime)} />
+        <StatCard label="Pending" value={formatDiamonds(wallet.diamonds_pending)} />
         <StatCard label="Withdrawn" value={formatDiamonds(wallet.diamonds_withdrawn)} />
       </section>
 
       <section className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-5">
-        <h2 className="text-xl font-black">Request Withdrawal</h2>
+        <h2 className="text-xl font-black">Withdraw</h2>
         <p className="mt-2 text-sm leading-6 text-neutral-400">
-          Minimum withdrawal: {formatDiamonds(minimumWithdrawal ?? 5000)}. Current
-          conversion: {diamondsPerUsd} Diamonds = $1.00.
+          Min: {formatDiamonds(minimumWithdrawal ?? 5000)} · {diamondsPerUsd} = $1
         </p>
         <p className="mt-2 text-sm leading-6 text-neutral-500">
-          Current creator tier: {creatorTierResult.data?.name ?? "Standard"} ·{" "}
-          {creatorTierResult.data?.creator_percentage ?? 50}% creator share.
+          Tier: {creatorTierResult.data?.name ?? "Standard"} ·{" "}
+          {creatorTierResult.data?.creator_percentage ?? 50}%
         </p>
         <form action={requestWithdrawal} className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
           <input
@@ -145,7 +143,7 @@ export default async function EarningsPage() {
           </select>
           <input
             name="payout_handle"
-            placeholder="Payout details note"
+            placeholder="Payout details"
             className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-sm text-white placeholder:text-neutral-500"
           />
           <button
@@ -159,7 +157,7 @@ export default async function EarningsPage() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
-          <h2 className="text-xl font-black">Recent Gift Earnings</h2>
+          <h2 className="text-xl font-black">Gift earnings</h2>
           <div className="mt-5 space-y-3">
             {giftEarningsResult.data?.length ? (
               giftEarningsResult.data.map((gift, index) => (
@@ -169,18 +167,18 @@ export default async function EarningsPage() {
                 >
                   <p className="font-black text-white">{gift.gift_type}</p>
                   <p className="mt-1 text-neutral-400">
-                    Gift value: {gift.gold_cost ?? 0} Gold · {formatDate(gift.created_at)}
+                    {gift.gold_cost ?? 0} Gold · {formatDate(gift.created_at)}
                   </p>
                 </div>
               ))
             ) : (
-              <p className="text-sm text-neutral-400">No gift earnings yet.</p>
+              <p className="text-sm text-neutral-400">No gifts yet.</p>
             )}
           </div>
         </section>
 
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
-          <h2 className="text-xl font-black">Withdrawal Requests</h2>
+          <h2 className="text-xl font-black">Withdrawals</h2>
           <div className="mt-5 space-y-3">
             {withdrawalsResult.data?.length ? (
               withdrawalsResult.data.map((request) => (
@@ -203,7 +201,7 @@ export default async function EarningsPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-neutral-400">No withdrawal requests yet.</p>
+              <p className="text-sm text-neutral-400">No withdrawals.</p>
             )}
           </div>
         </section>

@@ -118,11 +118,11 @@ export function DiscoverClient({
     <>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm leading-6 text-neutral-400">
-            Smart ranking prioritizes active people with stories, moments, shared interests, and strong engagement.
+          <p className="text-sm font-medium text-neutral-300">
+            ✨ Ranked for you
           </p>
           <p className="mt-1 text-xs text-emerald-200/70">
-            Swipe right to like, left to skip. Double tap for a quick like.
+            Swipe or double tap.
           </p>
         </div>
         <button
@@ -139,16 +139,13 @@ export function DiscoverClient({
           type="search"
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
-          placeholder="Enter their Matchr ID to find them"
+          placeholder="Matchr ID"
           className="w-full rounded-2xl border border-neutral-800 bg-black/70 px-4 py-3 text-[15px] text-white placeholder:text-neutral-500 focus:border-emerald-300/50 focus:outline-none"
         />
-        <p className="mt-2 text-sm leading-6 text-neutral-400">
-          Enter their Matchr ID to find them.
-        </p>
       </label>
 
-      <ProfileRail title="Recently Active" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />
-      <ProfileRail title="Trending Profiles" profiles={trending} />
+      <ProfileRail title="Active now" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />
+      <ProfileRail title="Trending" profiles={trending} />
 
       {visibleProfiles.length > 0 ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8 md:gap-5 lg:grid-cols-3">
@@ -165,14 +162,12 @@ export function DiscoverClient({
         </div>
       ) : (
         <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 sm:p-8">
-          <p className="text-xl font-black">No profiles match these filters</p>
+          <p className="text-xl font-black">No matches here</p>
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">
-            Try widening your filters, then come back with a story or moment so
-            you look active when new people land here.
+            Widen filters or post a story.
           </p>
           <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
-            Your profile could use more personality while the room fills up.
-            Add a bio people can reply to.
+            Add a bio to stand out.
           </p>
         </div>
       )}
