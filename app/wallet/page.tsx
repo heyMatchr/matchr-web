@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
 import { getEconomyNumberConfig } from "@/lib/economy";
+import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
 
@@ -16,7 +17,7 @@ export default async function WalletPage() {
 
   const { data: currentProfile } = await supabase
     .from("profiles")
-    .select("id, public_id, onboarding_completed")
+    .select("id, public_id, country, onboarding_completed")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -37,6 +38,7 @@ export default async function WalletPage() {
     eliteLevelsResult,
     priorityMessageCost,
     profileBoostCost,
+    availableProviders,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -62,7 +64,9 @@ export default async function WalletPage() {
       .order("level", { ascending: true }),
     getEconomyNumberConfig(supabase, "priority_message_cost", 15),
     getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
+    getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
   ]);
+  const defaultProvider = availableProviders[0]?.provider_key ?? "";
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
@@ -78,9 +82,11 @@ export default async function WalletPage() {
           <div className="mt-5 flex flex-wrap gap-2">
             <form action={startGoldCheckout}>
               <input type="hidden" name="package" value="500" />
+              <input type="hidden" name="provider_key" value={defaultProvider} />
               <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</button>
             </form>
             <form action={startPremiumCheckout}>
+              <input type="hidden" name="provider_key" value={defaultProvider} />
               <button className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Upgrade to Premium</button>
             </form>
           </div>
@@ -91,14 +97,34 @@ export default async function WalletPage() {
           {(packagesResult.data ?? []).map((pack, index) => (
             <form key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`} action={startGoldCheckout}>
               <input type="hidden" name="package_id" value={pack.id} />
-              <button className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30 sm:p-5">
+              <div className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30 sm:p-5">
                 <p className="font-black">{pack.name}</p>
                 <p className="mt-1.5 text-[15px] leading-6 text-neutral-300">
                   {pack.gold_amount + (pack.bonus_gold ?? 0)} gold
                   {pack.bonus_gold ? ` (${pack.bonus_gold} bonus)` : ""} · $
                   {pack.usd_price ?? pack.price_usd}
                 </p>
-              </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {availableProviders.map((provider, providerIndex) => (
+                    <label
+                      key={`${pack.id}-${provider.provider_key}`}
+                      className="rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
+                    >
+                      <input
+                        className="mr-1 accent-emerald-300"
+                        defaultChecked={providerIndex === 0}
+                        name="provider_key"
+                        type="radio"
+                        value={provider.provider_key}
+                      />
+                      {provider.name}
+                    </label>
+                  ))}
+                </div>
+                <button className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
+                  Create payment order
+                </button>
+              </div>
             </form>
           ))}
         </section>
@@ -114,6 +140,7 @@ export default async function WalletPage() {
               name="plan_id"
               value={premiumPlansResult.data?.[0]?.id ?? ""}
             />
+            <input type="hidden" name="provider_key" value={defaultProvider} />
             <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
               {premiumPlansResult.data?.[0]
                 ? `Start ${premiumPlansResult.data[0].name ?? premiumPlansResult.data[0].plan_name} · $${premiumPlansResult.data[0].price_usd}`
@@ -125,6 +152,7 @@ export default async function WalletPage() {
               (premiumPlansResult.data ?? []).map((plan) => (
                 <form key={plan.id} action={startPremiumCheckout}>
                   <input type="hidden" name="plan_id" value={plan.id} />
+                  <input type="hidden" name="provider_key" value={defaultProvider} />
                   <button className="h-full w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left text-[15px] leading-6 text-neutral-200 transition-colors hover:border-emerald-300/30">
                     <span className="block font-black text-white">
                       {plan.name ?? plan.plan_name}
@@ -144,6 +172,32 @@ export default async function WalletPage() {
               <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">
                 No active premium plans.
               </div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+          <h2 className="text-lg font-black">Payment providers</h2>
+          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
+            Available for {currentProfile.country ?? "your region"}.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {availableProviders.length ? (
+              availableProviders.map((provider) => (
+                <div
+                  key={provider.provider_key}
+                  className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
+                >
+                  <p className="font-black text-white">{provider.name}</p>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    {provider.supported_currencies.join(", ")}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-neutral-400">
+                No payment providers are currently available.
+              </p>
             )}
           </div>
         </section>

@@ -8,11 +8,14 @@ export type PaymentOrderType =
   | "premium_subscription";
 
 export type PaymentProvider =
+  | "apple_pay"
   | "crypto_usdt"
   | "flutterwave"
   | "manual"
   | "paystack"
-  | "stripe";
+  | "stripe"
+  | "usdt"
+  | string;
 
 type Supabase = SupabaseClient<Database>;
 

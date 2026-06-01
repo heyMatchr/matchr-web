@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  getAvailablePaymentProviders,
+  isProviderAvailable,
+} from "@/lib/payment-providers";
 import { createPaymentOrder } from "@/lib/payments";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -18,10 +22,41 @@ async function currentUser() {
   return { supabase, user };
 }
 
+async function resolveProviderKey(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  userId: string,
+  requestedProviderKey: string,
+) {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("country")
+    .eq("id", userId)
+    .maybeSingle();
+  const availableProviders = await getAvailablePaymentProviders(
+    supabase,
+    profile?.country,
+    "USD",
+  );
+
+  if (!availableProviders.length) {
+    throw new Error("No payment providers are available for your region.");
+  }
+
+  if (
+    requestedProviderKey &&
+    isProviderAvailable(availableProviders, requestedProviderKey)
+  ) {
+    return requestedProviderKey;
+  }
+
+  return availableProviders[0].provider_key;
+}
+
 export async function startGoldCheckout(formData: FormData) {
   const packageId = String(formData.get("package_id") ?? "");
   const packageKey = String(formData.get("package") ?? "");
-  const { supabase } = await currentUser();
+  const requestedProviderKey = String(formData.get("provider_key") ?? "");
+  const { supabase, user } = await currentUser();
   let query = supabase
     .from("gold_packages")
     .select("id, name, gold_amount, bonus_gold, usd_price, price_usd")
@@ -41,6 +76,12 @@ export async function startGoldCheckout(formData: FormData) {
     return;
   }
 
+  const providerKey = await resolveProviderKey(
+    supabase,
+    user.id,
+    requestedProviderKey,
+  );
+
   await createPaymentOrder(supabase, {
     amount: pack.usd_price ?? pack.price_usd,
     goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
@@ -52,15 +93,18 @@ export async function startGoldCheckout(formData: FormData) {
       provider_message: "Payment provider coming next",
     },
     orderType: "gold_purchase",
-    provider: "manual",
+    provider: providerKey,
   });
 
   revalidatePath("/wallet");
 }
 
 export async function startPremiumCheckout(formData?: FormData) {
-  const { supabase } = await currentUser();
+  const { supabase, user } = await currentUser();
   const planId = formData ? String(formData.get("plan_id") ?? "") : "";
+  const requestedProviderKey = formData
+    ? String(formData.get("provider_key") ?? "")
+    : "";
   let query = supabase
     .from("premium_plans")
     .select("id, name, plan_name, price_usd, duration_days, interval")
@@ -76,6 +120,12 @@ export async function startPremiumCheckout(formData?: FormData) {
     return;
   }
 
+  const providerKey = await resolveProviderKey(
+    supabase,
+    user.id,
+    requestedProviderKey,
+  );
+
   await createPaymentOrder(supabase, {
     amount: plan.price_usd,
     metadata: {
@@ -85,7 +135,7 @@ export async function startPremiumCheckout(formData?: FormData) {
       provider_message: "Payment provider coming next",
     },
     orderType: "premium_subscription",
-    provider: "manual",
+    provider: providerKey,
   });
 
   revalidatePath("/wallet");
