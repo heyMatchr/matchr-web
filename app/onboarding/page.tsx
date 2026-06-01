@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { OnboardingForm } from "./onboarding-form";
 
 export default async function OnboardingPage() {
@@ -35,7 +36,11 @@ export default async function OnboardingPage() {
           You can shape the rest of your profile later.
         </p>
 
-        <OnboardingForm />
+        <OnboardingForm
+          anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+          supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
+          userId={user.id}
+        />
       </section>
     </main>
   );

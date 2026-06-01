@@ -2,10 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import {
-  AVATAR_BUCKET_NAME,
-  AVATAR_MAX_SIZE_BYTES,
-} from "@/lib/supabase/storage";
+import { AVATAR_BUCKET_NAME } from "@/lib/supabase/storage";
 import type { Database } from "@/lib/supabase/types";
 
 export type OnboardingFormState = {
@@ -63,18 +60,12 @@ function getIntentSelection(formData: FormData) {
     .slice(0, 7);
 }
 
-function getAvatarExtension(file: File) {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-
-  if (extension && ["jpg", "jpeg", "png", "webp", "gif"].includes(extension)) {
-    return extension;
+function isSafeAvatarPath(path: string, userId: string) {
+  if (!path.startsWith(`${userId}/`)) {
+    return false;
   }
 
-  return file.type.split("/").pop() || "jpg";
-}
-
-function isAllowedOnboardingAvatarType(file: File) {
-  return ["image/jpeg", "image/png", "image/webp"].includes(file.type);
+  return /\.(jpe?g|png|webp)$/i.test(path);
 }
 
 function isUnknownColumnError(message: string) {
@@ -184,7 +175,7 @@ export async function saveOnboarding(
   const showGenderOnProfile = formData.get("show_gender_on_profile") === "on";
   const showOrientationOnProfile =
     formData.get("show_orientation_on_profile") === "on";
-  const avatar = formData.get("avatar");
+  const submittedAvatarPath = getFormString(formData, "avatar_path");
   const age = ageValue ? Number(ageValue) : 18;
   const safeIdentityOptions = new Set([
     "Man",
@@ -222,39 +213,16 @@ export async function saveOnboarding(
   let avatarUrl: string | null = null;
 
   try {
-    if (avatar instanceof File && avatar.size > 0) {
-      if (!isAllowedOnboardingAvatarType(avatar)) {
-        return { message: INVALID_IMAGE_MESSAGE };
-      }
-
-      if (avatar.size > AVATAR_MAX_SIZE_BYTES) {
-        return { message: INVALID_IMAGE_MESSAGE };
-      }
-
-      avatarPath = `${user.id}/avatar-${Date.now()}.${getAvatarExtension(
-        avatar,
-      )}`;
-      const { error: uploadError } = await supabase.storage
-        .from(AVATAR_BUCKET_NAME)
-        .upload(avatarPath, avatar, {
-          cacheControl: "3600",
-          contentType: avatar.type,
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error("[Onboarding] avatar upload failed", {
-          bucket: AVATAR_BUCKET_NAME,
-          error: uploadError.message,
-          fileType: avatar.type,
-          size: avatar.size,
+    if (submittedAvatarPath) {
+      if (!isSafeAvatarPath(submittedAvatarPath, user.id)) {
+        console.error("[Onboarding] rejected unsafe avatar path", {
+          avatarPath: submittedAvatarPath,
           userId: user.id,
         });
-
-        return {
-          message: "We couldn't upload your photo. You can skip it for now.",
-        };
+        return { message: INVALID_IMAGE_MESSAGE };
       }
+
+      avatarPath = submittedAvatarPath;
 
       const {
         data: { publicUrl },
@@ -264,6 +232,11 @@ export async function saveOnboarding(
         return { message: "Photo uploaded, but no public URL was generated." };
       }
 
+      console.info("[Onboarding] avatar public URL generated", {
+        avatarPath,
+        bucket: AVATAR_BUCKET_NAME,
+        userId: user.id,
+      });
       avatarUrl = publicUrl;
     }
   } catch (error) {
@@ -326,22 +299,65 @@ export async function saveOnboarding(
       supabase,
       userId: user.id,
     });
+    let savedAfterDroppingAvatar = false;
 
     if (error) {
       console.error("[Onboarding] profile save failed", {
         error: error.message,
+        hasAvatarPath: Boolean(avatarPath),
+        hasAvatarUrl: Boolean(avatarUrl),
         hasDisplayName: Boolean(displayName),
         hasIdentity: Boolean(gender),
         userId: user.id,
       });
 
-      if (avatarPath) {
-        await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+      if (avatarUrl) {
+        console.info("[Onboarding] retrying profile save without avatar URL", {
+          avatarPath,
+          userId: user.id,
+        });
+        const retryError = await saveProfileForOnboarding({
+          payload: {
+            ...profilePayload,
+            avatar_url: null,
+          },
+          supabase,
+          userId: user.id,
+        });
+
+        if (!retryError) {
+          if (avatarPath) {
+            await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+          }
+          console.info("[Onboarding] profile saved after dropping avatar URL", {
+            userId: user.id,
+          });
+          savedAfterDroppingAvatar = true;
+        } else {
+          console.error("[Onboarding] profile save without avatar URL failed", {
+            error: retryError.message,
+            userId: user.id,
+          });
+        }
       }
 
-      return {
-        message: GENERIC_SAVE_ERROR,
-      };
+      if (!savedAfterDroppingAvatar) {
+        if (avatarPath) {
+          await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+        }
+
+        return {
+          message: GENERIC_SAVE_ERROR,
+        };
+      }
+    }
+
+    if (!error) {
+      console.info("[Onboarding] profile save succeeded", {
+        hasAvatarPath: Boolean(avatarPath),
+        hasAvatarUrl: Boolean(avatarUrl),
+        userId: user.id,
+      });
     }
   } catch (error) {
     console.error("[Onboarding] profile save crashed", {

@@ -1,8 +1,13 @@
 "use client";
 
+import { createBrowserClient } from "@supabase/ssr";
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import { AVATAR_MAX_SIZE_BYTES } from "@/lib/supabase/storage";
+import {
+  AVATAR_BUCKET_NAME,
+  AVATAR_MAX_SIZE_BYTES,
+} from "@/lib/supabase/storage";
+import type { Database } from "@/lib/supabase/types";
 import { saveOnboarding, type OnboardingFormState } from "./actions";
 
 const initialState: OnboardingFormState = {
@@ -68,9 +73,31 @@ const onboardingAvatarAllowedTypes = [
 const invalidAvatarMessage =
   "Please upload a JPG, PNG, or WebP image under the allowed size.";
 
-export function OnboardingForm() {
+type OnboardingFormProps = {
+  anonKey: string;
+  supabaseUrl: string;
+  userId: string;
+};
+
+function getAvatarExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["jpg", "jpeg", "png", "webp"].includes(extension)) {
+    return extension;
+  }
+
+  return file.type.split("/").pop() || "jpg";
+}
+
+export function OnboardingForm({
+  anonKey,
+  supabaseUrl,
+  userId,
+}: OnboardingFormProps) {
   const [avatarError, setAvatarError] = useState("");
+  const [avatarPath, setAvatarPath] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [onboardingValues, setOnboardingValues] = useState({
     displayName: "",
     identity: "",
@@ -82,6 +109,10 @@ export function OnboardingForm() {
   const [state, formAction, pending] = useActionState(
     saveOnboarding,
     initialState,
+  );
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(supabaseUrl, anonKey),
+    [anonKey, supabaseUrl],
   );
   const { displayName, identity, selectedIntents } = onboardingValues;
   const totalSteps = introSlides.length + 4;
@@ -100,7 +131,7 @@ export function OnboardingForm() {
     };
   }, [avatarPreview]);
 
-  function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
+  async function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (avatarPreview) {
@@ -132,7 +163,60 @@ export function OnboardingForm() {
       return;
     }
 
-    setAvatarPreview(URL.createObjectURL(file));
+    const nextPreview = URL.createObjectURL(file);
+    setAvatarPreview(nextPreview);
+    setAvatarPath("");
+    setAvatarUploading(true);
+
+    try {
+      const nextAvatarPath = `${userId}/avatar-${Date.now()}.${getAvatarExtension(
+        file,
+      )}`;
+      const { error } = await supabase.storage
+        .from(AVATAR_BUCKET_NAME)
+        .upload(nextAvatarPath, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: true,
+        });
+
+      if (error) {
+        console.error("[Onboarding] direct avatar upload failed", {
+          bucket: AVATAR_BUCKET_NAME,
+          error: error.message,
+          fileType: file.type,
+          size: file.size,
+          userId,
+        });
+        event.target.value = "";
+        setAvatarError("We couldn't upload your photo. You can skip it for now.");
+        setAvatarPath("");
+        setAvatarPreview("");
+        URL.revokeObjectURL(nextPreview);
+        return;
+      }
+
+      console.info("[Onboarding] direct avatar upload succeeded", {
+        avatarPath: nextAvatarPath,
+        bucket: AVATAR_BUCKET_NAME,
+        fileType: file.type,
+        size: file.size,
+        userId,
+      });
+      setAvatarPath(nextAvatarPath);
+    } catch (error) {
+      console.error("[Onboarding] direct avatar upload crashed", {
+        error,
+        userId,
+      });
+      event.target.value = "";
+      setAvatarError("We couldn't upload your photo. You can skip it for now.");
+      setAvatarPath("");
+      setAvatarPreview("");
+      URL.revokeObjectURL(nextPreview);
+    } finally {
+      setAvatarUploading(false);
+    }
   }
 
   function toggleIntent(intent: string) {
@@ -159,6 +243,11 @@ export function OnboardingForm() {
       event.preventDefault();
       return;
     }
+
+    if (avatarUploading) {
+      event.preventDefault();
+      setAvatarError("Wait for your photo to finish uploading, or skip it.");
+    }
   }
 
   const canContinue =
@@ -174,11 +263,11 @@ export function OnboardingForm() {
     <form
       action={formAction}
       className="mt-8"
-      encType="multipart/form-data"
       onSubmitCapture={handleSubmitCapture}
     >
       <input ref={identityInputRef} name="gender" readOnly type="hidden" value={identity} />
       <input name="identity" readOnly type="hidden" value={identity} />
+      <input name="avatar_path" readOnly type="hidden" value={avatarPath} />
       <input
         ref={displayNameInputRef}
         name="display_name"
@@ -357,9 +446,8 @@ export function OnboardingForm() {
               <input
                 accept="image/*"
                 className="sr-only"
-                disabled={pending}
+                disabled={pending || avatarUploading}
                 id="avatar"
-                name="avatar"
                 onChange={handleAvatarChange}
                 type="file"
               />
@@ -368,7 +456,7 @@ export function OnboardingForm() {
                 className="mt-3 min-h-5 text-sm text-red-300"
                 role={avatarError ? "alert" : undefined}
               >
-                {avatarError}
+                {avatarUploading ? "Uploading photo..." : avatarError}
               </p>
             </section>
           ) : null}
@@ -406,10 +494,16 @@ export function OnboardingForm() {
           ) : (
             <button
               className="rounded-full bg-white px-7 py-3 text-sm font-black text-black transition-all hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={pending || Boolean(avatarError) || !identity || !displayName.trim()}
+              disabled={
+                pending ||
+                avatarUploading ||
+                Boolean(avatarError) ||
+                !identity ||
+                !displayName.trim()
+              }
               type="submit"
             >
-              {pending ? "Opening matchr..." : "Enter matchr"}
+              {pending ? "Opening matchr..." : avatarUploading ? "Uploading..." : "Enter matchr"}
             </button>
           )}
         </div>
