@@ -25,6 +25,14 @@ function getInterests(formData: FormData) {
     .slice(0, 12);
 }
 
+function getIntentSelection(formData: FormData) {
+  return formData
+    .getAll("relationship_intent")
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 7);
+}
+
 function getAvatarExtension(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -48,7 +56,11 @@ export async function saveOnboarding(
   const interestedIn = getFormString(formData, "interested_in");
   const occupation = getFormString(formData, "occupation");
   const interests = getInterests(formData);
-  const relationshipIntent = getFormString(formData, "relationship_intent");
+  const relationshipIntentSelections = getIntentSelection(formData);
+  const relationshipIntent =
+    relationshipIntentSelections.join(", ") ||
+    getFormString(formData, "relationship_intent") ||
+    "Exploration";
   const bio = getFormString(formData, "bio");
   const location = getFormString(formData, "location");
   const height = getFormString(formData, "height");
@@ -66,23 +78,20 @@ export async function saveOnboarding(
   const showOrientationOnProfile =
     formData.get("show_orientation_on_profile") === "on";
   const avatar = formData.get("avatar");
-  const age = Number(ageValue);
+  const age = ageValue ? Number(ageValue) : 18;
+  const safeIdentityOptions = new Set([
+    "Man",
+    "Woman",
+    "LGBTQ+ Community",
+    "Prefer not to say",
+  ]);
 
-  if (
-    !displayName ||
-    !ageValue ||
-    !gender ||
-    !interestedIn ||
-    !occupation ||
-    !relationshipIntent ||
-    !bio ||
-    !location
-  ) {
-    return { message: "Fill out every field to continue." };
+  if (!displayName || !gender) {
+    return { message: "Choose an identity and display name to continue." };
   }
 
-  if (interests.length === 0) {
-    return { message: "Add at least one interest." };
+  if (!safeIdentityOptions.has(gender)) {
+    return { message: "Choose one of the identity options to continue." };
   }
 
   if (!Number.isInteger(age) || age < 18 || age > 120) {
@@ -91,18 +100,6 @@ export async function saveOnboarding(
 
   if (bio.length > 500) {
     return { message: "Keep your bio under 500 characters." };
-  }
-
-  if (!(avatar instanceof File) || avatar.size === 0) {
-    return { message: "Upload an avatar to continue." };
-  }
-
-  if (!AVATAR_ALLOWED_TYPES.includes(avatar.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
-    return { message: "Upload a JPG, PNG, WebP, or GIF avatar." };
-  }
-
-  if (avatar.size > AVATAR_MAX_SIZE_BYTES) {
-    return { message: "Keep your avatar under 5 MB." };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -114,32 +111,60 @@ export async function saveOnboarding(
     redirect("/login?next=/onboarding");
   }
 
-  const avatarPath = `${user.id}/avatar-${Date.now()}.${getAvatarExtension(
-    avatar,
-  )}`;
-  const { error: uploadError } = await supabase.storage
-    .from(AVATAR_BUCKET_NAME)
-    .upload(avatarPath, avatar, {
-      cacheControl: "3600",
-      contentType: avatar.type,
-      upsert: true,
-    });
+  let avatarPath = "";
+  let avatarUrl: string | null = null;
 
-  if (uploadError) {
-    return {
-      message:
-        uploadError.message ||
-        "Avatar upload failed. Check the Supabase avatars bucket setup.",
-    };
+  if (avatar instanceof File && avatar.size > 0) {
+    if (!AVATAR_ALLOWED_TYPES.includes(avatar.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
+      return { message: "Upload a JPG, PNG, WebP, or GIF avatar." };
+    }
+
+    if (avatar.size > AVATAR_MAX_SIZE_BYTES) {
+      return { message: "Keep your avatar under 5 MB." };
+    }
+
+    avatarPath = `${user.id}/avatar-${Date.now()}.${getAvatarExtension(
+      avatar,
+    )}`;
+    const { error: uploadError } = await supabase.storage
+      .from(AVATAR_BUCKET_NAME)
+      .upload(avatarPath, avatar, {
+        cacheControl: "3600",
+        contentType: avatar.type,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return {
+        message:
+          uploadError.message ||
+          "Avatar upload failed. Check the Supabase avatars bucket setup.",
+      };
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(AVATAR_BUCKET_NAME).getPublicUrl(avatarPath);
+
+    if (!publicUrl) {
+      return { message: "Avatar uploaded, but no public URL was generated." };
+    }
+
+    avatarUrl = publicUrl;
   }
 
-  const {
-    data: { publicUrl: avatarUrl },
-  } = supabase.storage.from(AVATAR_BUCKET_NAME).getPublicUrl(avatarPath);
-
-  if (!avatarUrl) {
-    return { message: "Avatar uploaded, but no public URL was generated." };
-  }
+  const normalizedGenderIdentity =
+    gender === "LGBTQ+ Community"
+      ? "Other"
+      : gender === "Prefer not to say"
+        ? "Prefer not to say"
+        : genderIdentity || gender;
+  const normalizedInterests =
+    interests.length > 0
+      ? interests
+      : relationshipIntentSelections.length > 0
+        ? relationshipIntentSelections
+        : ["Private discovery"];
 
   const { error } = await supabase.from("profiles").upsert(
     {
@@ -147,22 +172,22 @@ export async function saveOnboarding(
       display_name: displayName,
       age,
       gender,
-      gender_identity: genderIdentity || null,
+      gender_identity: normalizedGenderIdentity || null,
       pronouns: pronouns || null,
       sexual_orientation: sexualOrientation || null,
-      interested_in: interestedIn,
-      occupation,
-      interests,
+      interested_in: interestedIn || "Everyone",
+      occupation: occupation || "Not shared",
+      interests: normalizedInterests,
       relationship_intent: relationshipIntent,
-      bio,
-      location,
+      bio: bio || "Private. On my terms.",
+      location: location || "Private",
       height: height || null,
       weight: weight || null,
       body_type: bodyType || null,
       relationship_status: relationshipStatus || null,
       country: country || null,
       country_flag: countryFlag || null,
-      accepting_dating: acceptingDating,
+      accepting_dating: acceptingDating || relationshipIntent.includes("Flirting"),
       open_to_long_distance: openToLongDistance,
       show_gender_on_profile: showGenderOnProfile,
       show_orientation_on_profile: showOrientationOnProfile,
@@ -178,7 +203,9 @@ export async function saveOnboarding(
   );
 
   if (error) {
-    await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+    if (avatarPath) {
+      await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+    }
     return { message: error.message };
   }
 
