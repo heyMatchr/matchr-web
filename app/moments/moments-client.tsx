@@ -181,6 +181,13 @@ export function MomentsClient({
           moments.map((moment, index) => {
             const isOwner = moment.user_id === currentUserId;
             const canShowLikes = isOwner || !moment.hide_likes;
+            const engagementScore =
+              moment.likeCount + moment.commentCount + moment.giftCount;
+            const statusChips = [
+              moment.giftCount > 0 ? "◆ Gifted" : "",
+              moment.commentCount > 0 ? "● Active" : "",
+              engagementScore >= 5 ? "↟ Trending" : "",
+            ].filter(Boolean);
 
             return (
             <article
@@ -294,6 +301,18 @@ export function MomentsClient({
               </div>
 
               <div className="min-w-0 p-4">
+                {statusChips.length ? (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {statusChips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-50"
+                      >
+                        {chip}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <form
                     className="shrink-0"

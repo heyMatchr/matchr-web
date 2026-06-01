@@ -213,11 +213,15 @@ export function ChatClient({
           ),
         )
       : 0;
+  const hasReceiverReply = messages.some(
+    (message) => message.sender_id === receiverId && !message.optimistic,
+  );
+  const hasOwnMessage = messages.some(
+    (message) => message.sender_id === currentUserId && !message.optimistic,
+  );
   const messageGoldCost = calculateMessageCost({
     hasPremium,
-    hasReceiverReply: messages.some(
-      (message) => message.sender_id === receiverId && !message.optimistic,
-    ),
+    hasReceiverReply,
     receiver: {
       gender: receiverGender,
       gender_identity: receiverGenderIdentity,
@@ -1418,6 +1422,21 @@ export function ChatClient({
         {messageGoldCost > 0 ? (
           <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm leading-5 text-amber-50">
             {messageGoldCost} Gold to send · Free after reply
+          </p>
+        ) : null}
+        {messageGoldCost === 0 && hasOwnMessage && !hasReceiverReply ? (
+          <p className="mb-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2 text-sm leading-5 text-emerald-50">
+            Waiting for reply
+          </p>
+        ) : null}
+        {hasReceiverReply && !hasOwnMessage ? (
+          <p className="mb-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2 text-sm leading-5 text-emerald-50">
+            Reply unlocks chat
+          </p>
+        ) : null}
+        {hasReceiverReply && hasOwnMessage ? (
+          <p className="mb-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2 text-sm leading-5 text-emerald-50">
+            Chat unlocked
           </p>
         ) : null}
         <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">

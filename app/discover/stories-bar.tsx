@@ -1207,7 +1207,29 @@ export function StoriesBar({
 
             <div className="absolute bottom-0 left-0 right-0 z-30 border-t border-white/10 bg-black/65 p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-xl sm:p-4 sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]">
               {activeGroup.isOwn ? (
-                <div className="flex items-center gap-3">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      ["Views", engagement.viewers.length],
+                      ["Reactions", engagement.reactions.length],
+                      ["Replies", engagement.replies.length],
+                      ["Gifts", engagement.gifts.length],
+                    ].map(([label, count]) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setIsAnalyticsOpen(true)}
+                        className="rounded-2xl border border-white/10 bg-white/[0.06] px-2 py-2 text-center"
+                      >
+                        <span className="block text-base font-black text-white">
+                          {count}
+                        </span>
+                        <span className="block truncate text-[11px] text-neutral-400">
+                          {label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                   <button
                     type="button"
                     onClick={() => setIsAnalyticsOpen(true)}
@@ -1216,9 +1238,9 @@ export function StoriesBar({
                     <span className="min-w-0">
                       <span className="block text-sm font-black">Story activity</span>
                       <span className="block truncate text-xs text-neutral-400">
-                        {engagement.viewers.length} viewers ·{" "}
-                        {engagement.reactions.length + engagement.replies.length} responses ·{" "}
-                        {engagement.gifts.length} gifts
+                        {engagement.viewers.length + engagement.reactions.length + engagement.replies.length + engagement.gifts.length > 0
+                          ? "Growing"
+                          : "Post again"}
                       </span>
                     </span>
                     <span className="text-lg text-emerald-100">⌃</span>

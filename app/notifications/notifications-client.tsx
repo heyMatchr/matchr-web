@@ -34,25 +34,53 @@ function formatTime(timestamp: string) {
 }
 
 function toneForType(type: string) {
-  switch (type) {
-    case "new_match":
-      return "border-emerald-300/30 bg-emerald-300/10";
-    case "new_message":
-      return "border-sky-300/20 bg-sky-300/10";
-    case "profile_view":
-      return "border-violet-300/20 bg-violet-300/10";
-    case "new_follower":
-      return "border-teal-300/20 bg-teal-300/10";
-    default:
-      return "border-neutral-800 bg-black/50";
+  if (type.includes("gift")) {
+    return "border-amber-300/35 bg-amber-300/10";
   }
+
+  if (type.includes("message") || type.includes("private_media")) {
+    return "border-sky-300/25 bg-sky-300/10";
+  }
+
+  if (type.includes("match")) {
+    return "border-emerald-300/30 bg-emerald-300/10";
+  }
+
+  if (type.includes("story")) {
+    return "border-pink-300/25 bg-pink-300/10";
+  }
+
+  if (type.includes("view")) {
+    return "border-violet-300/20 bg-violet-300/10";
+  }
+
+  if (type.includes("follow")) {
+    return "border-teal-300/20 bg-teal-300/10";
+  }
+
+  return "border-neutral-800 bg-black/50";
 }
 
 function typeLabel(type: string) {
-  return type
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  if (type.includes("gift")) return "Gift";
+  if (type.includes("message") || type.includes("private_media")) return "Message";
+  if (type.includes("match")) return "Match";
+  if (type.includes("story")) return "Story";
+  if (type.includes("view")) return "View";
+  if (type.includes("follow")) return "Follow";
+
+  return "Activity";
+}
+
+function priorityLabel(type: string) {
+  if (type.includes("gift")) return "Top";
+  if (type.includes("message") || type.includes("private_media")) return "Hot";
+  if (type.includes("match")) return "New";
+  if (type.includes("story")) return "Live";
+  if (type.includes("view")) return "Seen";
+  if (type.includes("follow")) return "Social";
+
+  return "";
 }
 
 export function NotificationsClient({
@@ -217,6 +245,11 @@ export function NotificationsClient({
                       <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-neutral-400">
                         {typeLabel(notification.type)}
                       </span>
+                      {priorityLabel(notification.type) ? (
+                        <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-neutral-300">
+                          {priorityLabel(notification.type)}
+                        </span>
+                      ) : null}
                     </div>
                     <p className="mt-2 text-sm leading-6 text-neutral-300">
                       {notification.body || notification.title}

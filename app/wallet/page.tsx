@@ -78,6 +78,23 @@ export default async function WalletPage() {
           <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
             Payments are pending until confirmed.
           </p>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ["✉", "Start", "Get noticed"],
+              ["◆", "Gift", "Send signal"],
+              ["↟", "Boost", "Stand out"],
+              ["♛", "Premium", "More access"],
+            ].map(([icon, label, sublabel]) => (
+              <div
+                key={label}
+                className="rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3"
+              >
+                <p className="text-lg leading-none text-emerald-100">{icon}</p>
+                <p className="mt-2 text-sm font-black text-white">{label}</p>
+                <p className="mt-0.5 text-xs text-emerald-50/65">{sublabel}</p>
+              </div>
+            ))}
+          </div>
           <div className="mt-5 flex flex-wrap gap-2">
             <form action={startGoldCheckout}>
               <input type="hidden" name="package" value="500" />
