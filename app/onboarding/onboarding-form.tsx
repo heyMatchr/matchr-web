@@ -67,6 +67,7 @@ export function OnboardingForm() {
   const [avatarPreview, setAvatarPreview] = useState("");
   const [identity, setIdentity] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [selectedIntents, setSelectedIntents] = useState<string[]>([]);
   const [step, setStep] = useState(0);
   const [state, formAction, pending] = useActionState(
     saveOnboarding,
@@ -119,6 +120,14 @@ export function OnboardingForm() {
     setAvatarPreview(URL.createObjectURL(file));
   }
 
+  function toggleIntent(intent: string) {
+    setSelectedIntents((current) =>
+      current.includes(intent)
+        ? current.filter((item) => item !== intent)
+        : [...current, intent],
+    );
+  }
+
   const canContinue =
     isIntro ||
     (step === introSlides.length && Boolean(identity)) ||
@@ -130,6 +139,16 @@ export function OnboardingForm() {
 
   return (
     <form action={formAction} className="mt-8" encType="multipart/form-data">
+      <input name="gender" type="hidden" value={identity} />
+      <input name="display_name" type="hidden" value={displayName.trim()} />
+      {selectedIntents.map((intent) => (
+        <input
+          key={intent}
+          name="relationship_intent"
+          type="hidden"
+          value={intent}
+        />
+      ))}
       <div className={panelClass}>
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-[#D4AF37]">
@@ -181,9 +200,7 @@ export function OnboardingForm() {
                       checked={identity === option.label}
                       className="sr-only"
                       disabled={pending}
-                      name="gender"
                       onChange={() => setIdentity(option.label)}
-                      required
                       type="radio"
                       value={option.label}
                     />
@@ -213,10 +230,8 @@ export function OnboardingForm() {
                   autoComplete="nickname"
                   className="w-full rounded-full border border-neutral-700 bg-black/45 px-6 py-4 text-lg text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none"
                   disabled={pending}
-                  name="display_name"
                   onChange={(event) => setDisplayName(event.target.value)}
                   placeholder="Display name"
-                  required
                   value={displayName}
                 />
               </label>
@@ -238,9 +253,10 @@ export function OnboardingForm() {
                     className="flex items-center gap-3 rounded-3xl border border-white/10 bg-black/30 px-5 py-4 text-sm font-medium text-neutral-100"
                   >
                     <input
+                      checked={selectedIntents.includes(intent)}
                       className="h-4 w-4 accent-emerald-300"
                       disabled={pending}
-                      name="relationship_intent"
+                      onChange={() => toggleIntent(intent)}
                       type="checkbox"
                       value={intent}
                     />
