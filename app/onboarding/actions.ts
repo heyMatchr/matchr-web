@@ -17,6 +17,15 @@ function getFormString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getFirstFormString(formData: FormData, keys: string[]) {
+  for (const key of keys) {
+    const value = getFormString(formData, key);
+    if (value) return value;
+  }
+
+  return "";
+}
+
 function getInterests(formData: FormData) {
   return getFormString(formData, "interests")
     .split(",")
@@ -47,9 +56,18 @@ export async function saveOnboarding(
   _previousState: OnboardingFormState,
   formData: FormData,
 ): Promise<OnboardingFormState> {
-  const displayName = getFormString(formData, "display_name");
+  const displayName = getFirstFormString(formData, [
+    "display_name",
+    "displayName",
+    "username",
+    "full_name",
+  ]);
   const ageValue = getFormString(formData, "age");
-  const gender = getFormString(formData, "gender");
+  const gender = getFirstFormString(formData, [
+    "gender",
+    "identity",
+    "gender_identity",
+  ]);
   const genderIdentity = getFormString(formData, "gender_identity");
   const pronouns = getFormString(formData, "pronouns");
   const sexualOrientation = getFormString(formData, "sexual_orientation");
@@ -166,9 +184,7 @@ export async function saveOnboarding(
         ? relationshipIntentSelections
         : ["Private discovery"];
 
-  const { error } = await supabase.from("profiles").upsert(
-    {
-      id: user.id,
+  const profilePayload = {
       display_name: displayName,
       age,
       gender,
@@ -196,17 +212,52 @@ export async function saveOnboarding(
       looking_for: lookingFor || null,
       avatar_url: avatarUrl,
       onboarding_completed: true,
-    },
-    {
-      onConflict: "id",
-    },
-  );
+  };
+  const { data: existingProfile, error: existingProfileError } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  if (error) {
+  if (existingProfileError) {
+    console.error("[Onboarding] profile lookup failed", {
+      error: existingProfileError.message,
+      userId: user.id,
+    });
+
     if (avatarPath) {
       await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
     }
-    return { message: error.message };
+
+    return {
+      message: "We couldn't prepare your profile. Try again in a moment.",
+    };
+  }
+
+  const { error } = existingProfile
+    ? await supabase
+        .from("profiles")
+        .update(profilePayload)
+        .eq("id", user.id)
+    : await supabase.from("profiles").insert({
+        id: user.id,
+        ...profilePayload,
+      });
+
+  if (error) {
+    console.error("[Onboarding] profile save failed", {
+      error: error.message,
+      hasDisplayName: Boolean(displayName),
+      hasIdentity: Boolean(gender),
+      userId: user.id,
+    });
+
+    if (avatarPath) {
+      await supabase.storage.from(AVATAR_BUCKET_NAME).remove([avatarPath]);
+    }
+    return {
+      message: "We couldn't save your profile. Try again in a moment.",
+    };
   }
 
   await supabase.rpc("grant_starter_gold_once");

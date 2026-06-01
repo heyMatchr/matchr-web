@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_MAX_SIZE_BYTES,
@@ -65,14 +65,19 @@ const intentOptions = [
 export function OnboardingForm() {
   const [avatarError, setAvatarError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
-  const [identity, setIdentity] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [selectedIntents, setSelectedIntents] = useState<string[]>([]);
+  const [onboardingValues, setOnboardingValues] = useState({
+    displayName: "",
+    identity: "",
+    selectedIntents: [] as string[],
+  });
   const [step, setStep] = useState(0);
+  const identityInputRef = useRef<HTMLInputElement>(null);
+  const displayNameInputRef = useRef<HTMLInputElement>(null);
   const [state, formAction, pending] = useActionState(
     saveOnboarding,
     initialState,
   );
+  const { displayName, identity, selectedIntents } = onboardingValues;
   const totalSteps = introSlides.length + 4;
   const isIntro = step < introSlides.length;
   const currentIntro = introSlides[step];
@@ -121,11 +126,29 @@ export function OnboardingForm() {
   }
 
   function toggleIntent(intent: string) {
-    setSelectedIntents((current) =>
-      current.includes(intent)
-        ? current.filter((item) => item !== intent)
-        : [...current, intent],
-    );
+    setOnboardingValues((current) => ({
+      ...current,
+      selectedIntents: current.selectedIntents.includes(intent)
+        ? current.selectedIntents.filter((item) => item !== intent)
+        : [...current.selectedIntents, intent],
+    }));
+  }
+
+  function handleSubmitCapture(event: FormEvent<HTMLFormElement>) {
+    const trimmedDisplayName = onboardingValues.displayName.trim();
+
+    if (identityInputRef.current) {
+      identityInputRef.current.value = onboardingValues.identity;
+    }
+
+    if (displayNameInputRef.current) {
+      displayNameInputRef.current.value = trimmedDisplayName;
+    }
+
+    if (!onboardingValues.identity || !trimmedDisplayName) {
+      event.preventDefault();
+      return;
+    }
   }
 
   const canContinue =
@@ -138,13 +161,27 @@ export function OnboardingForm() {
     "rounded-[2rem] border border-white/10 bg-[#0B1F17]/80 p-5 shadow-[0_24px_90px_rgba(0,0,0,0.35)] backdrop-blur-xl sm:p-7";
 
   return (
-    <form action={formAction} className="mt-8" encType="multipart/form-data">
-      <input name="gender" type="hidden" value={identity} />
-      <input name="display_name" type="hidden" value={displayName.trim()} />
+    <form
+      action={formAction}
+      className="mt-8"
+      encType="multipart/form-data"
+      onSubmitCapture={handleSubmitCapture}
+    >
+      <input ref={identityInputRef} name="gender" readOnly type="hidden" value={identity} />
+      <input name="identity" readOnly type="hidden" value={identity} />
+      <input
+        ref={displayNameInputRef}
+        name="display_name"
+        readOnly
+        type="hidden"
+        value={displayName.trim()}
+      />
+      <input name="displayName" readOnly type="hidden" value={displayName.trim()} />
       {selectedIntents.map((intent) => (
         <input
           key={intent}
           name="relationship_intent"
+          readOnly
           type="hidden"
           value={intent}
         />
@@ -200,7 +237,12 @@ export function OnboardingForm() {
                       checked={identity === option.label}
                       className="sr-only"
                       disabled={pending}
-                      onChange={() => setIdentity(option.label)}
+                      onChange={() =>
+                        setOnboardingValues((current) => ({
+                          ...current,
+                          identity: option.label,
+                        }))
+                      }
                       type="radio"
                       value={option.label}
                     />
@@ -230,7 +272,12 @@ export function OnboardingForm() {
                   autoComplete="nickname"
                   className="w-full rounded-full border border-neutral-700 bg-black/45 px-6 py-4 text-lg text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none"
                   disabled={pending}
-                  onChange={(event) => setDisplayName(event.target.value)}
+                  onChange={(event) =>
+                    setOnboardingValues((current) => ({
+                      ...current,
+                      displayName: event.target.value,
+                    }))
+                  }
                   placeholder="Display name"
                   value={displayName}
                 />
