@@ -1744,29 +1744,23 @@ export function ChatClient({
       {goldModal ? (
         <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-amber-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(245,158,11,0.12)]">
-            <p className="text-xl font-black">Not enough gold</p>
+            <p className="text-xl font-black">Need Gold</p>
             <p className="mt-2 text-[15px] leading-6 text-neutral-300">{goldModal}</p>
             <div className="mt-5 grid grid-cols-2 gap-2">
               <Link
                 href="/wallet"
                 className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black"
               >
-                Buy Gold
+                Top Up
               </Link>
-              <Link
-                href="/wallet"
+              <button
+                type="button"
+                onClick={() => setGoldModal("")}
                 className="rounded-full border border-amber-200/30 px-4 py-3 text-sm text-amber-100"
               >
-                Upgrade
-              </Link>
+                Close
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setGoldModal("")}
-              className="mt-4 text-sm text-neutral-300"
-            >
-              Close
-            </button>
           </div>
         </div>
       ) : null}

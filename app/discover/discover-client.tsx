@@ -55,6 +55,9 @@ export function DiscoverClient({
   const [sortBy, setSortBy] = useState("compatible");
   const [searchText, setSearchText] = useState("");
   const { isUserOnline } = useGlobalPresence();
+  const searchQuery = searchText.trim();
+  const hasInvalidPublicIdSearch =
+    searchQuery.length > 0 && !isMatchrPublicId(searchQuery);
   const [filters, setFilters] = useState({
     acceptingDating: false,
     hasMoments: false,
@@ -67,10 +70,7 @@ export function DiscoverClient({
   });
   const visibleProfiles = useMemo(() => {
     const dismissed = new Set(dismissedIds);
-    const trimmedSearch = searchText.trim();
-    const normalizedPublicIdSearch = normalizePublicId(trimmedSearch);
-    const hasInvalidPublicIdSearch =
-      trimmedSearch.length > 0 && !isMatchrPublicId(trimmedSearch);
+    const normalizedPublicIdSearch = normalizePublicId(searchQuery);
     const filtered = profiles.filter((profile) => {
       if (dismissed.has(profile.id)) return false;
       if (hasInvalidPublicIdSearch) {
@@ -98,7 +98,7 @@ export function DiscoverClient({
       }
       return b.compatibility - a.compatibility;
     });
-  }, [dismissedIds, filters, isUserOnline, profiles, searchText, sortBy]);
+  }, [dismissedIds, filters, hasInvalidPublicIdSearch, isUserOnline, profiles, searchQuery, sortBy]);
   const liveRecentlyActive = useMemo(
     () =>
       profiles
@@ -143,6 +143,11 @@ export function DiscoverClient({
           className="w-full rounded-2xl border border-neutral-800 bg-black/70 px-4 py-3 text-[15px] text-white placeholder:text-neutral-500 focus:border-emerald-300/50 focus:outline-none"
         />
       </label>
+      {hasInvalidPublicIdSearch ? (
+        <p className="mt-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-2 text-sm text-amber-100">
+          Enter Matchr ID
+        </p>
+      ) : null}
 
       <ProfileRail title="Active now" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />
       <ProfileRail title="Trending" profiles={trending} />
@@ -239,9 +244,6 @@ export function DiscoverClient({
                   />
                 </label>
               ))}
-              <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-500">
-                Distance, nearby sorting, verified-only enforcement, and compatibility scoring are ready as placeholders for location/verification signals.
-              </div>
             </div>
           </div>
         </div>

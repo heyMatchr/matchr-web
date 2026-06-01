@@ -75,9 +75,6 @@ export default async function WalletPage() {
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">Messages · Gifts · Premium</p>
-          <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
-            Payments are pending until confirmed.
-          </p>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               ["✉", "Start", "Get noticed"],
@@ -96,11 +93,7 @@ export default async function WalletPage() {
             ))}
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
-            <form action={startGoldCheckout}>
-              <input type="hidden" name="package" value="500" />
-              <input type="hidden" name="provider_key" value={defaultProvider} />
-              <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</button>
-            </form>
+            <a href="#gold-packages" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</a>
             <form action={startPremiumCheckout}>
               <input type="hidden" name="provider_key" value={defaultProvider} />
               <button className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Upgrade to Premium</button>
@@ -108,40 +101,58 @@ export default async function WalletPage() {
           </div>
         </section>
 
-        <section className="grid gap-3.5 rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
-          <h2 className="text-lg font-black">Gold packages</h2>
+        <section id="gold-packages" className="grid gap-3.5 rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+          <div>
+            <h2 className="text-lg font-black">Gold packages</h2>
+            <p className="mt-1 text-sm text-neutral-400">Choose a package, then pick a payment method.</p>
+          </div>
           {(packagesResult.data ?? []).map((pack, index) => (
-            <form key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`} action={startGoldCheckout}>
-              <input type="hidden" name="package_id" value={pack.id} />
-              <div className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30 sm:p-5">
-                <p className="font-black">{pack.name}</p>
-                <p className="mt-1.5 text-[15px] leading-6 text-neutral-300">
-                  {pack.gold_amount + (pack.bonus_gold ?? 0)} gold
-                  {pack.bonus_gold ? ` (${pack.bonus_gold} bonus)` : ""} · $
-                  {pack.usd_price ?? pack.price_usd}
-                </p>
+            <details
+              key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`}
+              className="group rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 transition-colors open:border-emerald-300/30 sm:p-5"
+            >
+              <summary className="flex cursor-pointer list-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  <span className="block font-black">{pack.name}</span>
+                  <span className="mt-1.5 block text-[15px] leading-6 text-neutral-300">
+                    {pack.gold_amount + (pack.bonus_gold ?? 0)} Gold
+                    {pack.bonus_gold ? ` · ${pack.bonus_gold} bonus` : ""} · $
+                    {pack.usd_price ?? pack.price_usd}
+                  </span>
+                </span>
+                <span className="w-fit rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
+                  Select Package
+                </span>
+              </summary>
+              <form action={startGoldCheckout} className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3">
+                <input type="hidden" name="package_id" value={pack.id} />
+                <p className="text-sm font-black text-emerald-50">Payment Method</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {availableProviders.map((provider, providerIndex) => (
-                    <label
-                      key={`${pack.id}-${provider.provider_key}`}
-                      className="rounded-full border border-neutral-700 px-3 py-1.5 text-xs text-neutral-300"
-                    >
-                      <input
-                        className="mr-1 accent-emerald-300"
-                        defaultChecked={providerIndex === 0}
-                        name="provider_key"
-                        type="radio"
-                        value={provider.provider_key}
-                      />
-                      {provider.name}
-                    </label>
-                  ))}
+                  {availableProviders.length ? (
+                    availableProviders.map((provider, providerIndex) => (
+                      <label
+                        key={`${pack.id}-${provider.provider_key}`}
+                        className="rounded-full border border-neutral-700 bg-black/30 px-3 py-1.5 text-xs text-neutral-300"
+                      >
+                        <input
+                          className="mr-1 accent-emerald-300"
+                          defaultChecked={providerIndex === 0}
+                          name="provider_key"
+                          type="radio"
+                          value={provider.provider_key}
+                        />
+                        {provider.name}
+                      </label>
+                    ))
+                  ) : (
+                    <span className="text-sm text-neutral-400">No payment methods available.</span>
+                  )}
                 </div>
-                <button className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
-                  Continue
+                <button disabled={!availableProviders.length} className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50">
+                  Continue to Payment
                 </button>
-              </div>
-            </form>
+              </form>
+            </details>
           ))}
         </section>
 
@@ -160,9 +171,19 @@ export default async function WalletPage() {
             <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
               {premiumPlansResult.data?.[0]
                 ? `Start ${premiumPlansResult.data[0].name ?? premiumPlansResult.data[0].plan_name} · $${premiumPlansResult.data[0].price_usd}`
-                : "Premium soon"}
+                : "Premium unavailable"}
             </button>
           </form>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {["Priority", "Insights", "Discounts", "Badge"].map((benefit) => (
+              <span
+                key={benefit}
+                className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-3 py-1.5 text-sm text-emerald-50"
+              >
+                {benefit}
+              </span>
+            ))}
+          </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {(premiumPlansResult.data ?? []).length ? (
               (premiumPlansResult.data ?? []).map((plan) => (
@@ -186,14 +207,14 @@ export default async function WalletPage() {
               ))
             ) : (
               <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">
-                No active premium plans.
+                Premium plans are not available right now.
               </div>
             )}
           </div>
         </section>
 
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
-          <h2 className="text-lg font-black">Payment providers</h2>
+          <h2 className="text-lg font-black">Payment methods</h2>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
             Available here: {currentProfile.country ?? "your region"}.
           </p>
@@ -212,7 +233,7 @@ export default async function WalletPage() {
               ))
             ) : (
               <p className="text-sm text-neutral-400">
-                No payment providers are currently available.
+                No payment methods are available right now.
               </p>
             )}
           </div>
@@ -243,12 +264,12 @@ export default async function WalletPage() {
           </div>
         </section>
 
-        <History title="Transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
+        <History actionHref="#gold-packages" actionLabel="Buy Gold" emptyText="No purchases yet" title="Transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
         <History title="Payments" rows={(paymentOrdersResult.data ?? []).map((row) => {
           const amount = row.amount ?? row.amount_usd ?? 0;
           const currency = row.currency ?? "USD";
           const gold = row.gold_amount ? ` · ${row.gold_amount} Gold` : "";
-          return `${row.order_type} · ${row.status} · ${currency} ${amount}${gold} · ${row.provider}`;
+          return `${formatPaymentType(row.order_type)} · ${formatPaymentStatus(row.status)} · ${currency} ${amount}${gold}${row.provider ? ` · ${row.provider}` : ""}`;
         })} />
         <History title="Gifts in" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0}`)} />
         <History title="Gifts out" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0}`)} />
@@ -279,14 +300,59 @@ function formatWalletTransaction(row: {
   return `${labels[row.transaction_type] ?? row.transaction_type} · ${sign}${row.gold_delta} Gold`;
 }
 
-function History({ rows, title }: { rows: string[]; title: string }) {
+function formatPaymentStatus(status: string | null) {
+  const labels: Record<string, string> = {
+    cancelled: "Cancelled",
+    failed: "Failed",
+    paid: "Paid",
+    pending: "Processing",
+  };
+
+  return labels[status ?? ""] ?? "Processing";
+}
+
+function formatPaymentType(type: string | null) {
+  const labels: Record<string, string> = {
+    gift_purchase: "Gift purchase",
+    gold_purchase: "Gold purchase",
+    premium_subscription: "Premium",
+  };
+
+  return labels[type ?? ""] ?? "Purchase";
+}
+
+function History({
+  actionHref,
+  actionLabel,
+  emptyText = "No activity yet.",
+  rows,
+  title,
+}: {
+  actionHref?: string;
+  actionLabel?: string;
+  emptyText?: string;
+  rows: string[];
+  title: string;
+}) {
   return (
     <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
       <h2 className="text-lg font-black">{title}</h2>
       <div className="mt-4 grid gap-2.5">
         {rows.length ? rows.map((row, index) => (
           <div key={`${row}-${index}`} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">{row}</div>
-        )) : <p className="text-sm leading-6 text-neutral-400">No activity yet.</p>}
+        )) : (
+          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+            <p className="text-sm leading-6 text-neutral-400">{emptyText}</p>
+            {actionHref && actionLabel ? (
+              <a
+                href={actionHref}
+                className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-sm font-medium text-black"
+              >
+                {actionLabel}
+              </a>
+            ) : null}
+          </div>
+        )}
       </div>
     </section>
   );

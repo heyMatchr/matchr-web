@@ -878,18 +878,25 @@ function GiftsSheet({
           </button>
         </div>
         <p className="mt-2 text-sm text-neutral-500">
-          {goldBalance} gold available · Gold wallet coming soon
+          {goldBalance} Gold available
         </p>
         {giftState?.status === "error" ? (
           <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
-            <p className="font-black text-amber-100">Not enough gold</p>
-            <p className="mt-1 text-sm text-amber-100/70">{giftState.message}</p>
+            <p className="font-black text-amber-100">Need Gold</p>
+            <p className="mt-1 text-sm text-amber-100/70">Top up to send this gift.</p>
             <div className="mt-3 flex gap-2">
-              <button className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">
-                Buy Gold
-              </button>
-              <button className="rounded-full border border-amber-200/30 px-4 py-2 text-sm text-amber-100">
-                Upgrade
+              <Link
+                href="/wallet"
+                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black"
+              >
+                Top Up
+              </Link>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-amber-200/30 px-4 py-2 text-sm text-amber-100"
+              >
+                Close
               </button>
             </div>
           </div>
@@ -915,6 +922,9 @@ function GiftsSheet({
                     {gift.coinPrice} Gold
                     {gift.description ? ` · ${gift.description}` : ""}
                   </span>
+                </span>
+                <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
+                  Send Gift
                 </span>
               </button>
             </form>

@@ -122,15 +122,20 @@ export function BrowserNotificationSettings({
           This browser does not support web notifications.
         </p>
       ) : null}
-      <div className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
-        <span>Permission: {debugState.permission}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>
-          Enabled flag: {debugState.enabledFlag === "enabled" ? "yes" : "no"}
-        </span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>Secure context: {debugState.isSecureContext ? "yes" : "no"}</span>
-      </div>
+      <details className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
+        <summary className="cursor-pointer text-sm font-medium text-neutral-300">
+          Details
+        </summary>
+        <div className="mt-2">
+          <span>Permission: {debugState.permission}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>
+            Enabled flag: {debugState.enabledFlag === "enabled" ? "yes" : "no"}
+          </span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>Secure context: {debugState.isSecureContext ? "yes" : "no"}</span>
+        </div>
+      </details>
     </div>
   );
 }

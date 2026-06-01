@@ -397,65 +397,68 @@ export function PushNotificationSettings({
         ) : null}
       </div>
 
-      <div className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
-        <span>Permission granted: {isGranted ? "yes" : "no"}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>Subscription saved: {activeSubscriptionCount && activeSubscriptionCount > 0 ? "yes" : "no"}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>Active subscriptions: {activeSubscriptionCount ?? "unknown"}</span>
-        <br />
-        <span>Service worker: {support?.serviceWorkerSupported ? "yes" : "no"}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>PushManager: {support?.pushSupported ? "yes" : "no"}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>Secure: {support?.isSecureContext ? "yes" : "no"}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>Installed: {support?.isStandalone ? "yes" : "no"}</span>
-        <span className="mx-2 text-neutral-700">/</span>
-        <span>VAPID key: {support?.vapidPublicKeyExists ? "yes" : "no"}</span>
-      </div>
-
-      <div className="mt-3 rounded-xl border border-emerald-300/15 bg-black/45 px-3 py-2 text-xs leading-5 text-neutral-300">
-        <p className="font-semibold text-emerald-100">Push subscription debug</p>
-        <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
-          <span>supportDetected: {pushDebug.supportDetected ? "yes" : "no"}</span>
-          <span>permissionGranted: {pushDebug.permissionGranted || isGranted ? "yes" : "no"}</span>
-          <span>serviceWorkerReady: {pushDebug.serviceWorkerReady ? "yes" : "no"}</span>
-          <span>pushSubscriptionCreated: {pushDebug.pushSubscriptionCreated ? "yes" : "no"}</span>
-          <span>subscribeApiCalled: {pushDebug.subscribeApiCalled ? "yes" : "no"}</span>
-          <span>subscribeApiSuccess: {pushDebug.subscribeApiSuccess ? "yes" : "no"}</span>
+      <details className="mt-3 rounded-xl border border-neutral-800/70 bg-black/25 px-3 py-2 text-xs leading-5 text-neutral-400">
+        <summary className="cursor-pointer text-sm font-medium text-neutral-300">
+          Details
+        </summary>
+        <div className="mt-2">
+          <span>Permission granted: {isGranted ? "yes" : "no"}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>Subscription saved: {activeSubscriptionCount && activeSubscriptionCount > 0 ? "yes" : "no"}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>Active subscriptions: {activeSubscriptionCount ?? "unknown"}</span>
+          <br />
+          <span>Service worker: {support?.serviceWorkerSupported ? "yes" : "no"}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>PushManager: {support?.pushSupported ? "yes" : "no"}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>Secure: {support?.isSecureContext ? "yes" : "no"}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>Installed: {support?.isStandalone ? "yes" : "no"}</span>
+          <span className="mx-2 text-neutral-700">/</span>
+          <span>VAPID key: {support?.vapidPublicKeyExists ? "yes" : "no"}</span>
         </div>
-        <p className="mt-1 text-neutral-400">
-          subscribeApiResponse: {pushDebug.subscribeApiResponse || "none"}
-        </p>
-        <p className="mt-1 text-neutral-400">
-          subscribeApiError: {pushDebug.subscribeApiError || "none"}
-        </p>
-        <p className="mt-1 text-neutral-400">Last step: {pushDebug.lastStep}</p>
-        {pushDebugLog.length ? (
-          <div className="mt-2 space-y-1 text-[11px] text-neutral-500">
-            {pushDebugLog.map((entry) => (
-              <p key={entry}>{entry}</p>
-            ))}
+        <div className="mt-3 rounded-xl border border-emerald-300/15 bg-black/45 px-3 py-2 text-neutral-300">
+          <p className="font-semibold text-emerald-100">Push subscription debug</p>
+          <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+            <span>supportDetected: {pushDebug.supportDetected ? "yes" : "no"}</span>
+            <span>permissionGranted: {pushDebug.permissionGranted || isGranted ? "yes" : "no"}</span>
+            <span>serviceWorkerReady: {pushDebug.serviceWorkerReady ? "yes" : "no"}</span>
+            <span>pushSubscriptionCreated: {pushDebug.pushSubscriptionCreated ? "yes" : "no"}</span>
+            <span>subscribeApiCalled: {pushDebug.subscribeApiCalled ? "yes" : "no"}</span>
+            <span>subscribeApiSuccess: {pushDebug.subscribeApiSuccess ? "yes" : "no"}</span>
+          </div>
+          <p className="mt-1 text-neutral-400">
+            subscribeApiResponse: {pushDebug.subscribeApiResponse || "none"}
+          </p>
+          <p className="mt-1 text-neutral-400">
+            subscribeApiError: {pushDebug.subscribeApiError || "none"}
+          </p>
+          <p className="mt-1 text-neutral-400">Last step: {pushDebug.lastStep}</p>
+          {pushDebugLog.length ? (
+            <div className="mt-2 space-y-1 text-[11px] text-neutral-500">
+              {pushDebugLog.map((entry) => (
+                <p key={entry}>{entry}</p>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {showDebugTools && isDevelopment ? (
+          <div className="mt-3 rounded-xl border border-amber-300/20 bg-black/45 px-3 py-2 text-neutral-300">
+            <p className="font-semibold text-amber-100">Force save debug</p>
+            <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
+              <span>apiCalled: {forceSaveDebug.apiCalled ? "yes" : "no"}</span>
+              <span>response status: {forceSaveDebug.responseStatus || "none"}</span>
+            </div>
+            <p className="mt-1 break-words text-neutral-400">
+              response body: {forceSaveDebug.responseBody || "none"}
+            </p>
+            <p className="mt-1 break-words text-neutral-400">
+              error text: {forceSaveDebug.errorText || "none"}
+            </p>
           </div>
         ) : null}
-      </div>
-
-      {showDebugTools && isDevelopment ? (
-      <div className="mt-3 rounded-xl border border-amber-300/20 bg-black/45 px-3 py-2 text-xs leading-5 text-neutral-300">
-        <p className="font-semibold text-amber-100">Force save debug</p>
-        <div className="mt-1 grid gap-x-3 gap-y-1 sm:grid-cols-2">
-          <span>apiCalled: {forceSaveDebug.apiCalled ? "yes" : "no"}</span>
-          <span>response status: {forceSaveDebug.responseStatus || "none"}</span>
-        </div>
-        <p className="mt-1 break-words text-neutral-400">
-          response body: {forceSaveDebug.responseBody || "none"}
-        </p>
-        <p className="mt-1 break-words text-neutral-400">
-          error text: {forceSaveDebug.errorText || "none"}
-        </p>
-      </div>
-      ) : null}
+      </details>
     </div>
   );
 }
