@@ -4,8 +4,6 @@ import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
-import { BrowserNotificationSettings } from "@/app/settings/browser-notification-settings";
-import { InstallPromptCard } from "@/app/settings/install-prompt-card";
 import { FollowButton } from "@/app/social/follow-button";
 import { likeProfile } from "@/app/discover/actions";
 import { isVisibleIdentityValue } from "@/lib/identity";
@@ -23,6 +21,13 @@ type ProfilePageProps = {
     id: string;
   }>;
 };
+
+function toChipList(value?: string | null) {
+  return (value ?? "")
+    .split(/[,/|]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const perfStartedAt = startPerfTimer();
@@ -297,6 +302,43 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     (giftsReceivedResult.count ?? 0) >= 3 ? "Top gifted" : "",
     (followersResult.count ?? 0) >= 10 ? "Trending" : "",
   ].filter(Boolean);
+  const completedKeys = new Set(
+    profileCompletion.completed.map((signal) => signal.key),
+  );
+  const completionChecklist = [
+    ["Photo", completedKeys.has("photo")],
+    ["Bio", completedKeys.has("bio")],
+    ["Interests", completedKeys.has("interests")],
+    ["Story", completedKeys.has("story")],
+    ["Moments", completedKeys.has("moment")],
+    ["Location", completedKeys.has("location")],
+  ] as const;
+  const intentChips = toChipList(profile.relationship_intent);
+  const interestChips = profile.interests ?? [];
+  const lifestyleItems = [
+    ["Height", profile.height],
+    ["Body", profile.body_type],
+    ["Relationship", profile.relationship_status],
+    ["Looking for", profile.looking_for],
+    ["Dating", profile.accepting_dating ? "Yes" : null],
+    ["Distance", profile.open_to_long_distance ? "Open" : null],
+    ["Drinks", profile.drinking],
+    ["Smoking", profile.smoking],
+  ].filter(([, value]) => Boolean(value));
+  const chatHref = matchResult.data ? `/chat/${matchResult.data.id}` : null;
+  const attractionChips =
+    profile.id === user.id
+      ? [
+          { href: "/profile/edit", label: "Improve" },
+          { href: "/discover", label: "Story" },
+          { href: "/settings/templates", label: "Templates" },
+          { href: "/wallet", label: "Wallet" },
+        ]
+      : [
+          { href: chatHref, label: "Say Hi" },
+          { href: chatHref, label: "Gift" },
+          { href: hasActiveStories ? "/discover" : null, label: "Story Reply" },
+        ];
 
   finishPerfTimer("[Perf] Profile queries", perfStartedAt);
 
@@ -471,37 +513,22 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
                 Email verified
               </span>
-              <span className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400">
-                Phone verification placeholder
-              </span>
             </div>
 
             {profile.id === user.id ? (
-              <div className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/70">
-                      Wallet
-                    </p>
-                    <p className="mt-1 text-2xl font-black">
-                      {walletResult.data?.gold_balance ?? 0} gold
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-400">
-                      {premiumResult.data ? "Matchr Premium active" : "Premium inactive"}
-                    </p>
-                  </div>
-                  <div className="grid gap-2">
-                    <button className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">
-                      Buy Gold
-                    </button>
-                    <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">
-                      Upgrade
-                    </button>
-                  </div>
-                </div>
-                <p className="mt-3 text-xs text-neutral-500">
-                  Gold wallet coming soon.
-                </p>
+              <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3">
+                <span className="rounded-full bg-black/35 px-3 py-1.5 text-sm font-medium text-emerald-50">
+                  {walletResult.data?.gold_balance ?? 0} Gold
+                </span>
+                <span className="rounded-full bg-black/35 px-3 py-1.5 text-sm text-neutral-200">
+                  {premiumResult.data ? "Premium Active" : "Premium Inactive"}
+                </span>
+                <Link
+                  href="/wallet"
+                  className="rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200"
+                >
+                  Wallet
+                </Link>
               </div>
             ) : null}
 
@@ -529,44 +556,67 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     style={{ width: `${profileCompletion.score}%` }}
                   />
                 </div>
-                <div className="mt-4 grid gap-2">
-                  {profileCompletion.nextPrompts.length ? (
-                    profileCompletion.nextPrompts.map((prompt) => (
-                      <p
-                        key={prompt}
-                        className="rounded-xl border border-neutral-800 bg-black/35 px-3 py-2.5 text-sm leading-5 text-neutral-300"
-                      >
-                        {prompt}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="rounded-xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2.5 text-sm leading-5 text-emerald-50">
-                      Your profile has enough personality to start doing some
-                      damage, respectfully.
-                    </p>
-                  )}
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {completionChecklist.map(([label, done]) => (
+                    <span
+                      key={label}
+                      className={`rounded-full border px-3 py-2 text-sm ${
+                        done
+                          ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-50"
+                          : "border-neutral-800 bg-black/30 text-neutral-400"
+                      }`}
+                    >
+                      {done ? "✓" : "□"} {label}
+                    </span>
+                  ))}
                 </div>
               </div>
             ) : null}
 
-            {profile.id === user.id ? (
-              <div className="mt-4">
-                <InstallPromptCard compact />
+            {profile.bio ? (
+              <div className="mt-8">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                  Bio
+                </p>
+                <p className="mt-2 leading-7 text-neutral-200">{profile.bio}</p>
               </div>
             ) : null}
 
-            {profile.id === user.id ? (
-              <div className="mt-4">
-                <BrowserNotificationSettings compact />
+            {intentChips.length ? (
+              <div className="mt-8">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                  Intent
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {intentChips.map((intent) => (
+                    <span
+                      key={intent}
+                      className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-3 py-1.5 text-sm text-emerald-50"
+                    >
+                      {intent}
+                    </span>
+                  ))}
+                </div>
               </div>
             ) : null}
 
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Intent
-              </p>
-              <p className="mt-2 text-xl">{profile.relationship_intent}</p>
-            </div>
+            {interestChips.length ? (
+              <div className="mt-8">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                  Interests
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {interestChips.map((interest) => (
+                    <span
+                      key={interest}
+                      className="rounded-full bg-white/5 px-3 py-1.5 text-sm text-neutral-300"
+                    >
+                      {interest}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {profile.pronouns ||
             (profile.show_gender_on_profile &&
@@ -600,64 +650,37 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
             <div className="mt-8">
               <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Lifestyle
+                Actions
               </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {[
-                  ["Drinks", profile.drinking],
-                  ["Smoking", profile.smoking],
-                  ["Workouts", "Fitness vibe placeholder"],
-                  ["Late nights", "Open to spontaneous plans"],
-                  ["Relationship type", profile.relationship_status],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
-                    <p className="text-xs text-neutral-500">{label}</p>
-                    <p className="mt-1 text-sm text-neutral-200">{value ?? "Not shared"}</p>
-                  </div>
-                ))}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {attractionChips.map((chip) =>
+                  chip.href ? (
+                    <Link
+                      key={chip.label}
+                      href={chip.href}
+                      className="rounded-full border border-emerald-300/15 bg-emerald-300/10 px-3 py-1.5 text-sm text-emerald-50 transition-colors hover:bg-emerald-300/15"
+                    >
+                      {chip.label}
+                    </Link>
+                  ) : (
+                    <span
+                      key={chip.label}
+                      className="rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm text-neutral-400"
+                    >
+                      {chip.label}
+                    </span>
+                  ),
+                )}
               </div>
             </div>
 
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Attraction prompts
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {[
-                  "Reply to their story",
-                  "Send a gift",
-                  "Say hi",
-                  profile.id === user.id ? "Complete your profile" : "Mention a shared interest",
-                ].map((prompt) => (
-                  <div key={prompt} className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4 text-sm text-emerald-50">
-                    {prompt}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Basic info
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {[
-                  ["Height", profile.height],
-                  ["Body type", profile.body_type],
-                  ["Relationship", profile.relationship_status],
-                  ["Looking for", profile.looking_for],
-                  [
-                    "Accepting dating",
-                    profile.accepting_dating ? "Yes" : "No",
-                  ],
-                  [
-                    "Long distance",
-                    profile.open_to_long_distance ? "Open" : "Local only",
-                  ],
-                  ["Drinking", profile.drinking],
-                  ["Smoking", profile.smoking],
-                ].map(([label, value]) =>
-                  value ? (
+            {lifestyleItems.length ? (
+              <div className="mt-8">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                  Basic info
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {lifestyleItems.map(([label, value]) => (
                     <div
                       key={label}
                       className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3"
@@ -665,42 +688,15 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       <p className="text-xs text-neutral-500">{label}</p>
                       <p className="mt-1 text-sm text-neutral-200">{value}</p>
                     </div>
-                  ) : null,
-                )}
+                  ))}
+                </div>
               </div>
-            </div>
-
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Bio
-              </p>
-              <p className="mt-2 leading-7 text-neutral-200">{profile.bio}</p>
-            </div>
-
-            <div className="mt-8">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Interests
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {profile.interests.map((interest) => (
-                  <span
-                    key={interest}
-                    className="rounded-full bg-white/5 px-3 py-1 text-sm text-neutral-300"
-                  >
-                    {interest}
-                  </span>
-                ))}
-              </div>
-            </div>
+            ) : null}
 
             {profile.id === user.id ? (
               <div className="mt-8">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                  Profile visitors
-                </p>
-                <p className="mt-2 text-sm leading-6 text-neutral-500">
-                  Recent people who opened your profile. Self views are not
-                  included.
+                  Visitors
                 </p>
                 {recentVisitors.length > 0 ? (
                   <div className="mt-3 grid gap-2">
@@ -763,7 +759,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 </div>
               ) : (
                 <div className="mt-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-4 text-sm text-neutral-500">
-                  No recent profile visitors yet.
+                  No visitors yet
                 </div>
               )}
             </div>
@@ -786,7 +782,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       </Link>
                     ))
                   ) : (
-                    <p className="text-sm text-neutral-500">No followers yet.</p>
+                    <p className="text-sm text-neutral-500">Followers 0</p>
                   )}
                 </div>
               </div>
@@ -807,7 +803,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     ))
                   ) : (
                     <p className="text-sm text-neutral-500">
-                      Not following anyone yet.
+                      Following 0
                     </p>
                   )}
                 </div>

@@ -9,6 +9,7 @@ import {
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
+import { BrowserNotificationSettings } from "./browser-notification-settings";
 import { InstallPromptCard } from "./install-prompt-card";
 import { PushNotificationSettings } from "./push-notification-settings";
 
@@ -140,7 +141,6 @@ export default async function SettingsPage() {
         </SettingsSection>
 
         <SettingsSection title="Notifications">
-          <InstallPromptCard />
           <PushNotificationSettings
             anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
             currentUserId={user.id}
@@ -156,6 +156,11 @@ export default async function SettingsPage() {
           <Toggle defaultChecked={settings.message_notifications} name="message_notifications" title="Message notifications" />
           <Toggle defaultChecked={settings.gift_notifications} name="gift_notifications" title="Gift notifications" />
           <Toggle defaultChecked={settings.match_notifications} name="match_notifications" title="Match notifications" />
+        </SettingsSection>
+
+        <SettingsSection title="Device">
+          <InstallPromptCard />
+          <BrowserNotificationSettings compact />
         </SettingsSection>
 
         <button className="rounded-full bg-white px-6 py-3 font-medium text-black transition-colors hover:bg-neutral-200">
