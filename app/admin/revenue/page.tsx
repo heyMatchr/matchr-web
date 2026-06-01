@@ -24,6 +24,8 @@ export default async function AdminRevenuePage() {
     messageChargesResult,
     premiumResult,
     paymentOrdersResult,
+    creatorWalletsResult,
+    withdrawalsResult,
   ] = await Promise.all([
     supabase.from("user_wallets").select("user_id, gold_balance").limit(50000),
     supabase
@@ -51,6 +53,15 @@ export default async function AdminRevenuePage() {
       .select("user_id, provider, order_type, status, amount, amount_usd, currency, gold_amount, created_at, paid_at")
       .order("created_at", { ascending: false })
       .limit(50000),
+    supabase
+      .from("creator_wallets")
+      .select("user_id, diamonds_balance, diamonds_lifetime, diamonds_pending, diamonds_withdrawn, created_at, updated_at")
+      .limit(50000),
+    supabase
+      .from("withdrawal_requests")
+      .select("id, user_id, diamonds_amount, cash_estimate, status, payout_method, created_at, processed_at")
+      .order("created_at", { ascending: false })
+      .limit(50000),
   ]);
 
   const firstError = [
@@ -60,6 +71,8 @@ export default async function AdminRevenuePage() {
     messageChargesResult,
     premiumResult,
     paymentOrdersResult,
+    creatorWalletsResult,
+    withdrawalsResult,
   ].find((result) => result.error)?.error;
 
   if (firstError) {
@@ -72,6 +85,8 @@ export default async function AdminRevenuePage() {
       ...(walletTransactionsResult.data ?? []).map((row) => row.user_id),
       ...(messageChargesResult.data ?? []).map((row) => row.sender_id),
       ...(paymentOrdersResult.data ?? []).map((row) => row.user_id),
+      ...(creatorWalletsResult.data ?? []).map((row) => row.user_id),
+      ...(withdrawalsResult.data ?? []).map((row) => row.user_id),
     ]),
   ].filter((id): id is string => Boolean(id));
   const { data: profiles, error: profileError } = profileIds.length
@@ -93,6 +108,7 @@ export default async function AdminRevenuePage() {
       title="Admin Revenue"
     >
       <RevenueDashboardClient
+        creatorWallets={creatorWalletsResult.data ?? []}
         gifts={giftsResult.data ?? []}
         messageCharges={messageChargesResult.data ?? []}
         paymentOrders={paymentOrdersResult.data ?? []}
@@ -100,6 +116,7 @@ export default async function AdminRevenuePage() {
         profiles={profiles ?? []}
         walletTransactions={walletTransactionsResult.data ?? []}
         wallets={walletsResult.data ?? []}
+        withdrawalRequests={withdrawalsResult.data ?? []}
       />
     </AppShell>
   );

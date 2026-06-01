@@ -70,6 +70,28 @@ type PaymentOrder = {
   user_id: string;
 };
 
+type CreatorWallet = {
+  created_at: string;
+  diamonds_balance: number;
+  diamonds_lifetime: number;
+  diamonds_pending: number;
+  diamonds_withdrawn: number;
+  updated_at: string;
+  user_id: string;
+};
+
+type WithdrawalRequest = {
+  cash_estimate: number;
+  created_at: string;
+  diamonds_amount: number;
+  id: string;
+  paid_at?: string | null;
+  payout_method: string;
+  processed_at: string | null;
+  status: string;
+  user_id: string;
+};
+
 type SeriesPoint = {
   date: string;
   label: string;
@@ -101,6 +123,7 @@ type RankedRow = {
 };
 
 type RevenueDashboardClientProps = {
+  creatorWallets: CreatorWallet[];
   gifts: GiftTransaction[];
   messageCharges: MessageCharge[];
   paymentOrders: PaymentOrder[];
@@ -108,6 +131,7 @@ type RevenueDashboardClientProps = {
   profiles: ProfileSummary[];
   walletTransactions: WalletTransaction[];
   wallets: WalletRow[];
+  withdrawalRequests: WithdrawalRequest[];
 };
 
 const rangeOptions: Array<{ key: RangeKey; label: string }> = [
@@ -644,6 +668,7 @@ function RankingTable({ emptyLabel, rows, title }: { emptyLabel: string; rows: R
 }
 
 export function RevenueDashboardClient({
+  creatorWallets,
   gifts,
   messageCharges,
   paymentOrders,
@@ -651,6 +676,7 @@ export function RevenueDashboardClient({
   profiles,
   walletTransactions,
   wallets,
+  withdrawalRequests,
 }: RevenueDashboardClientProps) {
   const [range, setRange] = useState<RangeKey>("7d");
   const keys = useMemo(() => dateKeys(rangeDays(range)), [range]);
@@ -674,6 +700,25 @@ export function RevenueDashboardClient({
   const currentGoldHeld = useMemo(
     () => wallets.reduce((total, row) => total + (row.gold_balance ?? 0), 0),
     [wallets],
+  );
+  const totalDiamondsIssued = useMemo(
+    () => creatorWallets.reduce((total, row) => total + (row.diamonds_lifetime ?? 0), 0),
+    [creatorWallets],
+  );
+  const totalCreatorEarnings = totalDiamondsIssued;
+  const totalPendingWithdrawals = useMemo(
+    () =>
+      withdrawalRequests
+        .filter((row) => row.status === "pending" || row.status === "approved")
+        .reduce((total, row) => total + row.diamonds_amount, 0),
+    [withdrawalRequests],
+  );
+  const totalCompletedWithdrawals = useMemo(
+    () =>
+      withdrawalRequests
+        .filter((row) => row.status === "paid")
+        .reduce((total, row) => total + row.diamonds_amount, 0),
+    [withdrawalRequests],
   );
   const issuedRows = walletTransactions.filter((row) => row.gold_delta > 0);
   const spentRows = walletTransactions.filter((row) => row.gold_delta < 0);
@@ -725,8 +770,40 @@ export function RevenueDashboardClient({
         previousValue: pendingPaymentOrders.length,
         subtitle: `${formatPercent(paymentConversionRate)} conversion`,
       },
+      {
+        change: null,
+        color: "violet" as Tone,
+        label: "Diamonds issued",
+        periodValue: totalDiamondsIssued,
+        previousValue: 0,
+        subtitle: "creator lifetime",
+      },
+      {
+        change: null,
+        color: "emerald" as Tone,
+        label: "Creator earnings",
+        periodValue: totalCreatorEarnings,
+        previousValue: 0,
+        subtitle: "total Diamonds earned",
+      },
+      makeKpi(
+        "Pending withdrawals",
+        "amber",
+        withdrawalRequests.filter((row) => row.status === "pending" || row.status === "approved"),
+        range,
+        (row) => row.created_at,
+        (row) => row.diamonds_amount,
+      ),
+      makeKpi(
+        "Completed withdrawals",
+        "emerald",
+        withdrawalRequests.filter((row) => row.status === "paid"),
+        range,
+        (row) => row.processed_at ?? row.created_at,
+        (row) => row.diamonds_amount,
+      ),
     ],
-    [activePremium.length, currentGoldHeld, gifts, issuedRows, messageCharges, paidPaymentOrders.length, paymentConversionRate, pendingPaymentOrders.length, projectedWeeklyPremiumRevenue, range, spentRows, starterRows],
+    [activePremium.length, currentGoldHeld, gifts, issuedRows, messageCharges, paidPaymentOrders.length, paymentConversionRate, pendingPaymentOrders.length, projectedWeeklyPremiumRevenue, range, spentRows, starterRows, totalCreatorEarnings, totalDiamondsIssued, withdrawalRequests],
   );
 
   const series = useMemo(
@@ -747,8 +824,26 @@ export function RevenueDashboardClient({
         keys,
         (row) => row.created_at,
       ),
+      diamondsIssued: countByDay(
+        creatorWallets,
+        keys,
+        (row) => row.created_at,
+        (row) => row.diamonds_lifetime,
+      ),
+      pendingWithdrawals: countByDay(
+        withdrawalRequests.filter((row) => row.status === "pending" || row.status === "approved"),
+        keys,
+        (row) => row.created_at,
+        (row) => row.diamonds_amount,
+      ),
+      paidWithdrawals: countByDay(
+        withdrawalRequests.filter((row) => row.status === "paid"),
+        keys,
+        (row) => row.processed_at ?? row.created_at,
+        (row) => row.diamonds_amount,
+      ),
     }),
-    [gifts, issuedRows, keys, messageCharges, paymentOrders, spentRows, starterRows],
+    [creatorWallets, gifts, issuedRows, keys, messageCharges, paymentOrders, spentRows, starterRows, withdrawalRequests],
   );
 
   const mostSentGifts = useMemo(
@@ -770,16 +865,16 @@ export function RevenueDashboardClient({
   );
   const topEarners = useMemo(
     () => rankBy(
-      activeWalletTransactions.filter((row) => row.transaction_type === "gift_received" && row.gold_delta > 0),
+      creatorWallets,
       (row) => row.user_id,
-      (row) => row.gold_delta,
+      (row) => row.diamonds_lifetime,
     ).map(([userId, total]) => ({
       label: profilesById.get(userId)?.display_name ?? "Unknown user",
       profile: profilesById.get(userId) ?? null,
       secondary: profilesById.get(userId)?.public_id ?? userId,
       total,
     })),
-    [activeWalletTransactions, profilesById],
+    [creatorWallets, profilesById],
   );
   const highestGoldSpenders = useMemo(
     () => rankBy(activeSpentRows, (row) => row.user_id, (row) => Math.abs(row.gold_delta)).map(([userId, total]) => ({
@@ -838,6 +933,9 @@ export function RevenueDashboardClient({
           <Link href="/admin/analytics" className="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200">
             Platform analytics
           </Link>
+          <Link href="/admin/withdrawals" className="rounded-full border border-violet-300/35 bg-violet-300/10 px-4 py-2 text-sm font-medium text-violet-100">
+            Withdrawals
+          </Link>
         </div>
       </div>
 
@@ -880,6 +978,32 @@ export function RevenueDashboardClient({
         </div>
       </section>
 
+      <section className="mt-6 rounded-2xl border border-violet-300/20 bg-violet-300/10 p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-black text-white">Creator earnings</h2>
+            <p className="mt-1 text-sm leading-6 text-violet-100/80">
+              Diamond balances and withdrawal exposure before real payouts are
+              connected.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-violet-300/20 bg-black/35 p-4">
+              <p className="text-sm text-violet-100">Diamonds issued</p>
+              <p className="mt-1 text-2xl font-black text-white">{formatNumber(totalDiamondsIssued)}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-300/20 bg-black/35 p-4">
+              <p className="text-sm text-amber-100">Pending withdrawals</p>
+              <p className="mt-1 text-2xl font-black text-white">{formatNumber(totalPendingWithdrawals)}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-300/20 bg-black/35 p-4">
+              <p className="text-sm text-emerald-100">Completed withdrawals</p>
+              <p className="mt-1 text-2xl font-black text-white">{formatNumber(totalCompletedWithdrawals)}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <EconomyChart datasets={[
           { color: "amber", id: "gold-spent", label: "Gold Spent", points: series.goldSpent },
@@ -897,6 +1021,11 @@ export function RevenueDashboardClient({
           { color: "emerald", id: "paid-orders", label: "Paid Orders", points: series.paidOrders },
           { color: "amber", id: "pending-orders", label: "Pending Orders", points: series.pendingOrders },
         ]} title="Payment Orders" type="bar" />
+        <EconomyChart datasets={[
+          { color: "violet", id: "diamonds-issued", label: "Diamonds Issued", points: series.diamondsIssued },
+          { color: "amber", id: "pending-withdrawals", label: "Pending Withdrawals", points: series.pendingWithdrawals },
+          { color: "emerald", id: "paid-withdrawals", label: "Paid Withdrawals", points: series.paidWithdrawals },
+        ]} title="Creator Diamonds & Withdrawals" type="bar" />
         <EconomyChart datasets={[
           { color: "violet", id: "top-gifts", label: "Top Gifts", points: topGiftSeries },
         ]} title="Top Gifts" type="bar" />

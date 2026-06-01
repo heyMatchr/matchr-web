@@ -348,6 +348,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           >
             Revenue
           </Link>
+          <Link
+            href="/admin/withdrawals"
+            className="rounded-full border border-violet-200/40 px-4 py-2 text-sm font-medium text-violet-50"
+          >
+            Withdrawals
+          </Link>
         </div>
       </div>
 

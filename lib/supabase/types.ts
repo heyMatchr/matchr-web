@@ -74,6 +74,29 @@ export type AdminAuditLogRow = {
   created_at: string;
 };
 
+export type CreatorWalletRow = {
+  user_id: string;
+  diamonds_balance: number;
+  diamonds_lifetime: number;
+  diamonds_pending: number;
+  diamonds_withdrawn: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WithdrawalRequestRow = {
+  id: string;
+  user_id: string;
+  diamonds_amount: number;
+  cash_estimate: number;
+  status: string;
+  payout_method: string;
+  payout_details: Record<string, unknown>;
+  admin_notes: string | null;
+  created_at: string;
+  processed_at: string | null;
+};
+
 export type LikeRow = {
   id: string;
   liker_id: string;
@@ -611,6 +634,47 @@ export type Database = {
           created_at?: string;
         };
         Update: never;
+        Relationships: [];
+      };
+      creator_wallets: {
+        Row: CreatorWalletRow;
+        Insert: {
+          user_id: string;
+          diamonds_balance?: number;
+          diamonds_lifetime?: number;
+          diamonds_pending?: number;
+          diamonds_withdrawn?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          diamonds_balance?: number;
+          diamonds_lifetime?: number;
+          diamonds_pending?: number;
+          diamonds_withdrawn?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      withdrawal_requests: {
+        Row: WithdrawalRequestRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          diamonds_amount: number;
+          cash_estimate?: number;
+          status?: string;
+          payout_method?: string;
+          payout_details?: Record<string, unknown>;
+          admin_notes?: string | null;
+          created_at?: string;
+          processed_at?: string | null;
+        };
+        Update: {
+          status?: string;
+          admin_notes?: string | null;
+          processed_at?: string | null;
+        };
         Relationships: [];
       };
       likes: {
@@ -1390,6 +1454,14 @@ export type Database = {
           target_order_id: string;
         };
         Returns: number;
+      };
+      request_creator_withdrawal: {
+        Args: {
+          requested_diamonds: number;
+          requested_payout_method: string;
+          requested_payout_details?: Record<string, unknown>;
+        };
+        Returns: WithdrawalRequestRow;
       };
       send_text_message_with_economy: {
         Args: {
