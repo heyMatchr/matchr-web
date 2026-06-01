@@ -12,6 +12,89 @@ import { DiscoverClient, type DiscoverProfile } from "./discover-client";
 import { StoriesBarLazy } from "./stories-bar-lazy";
 import type { StoryGroup } from "./stories-bar";
 
+type RawDiscoverProfile = {
+  accepting_dating?: boolean | null;
+  age?: number | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  country?: string | null;
+  created_at?: string | null;
+  discover_hidden?: boolean | null;
+  display_name?: string | null;
+  gender_identity?: string | null;
+  id: string;
+  identity_verified?: boolean | null;
+  interests?: string[] | null;
+  is_online?: boolean | null;
+  last_seen_at?: string | null;
+  location?: string | null;
+  moderation_score?: number | null;
+  occupation?: string | null;
+  phone_verified?: boolean | null;
+  pronouns?: string | null;
+  public_id?: string | null;
+  relationship_intent?: string | null;
+  sexual_orientation?: string | null;
+  shadow_restricted?: boolean | null;
+  show_gender_on_profile?: boolean | null;
+  show_orientation_on_profile?: boolean | null;
+  trusted_user?: boolean | null;
+  under_review?: boolean | null;
+  verified?: boolean | null;
+};
+
+const DISCOVER_PROFILE_SELECT =
+  "id, public_id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at";
+
+const CORE_DISCOVER_PROFILE_SELECT =
+  "id, public_id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, created_at";
+
+function isSchemaSelectionError(error: { message?: string } | null) {
+  const message = error?.message?.toLowerCase() ?? "";
+  return (
+    message.includes("schema cache") ||
+    message.includes("could not find") ||
+    (message.includes("column") && message.includes("does not exist"))
+  );
+}
+
+async function fetchDiscoverProfiles({
+  supabase,
+  userId,
+}: {
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  userId: string;
+}) {
+  const queryProfiles = (selectColumns: string) =>
+    supabase
+      .from("profiles")
+      .select(selectColumns)
+      .eq("onboarding_completed", true)
+      .neq("id", userId)
+      .order("created_at", { ascending: false })
+      .limit(120);
+  const fullResult = await queryProfiles(DISCOVER_PROFILE_SELECT);
+
+  if (!fullResult.error || !isSchemaSelectionError(fullResult.error)) {
+    return {
+      data: (fullResult.data ?? []) as unknown as RawDiscoverProfile[],
+      error: fullResult.error,
+    };
+  }
+
+  console.error("[Discover] profile select hit missing optional column; retrying core select", {
+    error: fullResult.error.message,
+    userId,
+  });
+
+  const coreResult = await queryProfiles(CORE_DISCOVER_PROFILE_SELECT);
+
+  return {
+    data: (coreResult.data ?? []) as unknown as RawDiscoverProfile[],
+    error: coreResult.error,
+  };
+}
+
 export default async function DiscoverPage() {
   const perfStartedAt = startPerfTimer();
   const supabase = await createSupabaseServerClient();
@@ -30,15 +113,7 @@ export default async function DiscoverPage() {
   ] =
     await timeAsync("[Perf] Discover base profile filters", () =>
       Promise.all([
-        supabase
-          .from("profiles")
-          .select(
-            "id, public_id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at",
-          )
-          .eq("onboarding_completed", true)
-          .neq("id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(120),
+        fetchDiscoverProfiles({ supabase, userId: user.id }),
         supabase.from("likes").select("liked_profile_id").eq("liker_id", user.id),
         supabase
           .from("passes")
@@ -79,9 +154,9 @@ export default async function DiscoverPage() {
   }
 
   const excludedUserIds = new Set([
-    ...likesResult.data.map((like) => like.liked_profile_id),
-    ...passesResult.data.map((pass) => pass.passed_profile_id),
-    ...blocksResult.data.map((block) =>
+    ...(likesResult.data ?? []).map((like) => like.liked_profile_id),
+    ...(passesResult.data ?? []).map((pass) => pass.passed_profile_id),
+    ...(blocksResult.data ?? []).map((block) =>
       block.blocker_id === user.id ? block.blocked_user_id : block.blocker_id,
     ),
   ]);
@@ -97,7 +172,7 @@ export default async function DiscoverPage() {
       identityPreferences?.relationship_intent_preference ?? null,
   };
   const visibleProfiles =
-    profilesResult.data.filter(
+    (profilesResult.data ?? []).filter(
       (profile) =>
         !excludedUserIds.has(profile.id),
     ) ??
@@ -297,7 +372,7 @@ export default async function DiscoverPage() {
     const momentCount = momentCounts.get(profile.id) ?? 0;
     const followerCount = followerCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
-    const isOnline = profile.is_online;
+    const isOnline = Boolean(profile.is_online);
     const engagementCount = engagementByUser.get(profile.id) ?? 0;
     const giftCount = giftCounts.get(profile.id) ?? 0;
     const trendingScore =
@@ -324,32 +399,32 @@ export default async function DiscoverPage() {
     });
 
     return {
-      accepting_dating: profile.accepting_dating,
-      age: profile.age,
-      avatar_url: profile.avatar_url,
-      bio: profile.bio,
+      accepting_dating: Boolean(profile.accepting_dating),
+      age: profile.age ?? 18,
+      avatar_url: profile.avatar_url ?? null,
+      bio: profile.bio ?? "",
       compatibility,
-      country: profile.country,
-      display_name: profile.display_name,
+      country: profile.country ?? null,
+      display_name: profile.display_name || "Someone",
       followerCount,
       hasMoments: momentCount > 0,
       hasStories,
       id: profile.id,
-      public_id: profile.public_id,
+      public_id: profile.public_id ?? null,
       interests: profile.interests ?? [],
       isOnline,
-      location: profile.location,
+      location: profile.location || "Private",
       momentCount,
-      pronouns: profile.pronouns,
-      relationship_intent: profile.relationship_intent,
+      pronouns: profile.pronouns ?? null,
+      relationship_intent: profile.relationship_intent || "Exploration",
       gender_identity: profile.show_gender_on_profile
-        ? profile.gender_identity
+        ? profile.gender_identity ?? null
         : null,
       sexual_orientation: profile.show_orientation_on_profile
-        ? profile.sexual_orientation
+        ? profile.sexual_orientation ?? null
         : null,
       trendingScore,
-      verified: profile.verified,
+      verified: Boolean(profile.verified),
     };
   }).filter((profile) => {
     const setting = settingsByUser.get(profile.id);
