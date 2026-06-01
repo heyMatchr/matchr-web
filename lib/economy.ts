@@ -39,8 +39,8 @@ export const DEFAULT_MESSAGE_RULES: MessageRules = {
 };
 
 export const DEFAULT_CREATOR_SPLIT: CreatorSplit = {
-  platform_percent: 60,
-  receiver_percent: 40,
+  platform_percent: 50,
+  receiver_percent: 50,
 };
 
 const DEFAULT_CONFIG: Record<string, unknown> = {
@@ -56,7 +56,10 @@ const DEFAULT_CONFIG: Record<string, unknown> = {
     { id: "matchr_crown", name: "Matchr Crown", price: 150 },
   ],
   message_rules: DEFAULT_MESSAGE_RULES,
+  minimum_withdrawal: 5000,
   premium_weekly_price_usd: 3.99,
+  priority_message_cost: 15,
+  profile_boost_cost: 50,
   starter_gold_female: 0,
   starter_gold_male: 100,
 };
@@ -82,15 +85,18 @@ export async function getEconomyConfig<T = unknown>(
 export async function getGiftCatalog(supabase: EconomyClient) {
   const { data: managedGifts, error: managedGiftError } = await supabase
     .from("gift_catalog")
-    .select("id, name, gold_cost, icon_url, active, sort_order")
+    .select("id, name, description, category, gold_cost, creator_percentage, icon_url, active, sort_order")
     .eq("active", true)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 
   if (!managedGiftError && managedGifts?.length) {
     return managedGifts
-      .map((gift) => ({
+      .map<GiftOption>((gift) => ({
+        category: gift.category,
         coinPrice: Number(gift.gold_cost),
+        creatorPercentage: Number(gift.creator_percentage),
+        description: gift.description,
         icon: gift.icon_url ?? GIFT_ICON_BY_TYPE[gift.id] ?? "✦",
         name: gift.name,
         type: gift.id,
@@ -132,7 +138,40 @@ export async function getGiftPrice(
 }
 
 export async function getCreatorSplit(supabase: EconomyClient) {
+  const { data: standardTier, error } = await supabase
+    .from("creator_tiers")
+    .select("creator_percentage")
+    .eq("active", true)
+    .eq("name", "Standard")
+    .maybeSingle();
+
+  if (!error && standardTier?.creator_percentage !== undefined) {
+    const receiverPercent = Math.max(
+      0,
+      Math.min(100, Number(standardTier.creator_percentage)),
+    );
+
+    return {
+      platform_percent: 100 - receiverPercent,
+      receiver_percent: receiverPercent,
+    };
+  }
+
   return getEconomyConfig<CreatorSplit>(supabase, "creator_split");
+}
+
+export async function getEconomyNumberConfig(
+  supabase: EconomyClient,
+  key: string,
+  fallback: number,
+) {
+  const value = await getEconomyConfig<unknown>(supabase, key);
+  const normalized =
+    typeof value === "object" && value !== null && "value" in value
+      ? Number((value as { value?: unknown }).value)
+      : Number(value);
+
+  return Number.isFinite(normalized) ? normalized : fallback;
 }
 
 function identityBucket(profile: EconomyProfile) {

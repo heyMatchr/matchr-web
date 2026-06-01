@@ -70,24 +70,43 @@ set search_path = public
 as $$
   select greatest(
     1,
-    coalesce((value_json ->> 'diamonds_per_usd')::numeric, 100)
+    coalesce((value_json #>> '{}')::numeric, (value #>> '{}')::numeric, 100)
   )
   from public.economy_config
-  where key = 'diamond_conversion';
+  where key = 'diamond_conversion_rate';
 $$;
 
-create or replace function public.get_creator_receiver_percent()
+create or replace function public.get_creator_receiver_percent(target_user_id uuid default null)
 returns numeric
-language sql
+language plpgsql
 stable
 set search_path = public
 as $$
-  select least(
-    100,
-    greatest(0, coalesce((value_json ->> 'receiver_percent')::numeric, 50))
-  )
+declare
+  tier_percent numeric;
+  split_percent numeric;
+begin
+  select creator_percentage
+  into tier_percent
+  from public.creator_tiers
+  where active = true
+  order by
+    case when lower(name) = 'standard' then 0 else 1 end,
+    sort_order,
+    creator_percentage
+  limit 1;
+
+  if tier_percent is not null then
+    return least(100, greatest(0, tier_percent));
+  end if;
+
+  select coalesce((value_json ->> 'receiver_percent')::numeric, 50)
+  into split_percent
   from public.economy_config
   where key = 'creator_split';
+
+  return least(100, greatest(0, coalesce(split_percent, 50)));
+end;
 $$;
 
 create or replace function public.credit_creator_diamonds_from_gift()
@@ -104,7 +123,7 @@ begin
     return new;
   end if;
 
-  receiver_percent := public.get_creator_receiver_percent();
+  receiver_percent := public.get_creator_receiver_percent(new.receiver_id);
   diamonds_to_credit := floor(coalesce(new.gold_cost, new.coin_price, 0) * (receiver_percent / 100))::integer;
 
   if diamonds_to_credit <= 0 then
@@ -163,7 +182,7 @@ begin
   select greatest(1, coalesce((value_json #>> '{}')::integer, 5000))
   into min_diamonds
   from public.economy_config
-  where key = 'creator_withdrawal_min_diamonds';
+  where key = 'minimum_withdrawal';
 
   diamonds_per_usd := public.get_diamonds_per_usd();
 

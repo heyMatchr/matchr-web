@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
-import { getEconomyConfig } from "@/lib/economy";
+import { getEconomyNumberConfig } from "@/lib/economy";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
 
@@ -33,7 +33,10 @@ export default async function WalletPage() {
     messageChargesResult,
     premiumResult,
     paymentOrdersResult,
-    premiumWeeklyPrice,
+    premiumPlansResult,
+    eliteLevelsResult,
+    priorityMessageCost,
+    profileBoostCost,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -48,7 +51,17 @@ export default async function WalletPage() {
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
     supabase.from("payment_orders").select("provider, order_type, status, amount, amount_usd, currency, gold_amount, metadata, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
-    getEconomyConfig<number>(supabase, "premium_weekly_price_usd"),
+    supabase
+      .from("premium_plans")
+      .select("id, name, plan_name, duration_days, price_usd, description")
+      .eq("active", true)
+      .order("price_usd", { ascending: true }),
+    supabase
+      .from("elite_levels")
+      .select("level, monthly_gold_requirement, badge, benefits_json")
+      .order("level", { ascending: true }),
+    getEconomyNumberConfig(supabase, "priority_message_cost", 15),
+    getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
   ]);
 
   return (
@@ -96,13 +109,67 @@ export default async function WalletPage() {
             {premiumResult.data ? `${premiumResult.data.plan_name} · ${premiumResult.data.status}` : "No active premium plan."}
           </p>
           <form action={startPremiumCheckout} className="mt-4">
+            <input
+              type="hidden"
+              name="plan_id"
+              value={premiumPlansResult.data?.[0]?.id ?? ""}
+            />
             <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
-              Start ${premiumWeeklyPrice}/week placeholder checkout
+              {premiumPlansResult.data?.[0]
+                ? `Start ${premiumPlansResult.data[0].name ?? premiumPlansResult.data[0].plan_name} · $${premiumPlansResult.data[0].price_usd}`
+                : "Premium provider coming next"}
             </button>
           </form>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {["Cheaper messages", "Profile boost", "Advanced filters", "Read insights"].map((perk) => (
-              <div key={perk} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">{perk}</div>
+            {(premiumPlansResult.data ?? []).length ? (
+              (premiumPlansResult.data ?? []).map((plan) => (
+                <form key={plan.id} action={startPremiumCheckout}>
+                  <input type="hidden" name="plan_id" value={plan.id} />
+                  <button className="h-full w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left text-[15px] leading-6 text-neutral-200 transition-colors hover:border-emerald-300/30">
+                    <span className="block font-black text-white">
+                      {plan.name ?? plan.plan_name}
+                    </span>
+                    <span className="mt-1 block text-neutral-300">
+                      ${plan.price_usd} · {plan.duration_days} days
+                    </span>
+                    {plan.description ? (
+                      <span className="mt-1 block text-sm text-neutral-500">
+                        {plan.description}
+                      </span>
+                    ) : null}
+                  </button>
+                </form>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">
+                No active premium plans.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+          <h2 className="text-lg font-black">Elite levels</h2>
+          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
+            Priority messages are currently {priorityMessageCost} Gold. Profile
+            boosts are currently {profileBoostCost} Gold.
+          </p>
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+            {(eliteLevelsResult.data ?? []).map((level) => (
+              <div
+                key={level.level}
+                className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
+              >
+                <p className="font-black text-white">
+                  Level {level.level} · {level.badge}
+                </p>
+                <p className="mt-1 text-neutral-400">
+                  {level.monthly_gold_requirement.toLocaleString()} Gold/month
+                </p>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {Object.keys(level.benefits_json ?? {}).join(", ") || "Benefits coming soon"}
+                </p>
+              </div>
             ))}
           </div>
         </section>

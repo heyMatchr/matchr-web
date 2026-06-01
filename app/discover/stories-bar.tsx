@@ -1284,7 +1284,8 @@ export function StoriesBar({
                             <span className="min-w-0 flex-1">
                               <span className="block font-medium">{gift.name}</span>
                               <span className="text-xs text-neutral-500">
-                                {gift.coinPrice} coins
+                                {gift.coinPrice} Gold
+                                {gift.description ? ` · ${gift.description}` : ""}
                               </span>
                             </span>
                           </button>

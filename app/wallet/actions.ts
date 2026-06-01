@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getEconomyConfig } from "@/lib/economy";
 import { createPaymentOrder } from "@/lib/payments";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -59,17 +58,30 @@ export async function startGoldCheckout(formData: FormData) {
   revalidatePath("/wallet");
 }
 
-export async function startPremiumCheckout() {
+export async function startPremiumCheckout(formData?: FormData) {
   const { supabase } = await currentUser();
-  const premiumWeeklyPrice = await getEconomyConfig<number>(
-    supabase,
-    "premium_weekly_price_usd",
-  );
+  const planId = formData ? String(formData.get("plan_id") ?? "") : "";
+  let query = supabase
+    .from("premium_plans")
+    .select("id, name, plan_name, price_usd, duration_days, interval")
+    .eq("active", true);
+  query = planId ? query.eq("id", planId) : query.order("price_usd", { ascending: true }).limit(1);
+  const { data: plan, error } = await query.maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!plan) {
+    return;
+  }
 
   await createPaymentOrder(supabase, {
-    amount: premiumWeeklyPrice,
+    amount: plan.price_usd,
     metadata: {
-      plan_name: "Matchr Premium",
+      duration_days: plan.duration_days,
+      plan_id: plan.id,
+      plan_name: plan.name ?? plan.plan_name,
       provider_message: "Payment provider coming next",
     },
     orderType: "premium_subscription",

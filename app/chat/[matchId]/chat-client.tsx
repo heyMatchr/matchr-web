@@ -169,6 +169,14 @@ export function ChatClient({
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const groupedGiftCatalog = useMemo(() => {
+    const groups = new Map<string, GiftOption[]>();
+    giftCatalog.forEach((gift) => {
+      const category = gift.category || "Classic";
+      groups.set(category, [...(groups.get(category) ?? []), gift]);
+    });
+    return [...groups.entries()];
+  }, [giftCatalog]);
   const { isUserOnline } = useGlobalPresence();
   const receiverIsGloballyOnline = isUserOnline(receiverId);
   const receiverOnlineForDisplay = receiverIsGloballyOnline;
@@ -1607,24 +1615,34 @@ export function ChatClient({
                 <p className="mt-1 px-1 text-sm leading-5 text-emerald-50/75">
                   Gifts use your Matchr Gold balance.
                 </p>
-                <div className="mt-3 grid max-h-[34dvh] gap-2 overflow-y-auto pr-1">
-                  {giftCatalog.map((gift) => (
-                    <button
-                      key={gift.type}
-                      type="button"
-                      onClick={() => void sendGift(gift)}
-                      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-3 py-3 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
-                    >
-                      <span className="text-xl">{gift.icon}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block font-medium text-white">
-                          {gift.name}
-                        </span>
-                        <span className="text-sm text-neutral-400">
-                          {gift.coinPrice} coins
-                        </span>
-                      </span>
-                    </button>
+                <div className="mt-3 grid max-h-[34dvh] gap-4 overflow-y-auto pr-1">
+                  {groupedGiftCatalog.map(([category, gifts]) => (
+                    <div key={category}>
+                      <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
+                        {category}
+                      </p>
+                      <div className="grid gap-2">
+                        {gifts.map((gift) => (
+                          <button
+                            key={gift.type}
+                            type="button"
+                            onClick={() => void sendGift(gift)}
+                            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-3 py-3 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+                          >
+                            <span className="text-xl">{gift.icon}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium text-white">
+                                {gift.name}
+                              </span>
+                              <span className="text-sm text-neutral-400">
+                                {gift.coinPrice} Gold
+                                {gift.description ? ` · ${gift.description}` : ""}
+                              </span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1682,10 +1700,11 @@ export function ChatClient({
               {receiverName} receives{" "}
               {Math.floor(
                 pendingGift.coinPrice *
-                  ((creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent /
+                  ((pendingGift.creatorPercentage ??
+                    (creatorSplit ?? DEFAULT_CREATOR_SPLIT).receiver_percent) /
                     100),
               )}{" "}
-              Gold from the creator split.
+              Diamonds from the creator split.
             </p>
             <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
               {spendableGold} Gold available

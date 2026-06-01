@@ -57,8 +57,9 @@ export default async function EarningsPage() {
     walletResult,
     withdrawalsResult,
     giftEarningsResult,
-    diamondConversion,
+    diamondConversionRate,
     minimumWithdrawal,
+    creatorTierResult,
   ] = await Promise.all([
     supabase
       .from("creator_wallets")
@@ -77,8 +78,15 @@ export default async function EarningsPage() {
       .eq("receiver_id", user.id)
       .order("created_at", { ascending: false })
       .limit(12),
-    getEconomyConfig<{ diamonds_per_usd: number }>(supabase, "diamond_conversion"),
-    getEconomyConfig<number>(supabase, "creator_withdrawal_min_diamonds"),
+    getEconomyConfig<number>(supabase, "diamond_conversion_rate"),
+    getEconomyConfig<number>(supabase, "minimum_withdrawal"),
+    supabase
+      .from("creator_tiers")
+      .select("name, creator_percentage")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const wallet = walletResult.data ?? {
@@ -87,7 +95,7 @@ export default async function EarningsPage() {
     diamonds_pending: 0,
     diamonds_withdrawn: 0,
   };
-  const diamondsPerUsd = Math.max(1, diamondConversion?.diamonds_per_usd ?? 100);
+  const diamondsPerUsd = Math.max(1, Number(diamondConversionRate ?? 100));
   const cashEstimate = wallet.diamonds_balance / diamondsPerUsd;
 
   return (
@@ -114,6 +122,10 @@ export default async function EarningsPage() {
         <p className="mt-2 text-sm leading-6 text-neutral-400">
           Minimum withdrawal: {formatDiamonds(minimumWithdrawal ?? 5000)}. Current
           conversion: {diamondsPerUsd} Diamonds = $1.00.
+        </p>
+        <p className="mt-2 text-sm leading-6 text-neutral-500">
+          Current creator tier: {creatorTierResult.data?.name ?? "Standard"} ·{" "}
+          {creatorTierResult.data?.creator_percentage ?? 50}% creator share.
         </p>
         <form action={requestWithdrawal} className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
           <input

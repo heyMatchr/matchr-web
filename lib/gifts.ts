@@ -1,5 +1,8 @@
 export type GiftOption = {
+  category?: string;
   coinPrice: number;
+  creatorPercentage?: number;
+  description?: string;
   icon: string;
   name: string;
   type: string;

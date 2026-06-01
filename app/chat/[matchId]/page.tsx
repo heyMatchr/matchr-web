@@ -94,10 +94,9 @@ export default async function ChatPage({ params }: ChatPageProps) {
           .eq("user_id", user.id)
           .maybeSingle(),
         supabase
-          .from("subscriptions")
+          .from("premium_subscriptions")
           .select("id")
           .eq("user_id", user.id)
-          .eq("plan_name", "Matchr Premium")
           .eq("status", "active")
           .maybeSingle(),
         getGiftCatalog(supabase),
