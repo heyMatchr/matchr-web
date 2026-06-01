@@ -2,10 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import {
-  AVATAR_ALLOWED_TYPES,
-  AVATAR_MAX_SIZE_BYTES,
-} from "@/lib/supabase/storage";
+import { AVATAR_MAX_SIZE_BYTES } from "@/lib/supabase/storage";
 import { saveOnboarding, type OnboardingFormState } from "./actions";
 
 const initialState: OnboardingFormState = {
@@ -62,6 +59,15 @@ const intentOptions = [
   "Exploration",
 ];
 
+const onboardingAvatarAllowedTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+const invalidAvatarMessage =
+  "Please upload a JPG, PNG, or WebP image under the allowed size.";
+
 export function OnboardingForm() {
   const [avatarError, setAvatarError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState("");
@@ -108,16 +114,20 @@ export function OnboardingForm() {
       return;
     }
 
-    if (!AVATAR_ALLOWED_TYPES.includes(file.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
+    if (
+      !onboardingAvatarAllowedTypes.includes(
+        file.type as (typeof onboardingAvatarAllowedTypes)[number],
+      )
+    ) {
       event.target.value = "";
-      setAvatarError("Upload a JPG, PNG, WebP, or GIF avatar.");
+      setAvatarError(invalidAvatarMessage);
       setAvatarPreview("");
       return;
     }
 
     if (file.size > AVATAR_MAX_SIZE_BYTES) {
       event.target.value = "";
-      setAvatarError("Keep your avatar under 5 MB.");
+      setAvatarError(invalidAvatarMessage);
       setAvatarPreview("");
       return;
     }
@@ -339,7 +349,7 @@ export function OnboardingForm() {
                       Optional profile photo
                     </p>
                     <p className="mt-2 text-sm leading-6 text-neutral-400">
-                      JPG, PNG, WebP, or GIF under 5 MB.
+                      JPG, PNG, or WebP under 5 MB.
                     </p>
                   </>
                 )}
