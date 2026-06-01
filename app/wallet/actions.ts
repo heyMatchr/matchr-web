@@ -20,13 +20,19 @@ async function currentUser() {
 }
 
 export async function startGoldCheckout(formData: FormData) {
+  const packageId = String(formData.get("package_id") ?? "");
   const packageKey = String(formData.get("package") ?? "");
   const { supabase } = await currentUser();
-  const { data: pack, error } = await supabase
+  let query = supabase
     .from("gold_packages")
-    .select("id, name, gold_amount, price_usd")
-    .eq("gold_amount", Number(packageKey))
-    .maybeSingle();
+    .select("id, name, gold_amount, bonus_gold, usd_price, price_usd")
+    .eq("active", true);
+
+  query = packageId
+    ? query.eq("id", packageId)
+    : query.eq("gold_amount", Number(packageKey));
+
+  const { data: pack, error } = await query.maybeSingle();
 
   if (error) {
     throw new Error(error.message);
@@ -37,11 +43,13 @@ export async function startGoldCheckout(formData: FormData) {
   }
 
   await createPaymentOrder(supabase, {
-    amount: pack.price_usd,
-    goldAmount: pack.gold_amount,
+    amount: pack.usd_price ?? pack.price_usd,
+    goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
     metadata: {
       package_id: pack.id,
       package_name: pack.name,
+      base_gold: pack.gold_amount,
+      bonus_gold: pack.bonus_gold ?? 0,
       provider_message: "Payment provider coming next",
     },
     orderType: "gold_purchase",

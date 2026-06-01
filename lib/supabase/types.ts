@@ -219,10 +219,46 @@ export type GiftCatalogRow = {
   created_at: string;
 };
 
+export type ManagedGiftCatalogRow = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  gold_cost: number;
+  creator_percentage: number;
+  animation_key: string | null;
+  icon_url: string | null;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type EconomyConfigRow = {
   key: string;
+  value: unknown;
   value_json: unknown;
   description: string;
+  updated_at: string;
+};
+
+export type EliteLevelRow = {
+  level: number;
+  monthly_gold_requirement: number;
+  badge: string;
+  benefits_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatorTierRow = {
+  id: string;
+  name: string;
+  creator_percentage: number;
+  requirements_json: Record<string, unknown>;
+  active: boolean;
+  sort_order: number;
+  created_at: string;
   updated_at: string;
 };
 
@@ -250,8 +286,13 @@ export type GoldPackageRow = {
   id: string;
   name: string;
   gold_amount: number;
+  bonus_gold: number;
+  active: boolean;
+  sort_order: number;
   price_usd: number;
+  usd_price: number;
   created_at: string;
+  updated_at: string;
 };
 
 export type MessageChargeRow = {
@@ -400,12 +441,15 @@ export type PaymentOrderRow = {
 
 export type PremiumPlanRow = {
   id: string;
+  name: string;
+  duration_days: number;
   plan_name: string;
   price_usd: number;
   interval: string;
   description: string;
   active: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 export type GoldPurchaseRow = {
@@ -719,11 +763,87 @@ export type Database = {
         Row: EconomyConfigRow;
         Insert: {
           key: string;
+          value?: unknown;
           value_json: unknown;
           description?: string;
           updated_at?: string;
         };
-        Update: never;
+        Update: {
+          value?: unknown;
+          value_json?: unknown;
+          description?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      elite_levels: {
+        Row: EliteLevelRow;
+        Insert: {
+          level: number;
+          monthly_gold_requirement?: number;
+          badge?: string;
+          benefits_json?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          monthly_gold_requirement?: number;
+          badge?: string;
+          benefits_json?: Record<string, unknown>;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      creator_tiers: {
+        Row: CreatorTierRow;
+        Insert: {
+          id?: string;
+          name: string;
+          creator_percentage?: number;
+          requirements_json?: Record<string, unknown>;
+          active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          creator_percentage?: number;
+          requirements_json?: Record<string, unknown>;
+          active?: boolean;
+          sort_order?: number;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      gift_catalog: {
+        Row: ManagedGiftCatalogRow;
+        Insert: {
+          id: string;
+          name: string;
+          description?: string;
+          category?: string;
+          gold_cost: number;
+          creator_percentage?: number;
+          animation_key?: string | null;
+          icon_url?: string | null;
+          active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          description?: string;
+          category?: string;
+          gold_cost?: number;
+          creator_percentage?: number;
+          animation_key?: string | null;
+          icon_url?: string | null;
+          active?: boolean;
+          sort_order?: number;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       gifts_catalog: {
@@ -771,10 +891,24 @@ export type Database = {
           id?: string;
           name: string;
           gold_amount: number;
+          bonus_gold?: number;
+          active?: boolean;
+          sort_order?: number;
           price_usd: number;
+          usd_price?: number;
           created_at?: string;
+          updated_at?: string;
         };
-        Update: never;
+        Update: {
+          name?: string;
+          gold_amount?: number;
+          bonus_gold?: number;
+          active?: boolean;
+          sort_order?: number;
+          price_usd?: number;
+          usd_price?: number;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       gold_purchases: {
@@ -1120,14 +1254,26 @@ export type Database = {
         Row: PremiumPlanRow;
         Insert: {
           id?: string;
+          name?: string;
+          duration_days?: number;
           plan_name: string;
           price_usd: number;
           interval: string;
           description?: string;
           active?: boolean;
           created_at?: string;
+          updated_at?: string;
         };
-        Update: never;
+        Update: {
+          name?: string;
+          duration_days?: number;
+          plan_name?: string;
+          price_usd?: number;
+          interval?: string;
+          description?: string;
+          active?: boolean;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       profiles: {

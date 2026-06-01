@@ -80,6 +80,26 @@ export async function getEconomyConfig<T = unknown>(
 }
 
 export async function getGiftCatalog(supabase: EconomyClient) {
+  const { data: managedGifts, error: managedGiftError } = await supabase
+    .from("gift_catalog")
+    .select("id, name, gold_cost, icon_url, active, sort_order")
+    .eq("active", true)
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (!managedGiftError && managedGifts?.length) {
+    return managedGifts
+      .map((gift) => ({
+        coinPrice: Number(gift.gold_cost),
+        icon: gift.icon_url ?? GIFT_ICON_BY_TYPE[gift.id] ?? "✦",
+        name: gift.name,
+        type: gift.id,
+      }))
+      .filter((gift): gift is GiftOption =>
+        Boolean(gift.type && gift.name && Number.isFinite(gift.coinPrice)),
+      );
+  }
+
   const configuredGifts = await getEconomyConfig<
     { id: string; name: string; price: number; icon?: string }[]
   >(supabase, "gift_catalog");

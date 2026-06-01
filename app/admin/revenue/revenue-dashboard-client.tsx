@@ -933,6 +933,9 @@ export function RevenueDashboardClient({
           <Link href="/admin/analytics" className="rounded-full border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200">
             Platform analytics
           </Link>
+          <Link href="/admin/economy" className="rounded-full border border-amber-300/35 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-100">
+            Economy controls
+          </Link>
           <Link href="/admin/withdrawals" className="rounded-full border border-violet-300/35 bg-violet-300/10 px-4 py-2 text-sm font-medium text-violet-100">
             Withdrawals
           </Link>

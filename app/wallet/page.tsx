@@ -36,7 +36,12 @@ export default async function WalletPage() {
     premiumWeeklyPrice,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
-    supabase.from("gold_packages").select("id, name, gold_amount, price_usd").order("price_usd", { ascending: true }),
+    supabase
+      .from("gold_packages")
+      .select("id, name, gold_amount, bonus_gold, usd_price, price_usd")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("usd_price", { ascending: true }),
     supabase.from("wallet_transactions").select("transaction_type, gold_delta, reference_type, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
@@ -72,10 +77,14 @@ export default async function WalletPage() {
           <h2 className="text-lg font-black">Gold packages</h2>
           {(packagesResult.data ?? []).map((pack, index) => (
             <form key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`} action={startGoldCheckout}>
-              <input type="hidden" name="package" value={String(pack.gold_amount)} />
+              <input type="hidden" name="package_id" value={pack.id} />
               <button className="w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left transition-colors hover:border-emerald-300/30 sm:p-5">
                 <p className="font-black">{pack.name}</p>
-                <p className="mt-1.5 text-[15px] leading-6 text-neutral-300">{pack.gold_amount} gold · ${pack.price_usd}</p>
+                <p className="mt-1.5 text-[15px] leading-6 text-neutral-300">
+                  {pack.gold_amount + (pack.bonus_gold ?? 0)} gold
+                  {pack.bonus_gold ? ` (${pack.bonus_gold} bonus)` : ""} · $
+                  {pack.usd_price ?? pack.price_usd}
+                </p>
               </button>
             </form>
           ))}
