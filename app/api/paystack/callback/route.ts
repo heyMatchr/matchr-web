@@ -89,11 +89,6 @@ export async function GET(request: Request) {
     });
 
     if (order.status === "paid") {
-      console.info("[PaystackCallback] payment already paid", {
-        orderId: order.id,
-        reference,
-        userId: order.user_id,
-      });
       return walletRedirect(request, "success");
     }
 
@@ -124,11 +119,6 @@ export async function GET(request: Request) {
       }
 
       await markPaymentPaid(createSupabaseAdminClient(), order.id);
-      console.info("[PaystackCallback] payment marked paid", {
-        orderId: order.id,
-        reference,
-        userId: order.user_id,
-      });
 
       return walletRedirect(request, "success");
     }

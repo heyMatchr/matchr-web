@@ -109,11 +109,6 @@ export async function POST(request: Request) {
       paymentOrderMatchesPaystackTransaction(order, transaction)
     ) {
       await markPaymentPaid(createSupabaseAdminClient(), order.id);
-      console.info("[PaystackWebhook] payment marked paid", {
-        orderId: order.id,
-        reference,
-        userId: order.user_id,
-      });
       return NextResponse.json({ ok: true });
     }
 
@@ -122,7 +117,7 @@ export async function POST(request: Request) {
         paystack_reference: reference,
         paystack_status: transactionStatus,
       });
-      console.info("[PaystackWebhook] payment marked failed", {
+      console.warn("[PaystackWebhook] payment marked failed", {
         orderId: order.id,
         reference,
         status: transactionStatus,

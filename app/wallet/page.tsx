@@ -1,12 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
-import { isAdmin } from "@/lib/admin-auth";
 import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startPremiumCheckout } from "./actions";
-import { WalletCheckoutDiagnostics } from "./wallet-checkout-diagnostics";
-import { WalletProviderDebug } from "./wallet-provider-debug";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,13 +11,12 @@ export const revalidate = 0;
 type WalletPageProps = {
   searchParams?: Promise<{
     payment?: string | string[];
-    provider_debug?: string | string[];
   }>;
 };
 
 function getSearchValue(
   params: Awaited<NonNullable<WalletPageProps["searchParams"]>> | undefined,
-  key: "payment" | "provider_debug",
+  key: "payment",
 ) {
   const value = params?.[key];
 
@@ -48,18 +44,6 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     redirect("/onboarding");
   }
 
-  const isWalletDebugVisible =
-    getSearchValue(params, "provider_debug") === "1" ||
-    process.env.NODE_ENV !== "production" ||
-    (await isAdmin(user.id).catch((error) => {
-      console.error("[Wallet] admin debug lookup failed", {
-        error: error instanceof Error ? error.message : String(error),
-        userId: user.id,
-      });
-
-      return false;
-    }));
-
   const [
     walletResult,
     packagesResult,
@@ -73,7 +57,6 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     eliteLevelsResult,
     priorityMessageCost,
     profileBoostCost,
-    rawProvidersResult,
     availableProviders,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
@@ -100,58 +83,14 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .order("level", { ascending: true }),
     getEconomyNumberConfig(supabase, "priority_message_cost", 15),
     getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
-    supabase
-      .from("payment_providers")
-      .select("*")
-      .eq("active", true)
-      .order("priority", { ascending: true })
-      .order("name", { ascending: true }),
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
-  const rawProviderKeys =
-    rawProvidersResult.data?.map((provider) => provider.provider_key) ?? [];
-  const helperProviderKeys = availableProviders.map(
-    (provider) => provider.provider_key,
-  );
-  const fallbackProvidersUsed = false;
-
-  console.info("[Wallet] raw payment providers", {
-    count: rawProvidersResult.data?.length ?? 0,
-    error: rawProvidersResult.error?.message ?? null,
-    keys: rawProviderKeys,
-  });
-  console.info("[Wallet] providers passed into Wallet UI", {
-    count: availableProviders.length,
-    detectedCountry: currentProfile.country ?? null,
-    detectedCurrency: "USD",
-    fallbackProvidersUsed,
-    keys: helperProviderKeys,
-  });
-  console.info("[Wallet] provider debug visibility", {
-    isWalletDebugVisible,
-    providerDebugParam: getSearchValue(params, "provider_debug") ?? null,
-  });
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
       <div className="mt-8 grid gap-5">
-        <div className="w-fit rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-amber-100">
-          WALLET BUILD: provider-debug-v2
-        </div>
-        {isWalletDebugVisible ? (
-          <WalletProviderDebug
-            currency="USD"
-            defaultProviderKey={defaultProvider}
-            fallbackProvidersUsed={fallbackProvidersUsed}
-            helperProviderKeys={helperProviderKeys}
-            rawProviderCount={rawProvidersResult.data?.length ?? 0}
-            rawProviderKeys={rawProviderKeys}
-            userCountry={currentProfile.country}
-          />
-        ) : null}
-        {isWalletDebugVisible ? <WalletCheckoutDiagnostics /> : null}
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
@@ -224,18 +163,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 <input type="hidden" name="package_id" value={pack.id} />
                 <p className="text-sm font-black text-emerald-50">
                   Payment Method
-                  {isWalletDebugVisible ? (
-                    <span className="ml-2 font-mono text-xs text-amber-100">
-                      ({availableProviders.length} providers)
-                    </span>
-                  ) : null}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {availableProviders.length ? (
                     availableProviders.map((provider, providerIndex) => (
                       <label
-                        data-provider-index={providerIndex}
-                        data-provider-key={provider.provider_key}
                         key={`${pack.id}-${provider.provider_key}`}
                         className="rounded-full border border-neutral-700 bg-black/30 px-3 py-1.5 text-xs text-neutral-300"
                       >
@@ -247,12 +179,6 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                           value={provider.provider_key}
                         />
                         {provider.name}
-                        {isWalletDebugVisible ? (
-                          <span className="ml-2 font-mono text-[10px] text-amber-100">
-                            #{providerIndex} key={provider.provider_key} name=
-                            {provider.name}
-                          </span>
-                        ) : null}
                       </label>
                     ))
                   ) : (
@@ -331,20 +257,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {availableProviders.length ? (
-              availableProviders.map((provider, providerIndex) => (
+              availableProviders.map((provider) => (
                 <div
-                  data-provider-index={providerIndex}
-                  data-provider-key={provider.provider_key}
                   key={provider.provider_key}
                   className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
                 >
                   <p className="font-black text-white">{provider.name}</p>
-                  {isWalletDebugVisible ? (
-                    <p className="mt-1 font-mono text-[11px] leading-5 text-amber-100">
-                      #{providerIndex} key={provider.provider_key} name=
-                      {provider.name}
-                    </p>
-                  ) : null}
                   <p className="mt-1 text-sm text-neutral-500">
                     {provider.supported_currencies.join(", ")}
                   </p>

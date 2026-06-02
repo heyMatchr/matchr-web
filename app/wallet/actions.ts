@@ -98,17 +98,13 @@ function isNextRedirectError(error: unknown) {
 }
 
 function logCheckoutError(stage: string, error: unknown) {
-  console.error("[WalletCheckout] caught error", {
+  console.error("[Wallet] checkout failed", {
     error: error instanceof Error ? error.message : String(error),
     stage,
   });
 }
 
 export async function startGoldCheckout(formData: FormData) {
-  console.error("🚨 MATCHR START GOLD CHECKOUT ENTERED 🚨", {
-    hasFormData: Boolean(formData),
-  });
-
   let stage = "read_form_data";
 
   try {
@@ -116,19 +112,8 @@ export async function startGoldCheckout(formData: FormData) {
     const packageKey = String(formData.get("package") ?? "");
     const requestedProviderKey = String(formData.get("provider_key") ?? "");
 
-    console.info("[WalletCheckout] startGoldCheckout entered", {
-      packageId,
-      packageKey,
-      requestedProviderKey,
-    });
-
     stage = "load_current_user";
     const { supabase, user } = await currentUser();
-
-    console.info("[WalletCheckout] authenticated user resolved", {
-      hasUser: Boolean(user.id),
-      userId: user.id,
-    });
 
     stage = "load_gold_package";
     let query = supabase
@@ -142,18 +127,12 @@ export async function startGoldCheckout(formData: FormData) {
 
     const { data: pack, error } = await query.maybeSingle();
 
-    console.info("[WalletCheckout] gold package query finished", {
-      error: error?.message ?? null,
-      packageFound: Boolean(pack),
-      packageId: pack?.id ?? packageId,
-    });
-
     if (error) {
       throw new Error(error.message);
     }
 
     if (!pack) {
-      console.warn("[WalletCheckout] stopping: no active package found", {
+      console.warn("[Wallet] active checkout package not found", {
         packageId,
         packageKey,
       });
@@ -172,13 +151,6 @@ export async function startGoldCheckout(formData: FormData) {
     const paystackPricing = paystackReference
       ? getPaystackCheckoutPricing(usdAmount)
       : null;
-
-    console.info("[WalletCheckout] provider resolved", {
-      paystackReferenceCreated: Boolean(paystackReference),
-      paystackPricing,
-      providerKey,
-      requestedProviderKey,
-    });
 
     const metadata = {
       package_id: pack.id,
@@ -207,27 +179,11 @@ export async function startGoldCheckout(formData: FormData) {
       provider: providerKey,
     });
 
-    console.info("[WalletCheckout] createPaymentOrder succeeded", {
-      amount: usdAmount,
-      goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
-      orderId: order.id,
-      providerKey,
-      status: order.status,
-    });
-
     if (providerKey === "paystack" && paystackReference) {
       stage = "initialize_paystack";
       const origin = await getAppOrigin();
       const checkoutPricing =
         paystackPricing ?? getPaystackCheckoutPricing(usdAmount);
-
-      console.info("[WalletCheckout] Paystack NGN checkout pricing", {
-        amountSubunit: checkoutPricing.checkoutAmountNgn * 100,
-        checkoutAmountNgn: checkoutPricing.checkoutAmountNgn,
-        checkoutCurrency: checkoutPricing.checkoutCurrency,
-        fxRateUsed: checkoutPricing.fxRateUsed,
-        usdAmount: checkoutPricing.usdAmount,
-      });
 
       const checkout = await initializePaystackTransaction({
         amount: checkoutPricing.checkoutAmountNgn,
@@ -247,24 +203,12 @@ export async function startGoldCheckout(formData: FormData) {
         reference: paystackReference,
       });
 
-      console.info("[WalletCheckout] Paystack redirect URL generated", {
-        hasAuthorizationUrl: Boolean(checkout.authorization_url),
-        orderId: order.id,
-        providerKey,
-      });
-
       redirect(checkout.authorization_url);
     }
-
-    console.info("[WalletCheckout] non-Paystack checkout completed without redirect", {
-      orderId: order.id,
-      providerKey,
-    });
 
     revalidatePath("/wallet");
   } catch (error) {
     if (isNextRedirectError(error)) {
-      console.info("[WalletCheckout] redirect thrown by Next.js", { stage });
       throw error;
     }
 
