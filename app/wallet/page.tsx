@@ -4,7 +4,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { startGoldCheckout, startPremiumCheckout } from "./actions";
+import { startPremiumCheckout } from "./actions";
 import { WalletCheckoutDiagnostics } from "./wallet-checkout-diagnostics";
 import { WalletProviderDebug } from "./wallet-provider-debug";
 
@@ -216,9 +216,10 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 </span>
               </summary>
               <form
-                action={startGoldCheckout}
+                action="/wallet/checkout"
                 className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3"
                 data-wallet-checkout-form="gold"
+                method="post"
               >
                 <input type="hidden" name="package_id" value={pack.id} />
                 <p className="text-sm font-black text-emerald-50">
