@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { markPaymentFailed } from "@/lib/payments";
+import { markPaymentFailed, markPaymentPaid } from "@/lib/payments";
 import {
   paymentOrderMatchesPaystackTransaction,
   verifyPaystackTransaction,
@@ -24,6 +24,31 @@ async function findPaystackOrder(reference: string) {
   return data as PaymentOrderRow | null;
 }
 
+async function mergePaystackCallbackMetadata(
+  order: PaymentOrderRow,
+  metadata: Record<string, unknown>,
+) {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase
+    .from("payment_orders")
+    .update({
+      metadata: {
+        ...(order.metadata ?? {}),
+        paystack: {
+          ...((order.metadata?.paystack as Record<string, unknown> | undefined) ??
+            {}),
+          ...metadata,
+        },
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", order.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
 function walletRedirect(request: Request, state: string) {
   return NextResponse.redirect(new URL(`/wallet?payment=${state}`, request.url));
 }
@@ -46,8 +71,34 @@ export async function GET(request: Request) {
     const transaction = verification.data;
     const transactionStatus = transaction?.status;
 
+    if (!order) {
+      console.warn("[PaystackCallback] payment order not found", { reference });
+      return walletRedirect(request, "processing");
+    }
+
+    await mergePaystackCallbackMetadata(order, {
+      amount: transaction?.amount,
+      currency: transaction?.currency,
+      paid_at: transaction?.paid_at,
+      paystack_callback_status: transactionStatus,
+      paystack_reference: reference,
+      paystack_transaction_id: transaction?.id,
+      reference,
+      status: transactionStatus,
+      verified_at: new Date().toISOString(),
+    });
+
+    if (order.status === "paid") {
+      console.info("[PaystackCallback] payment already paid", {
+        orderId: order.id,
+        reference,
+        userId: order.user_id,
+      });
+      return walletRedirect(request, "success");
+    }
+
     if (
-      order?.status === "pending" &&
+      order.status === "pending" &&
       transactionStatus &&
       ["abandoned", "failed"].includes(transactionStatus)
     ) {
@@ -59,12 +110,35 @@ export async function GET(request: Request) {
     }
 
     if (
-      order &&
       transactionStatus === "success" &&
       paymentOrderMatchesPaystackTransaction(order, transaction)
     ) {
-      return walletRedirect(request, "processing");
+      if (order.status !== "pending") {
+        console.warn("[PaystackCallback] payment success ignored for non-pending order", {
+          orderId: order.id,
+          reference,
+          status: order.status,
+          userId: order.user_id,
+        });
+        return walletRedirect(request, "processing");
+      }
+
+      await markPaymentPaid(createSupabaseAdminClient(), order.id);
+      console.info("[PaystackCallback] payment marked paid", {
+        orderId: order.id,
+        reference,
+        userId: order.user_id,
+      });
+
+      return walletRedirect(request, "success");
     }
+
+    console.warn("[PaystackCallback] payment verification mismatch or non-success", {
+      orderId: order.id,
+      reference,
+      status: transactionStatus,
+      userId: order.user_id,
+    });
 
     return walletRedirect(request, "processing");
   } catch (error) {
@@ -72,4 +146,3 @@ export async function GET(request: Request) {
     return walletRedirect(request, "processing");
   }
 }
-
