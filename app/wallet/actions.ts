@@ -91,6 +91,10 @@ function logCheckoutError(stage: string, error: unknown) {
 }
 
 export async function startGoldCheckout(formData: FormData) {
+  console.error("🚨 MATCHR START GOLD CHECKOUT ENTERED 🚨", {
+    hasFormData: Boolean(formData),
+  });
+
   let stage = "read_form_data";
 
   try {

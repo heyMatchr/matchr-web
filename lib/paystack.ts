@@ -116,6 +116,14 @@ export async function initializePaystackTransaction(input: {
   metadata: Record<string, unknown>;
   reference: string;
 }) {
+  console.error("🚨 MATCHR PAYSTACK INIT ENTERED 🚨", {
+    amount: input.amount,
+    currency: input.currency,
+    hasCallbackUrl: Boolean(input.callbackUrl),
+    hasEmail: Boolean(input.email),
+    reference: input.reference,
+  });
+
   console.info("[WalletCheckout] Paystack initialize started", {
     amount: input.amount,
     currency: input.currency,
