@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { isAdmin } from "@/lib/admin-auth";
 import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
+import { WalletProviderDebug } from "./wallet-provider-debug";
 
 type WalletPageProps = {
   searchParams?: Promise<{
@@ -32,6 +34,17 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     redirect("/onboarding");
   }
 
+  const isWalletDebugVisible =
+    process.env.NODE_ENV !== "production" ||
+    (await isAdmin(user.id).catch((error) => {
+      console.error("[Wallet] admin debug lookup failed", {
+        error: error instanceof Error ? error.message : String(error),
+        userId: user.id,
+      });
+
+      return false;
+    }));
+
   const [
     walletResult,
     packagesResult,
@@ -45,6 +58,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     eliteLevelsResult,
     priorityMessageCost,
     profileBoostCost,
+    rawProvidersResult,
     availableProviders,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
@@ -71,14 +85,50 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .order("level", { ascending: true }),
     getEconomyNumberConfig(supabase, "priority_message_cost", 15),
     getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
+    supabase
+      .from("payment_providers")
+      .select("*")
+      .eq("active", true)
+      .order("priority", { ascending: true })
+      .order("name", { ascending: true }),
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = params?.payment ?? "";
+  const rawProviderKeys =
+    rawProvidersResult.data?.map((provider) => provider.provider_key) ?? [];
+  const helperProviderKeys = availableProviders.map(
+    (provider) => provider.provider_key,
+  );
+  const fallbackProvidersUsed = false;
+
+  console.info("[Wallet] raw payment providers", {
+    count: rawProvidersResult.data?.length ?? 0,
+    error: rawProvidersResult.error?.message ?? null,
+    keys: rawProviderKeys,
+  });
+  console.info("[Wallet] providers passed into Wallet UI", {
+    count: availableProviders.length,
+    detectedCountry: currentProfile.country ?? null,
+    detectedCurrency: "USD",
+    fallbackProvidersUsed,
+    keys: helperProviderKeys,
+  });
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
       <div className="mt-8 grid gap-5">
+        {isWalletDebugVisible ? (
+          <WalletProviderDebug
+            currency="USD"
+            defaultProviderKey={defaultProvider}
+            fallbackProvidersUsed={fallbackProvidersUsed}
+            helperProviderKeys={helperProviderKeys}
+            rawProviderCount={rawProvidersResult.data?.length ?? 0}
+            rawProviderKeys={rawProviderKeys}
+            userCountry={currentProfile.country}
+          />
+        ) : null}
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>

@@ -19,9 +19,26 @@ export async function getAvailablePaymentProviders(
     .order("priority", { ascending: true })
     .order("name", { ascending: true });
 
+  console.info("[PaymentProviders] Supabase provider query result", {
+    count: data?.length ?? 0,
+    currency: _currency,
+    keys: data?.map((provider) => provider.provider_key) ?? [],
+    userCountry: _userCountry ?? null,
+  });
+
   if (error) {
+    console.error("[PaymentProviders] Supabase provider query error", {
+      currency: _currency,
+      error: error.message,
+      userCountry: _userCountry ?? null,
+    });
     throw new Error(error.message);
   }
+
+  console.info("[PaymentProviders] providers returned from helper", {
+    count: data?.length ?? 0,
+    keys: data?.map((provider) => provider.provider_key) ?? [],
+  });
 
   return data ?? [];
 }
