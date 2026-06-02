@@ -227,6 +227,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                   {availableProviders.length ? (
                     availableProviders.map((provider, providerIndex) => (
                       <label
+                        data-provider-index={providerIndex}
+                        data-provider-key={provider.provider_key}
                         key={`${pack.id}-${provider.provider_key}`}
                         className="rounded-full border border-neutral-700 bg-black/30 px-3 py-1.5 text-xs text-neutral-300"
                       >
@@ -238,6 +240,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                           value={provider.provider_key}
                         />
                         {provider.name}
+                        {isWalletDebugVisible ? (
+                          <span className="ml-2 font-mono text-[10px] text-amber-100">
+                            #{providerIndex} key={provider.provider_key} name=
+                            {provider.name}
+                          </span>
+                        ) : null}
                       </label>
                     ))
                   ) : (
@@ -316,12 +324,20 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {availableProviders.length ? (
-              availableProviders.map((provider) => (
+              availableProviders.map((provider, providerIndex) => (
                 <div
+                  data-provider-index={providerIndex}
+                  data-provider-key={provider.provider_key}
                   key={provider.provider_key}
                   className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
                 >
                   <p className="font-black text-white">{provider.name}</p>
+                  {isWalletDebugVisible ? (
+                    <p className="mt-1 font-mono text-[11px] leading-5 text-amber-100">
+                      #{providerIndex} key={provider.provider_key} name=
+                      {provider.name}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-sm text-neutral-500">
                     {provider.supported_currencies.join(", ")}
                   </p>
