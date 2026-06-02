@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { markPaymentFailed, markPaymentPaid } from "@/lib/payments";
+import { markPaymentFailed, markPaymentPaidIdempotently } from "@/lib/payments";
 import {
   paymentOrderMatchesPaystackTransaction,
   verifyPaystackTransaction,
@@ -118,7 +118,7 @@ export async function GET(request: Request) {
         return walletRedirect(request, "processing");
       }
 
-      await markPaymentPaid(createSupabaseAdminClient(), order.id);
+      await markPaymentPaidIdempotently(createSupabaseAdminClient(), order.id);
 
       return walletRedirect(request, "success");
     }

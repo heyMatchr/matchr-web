@@ -34,3 +34,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Matchr Paystack Setup
+
+Required server env vars:
+
+```bash
+PAYSTACK_SECRET_KEY=sk_test_or_live_key
+PAYSTACK_MODE=test
+```
+
+Use `PAYSTACK_MODE=test` with Paystack test keys and `PAYSTACK_MODE=live` with live keys. The app keeps wallet package prices in USD, then sends Paystack checkout in NGN using the current temporary FX conversion in the checkout code.
+
+Configure Paystack URLs:
+
+```text
+Callback URL: https://YOUR_DOMAIN/api/paystack/callback
+Webhook URL:  https://YOUR_DOMAIN/api/paystack/webhook
+Webhook event: charge.success
+```
+
+Gold is credited only after Paystack verification marks the matching `payment_orders` row paid through the existing payment RPC flow.

@@ -95,6 +95,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">Messages · Gifts · Premium</p>
+          {paymentState === "success" ? (
+            <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+              Payment successful. Your Gold has been added.
+            </p>
+          ) : null}
           {paymentState === "processing" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/20 bg-black/25 px-4 py-3 text-sm leading-6 text-emerald-50">
               Payment processing. Gold appears after Paystack approves it.

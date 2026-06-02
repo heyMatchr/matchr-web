@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { PaymentOrderRow } from "@/lib/supabase/types";
-import { markPaymentFailed, markPaymentPaid } from "@/lib/payments";
+import { markPaymentFailed, markPaymentPaidIdempotently } from "@/lib/payments";
 import {
   paymentOrderMatchesPaystackTransaction,
   type PaystackWebhookEvent,
@@ -108,7 +108,7 @@ export async function POST(request: Request) {
       transactionStatus === "success" &&
       paymentOrderMatchesPaystackTransaction(order, transaction)
     ) {
-      await markPaymentPaid(createSupabaseAdminClient(), order.id);
+      await markPaymentPaidIdempotently(createSupabaseAdminClient(), order.id);
       return NextResponse.json({ ok: true });
     }
 

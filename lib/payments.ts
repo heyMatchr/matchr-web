@@ -63,6 +63,37 @@ export async function markPaymentPaid(
   return data as PaymentOrderRow;
 }
 
+export async function markPaymentPaidIdempotently(
+  supabase: Supabase,
+  orderId: string,
+) {
+  try {
+    return await markPaymentPaid(supabase, orderId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
+    if (!message.includes("order_not_pending")) {
+      throw error;
+    }
+
+    const { data, error: lookupError } = await supabase
+      .from("payment_orders")
+      .select("*")
+      .eq("id", orderId)
+      .maybeSingle();
+
+    if (lookupError) {
+      throw new Error(lookupError.message);
+    }
+
+    if (data?.status === "paid") {
+      return data as PaymentOrderRow;
+    }
+
+    throw error;
+  }
+}
+
 export async function markPaymentFailed(
   supabase: Supabase,
   orderId: string,
