@@ -9,10 +9,19 @@ import { WalletProviderDebug } from "./wallet-provider-debug";
 
 type WalletPageProps = {
   searchParams?: Promise<{
-    payment?: string;
-    provider_debug?: string;
+    payment?: string | string[];
+    provider_debug?: string | string[];
   }>;
 };
+
+function getSearchValue(
+  params: Awaited<NonNullable<WalletPageProps["searchParams"]>> | undefined,
+  key: "payment" | "provider_debug",
+) {
+  const value = params?.[key];
+
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default async function WalletPage({ searchParams }: WalletPageProps) {
   const params = await searchParams;
@@ -36,7 +45,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   }
 
   const isWalletDebugVisible =
-    params?.provider_debug === "1" ||
+    getSearchValue(params, "provider_debug") === "1" ||
     process.env.NODE_ENV !== "production" ||
     (await isAdmin(user.id).catch((error) => {
       console.error("[Wallet] admin debug lookup failed", {
@@ -96,7 +105,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
-  const paymentState = params?.payment ?? "";
+  const paymentState = getSearchValue(params, "payment") ?? "";
   const rawProviderKeys =
     rawProvidersResult.data?.map((provider) => provider.provider_key) ?? [];
   const helperProviderKeys = availableProviders.map(
@@ -115,6 +124,10 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     detectedCurrency: "USD",
     fallbackProvidersUsed,
     keys: helperProviderKeys,
+  });
+  console.info("[Wallet] provider debug visibility", {
+    isWalletDebugVisible,
+    providerDebugParam: getSearchValue(params, "provider_debug") ?? null,
   });
 
   return (

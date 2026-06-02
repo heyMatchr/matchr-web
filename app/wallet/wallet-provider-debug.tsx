@@ -63,8 +63,10 @@ export function WalletProviderDebug({
   }, []);
 
   return (
-    <section className="rounded-3xl border border-amber-300/30 bg-amber-300/10 p-4 text-xs leading-5 text-amber-50 sm:p-5">
-      <p className="text-sm font-black text-white">Wallet provider debug</p>
+    <section className="fixed left-1/2 top-[calc(env(safe-area-inset-top)+0.75rem)] z-[9999] max-h-[45dvh] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 overflow-y-auto rounded-3xl border-2 border-amber-300 bg-black/95 p-4 text-xs leading-5 text-amber-50 shadow-[0_20px_80px_rgba(245,158,11,0.28)] backdrop-blur-xl sm:p-5">
+      <p className="text-base font-black tracking-[0.14em] text-white">
+        WALLET PROVIDER DEBUG
+      </p>
       <div className="mt-3 grid gap-1">
         <p>raw provider count: {rawProviderCount}</p>
         <p>raw provider keys: {rawProviderKeys.join(", ") || "none"}</p>
