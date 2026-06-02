@@ -10,6 +10,7 @@ import { WalletProviderDebug } from "./wallet-provider-debug";
 type WalletPageProps = {
   searchParams?: Promise<{
     payment?: string;
+    provider_debug?: string;
   }>;
 };
 
@@ -35,6 +36,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   }
 
   const isWalletDebugVisible =
+    params?.provider_debug === "1" ||
     process.env.NODE_ENV !== "production" ||
     (await isAdmin(user.id).catch((error) => {
       console.error("[Wallet] admin debug lookup failed", {
@@ -194,7 +196,14 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </summary>
               <form action={startGoldCheckout} className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3">
                 <input type="hidden" name="package_id" value={pack.id} />
-                <p className="text-sm font-black text-emerald-50">Payment Method</p>
+                <p className="text-sm font-black text-emerald-50">
+                  Payment Method
+                  {isWalletDebugVisible ? (
+                    <span className="ml-2 font-mono text-xs text-amber-100">
+                      ({availableProviders.length} providers)
+                    </span>
+                  ) : null}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {availableProviders.length ? (
                     availableProviders.map((provider, providerIndex) => (
