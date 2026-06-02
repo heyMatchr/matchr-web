@@ -14,6 +14,20 @@ import {
 } from "@/lib/paystack";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+const PAYSTACK_CHECKOUT_CURRENCY = "NGN";
+const TEMP_PAYSTACK_USD_TO_NGN_RATE = 1500;
+
+function getPaystackCheckoutPricing(usdAmount: number) {
+  const checkoutAmountNgn = Math.round(usdAmount * TEMP_PAYSTACK_USD_TO_NGN_RATE);
+
+  return {
+    checkoutAmountNgn,
+    checkoutCurrency: PAYSTACK_CHECKOUT_CURRENCY,
+    fxRateUsed: TEMP_PAYSTACK_USD_TO_NGN_RATE,
+    usdAmount,
+  };
+}
+
 async function currentUser() {
   const supabase = await createSupabaseServerClient();
   const {
@@ -154,9 +168,14 @@ export async function startGoldCheckout(formData: FormData) {
     );
     const paystackReference =
       providerKey === "paystack" ? createPaystackReference() : null;
+    const usdAmount = Number(pack.usd_price ?? pack.price_usd);
+    const paystackPricing = paystackReference
+      ? getPaystackCheckoutPricing(usdAmount)
+      : null;
 
     console.info("[WalletCheckout] provider resolved", {
       paystackReferenceCreated: Boolean(paystackReference),
+      paystackPricing,
       providerKey,
       requestedProviderKey,
     });
@@ -168,7 +187,11 @@ export async function startGoldCheckout(formData: FormData) {
       bonus_gold: pack.bonus_gold ?? 0,
       ...(paystackReference
         ? {
+            checkout_amount_ngn: paystackPricing?.checkoutAmountNgn,
+            checkout_currency: paystackPricing?.checkoutCurrency,
+            fx_rate_used: paystackPricing?.fxRateUsed,
             paystack_reference: paystackReference,
+            usd_amount: paystackPricing?.usdAmount,
           }
         : {
             provider_message: "Payment method coming next",
@@ -177,7 +200,7 @@ export async function startGoldCheckout(formData: FormData) {
 
     stage = "create_payment_order";
     const order = await createPaymentOrder(supabase, {
-      amount: pack.usd_price ?? pack.price_usd,
+      amount: usdAmount,
       goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
       metadata,
       orderType: "gold_purchase",
@@ -185,7 +208,7 @@ export async function startGoldCheckout(formData: FormData) {
     });
 
     console.info("[WalletCheckout] createPaymentOrder succeeded", {
-      amount: pack.usd_price ?? pack.price_usd,
+      amount: usdAmount,
       goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
       orderId: order.id,
       providerKey,
@@ -195,15 +218,30 @@ export async function startGoldCheckout(formData: FormData) {
     if (providerKey === "paystack" && paystackReference) {
       stage = "initialize_paystack";
       const origin = await getAppOrigin();
+      const checkoutPricing =
+        paystackPricing ?? getPaystackCheckoutPricing(usdAmount);
+
+      console.info("[WalletCheckout] Paystack NGN checkout pricing", {
+        amountSubunit: checkoutPricing.checkoutAmountNgn * 100,
+        checkoutAmountNgn: checkoutPricing.checkoutAmountNgn,
+        checkoutCurrency: checkoutPricing.checkoutCurrency,
+        fxRateUsed: checkoutPricing.fxRateUsed,
+        usdAmount: checkoutPricing.usdAmount,
+      });
+
       const checkout = await initializePaystackTransaction({
-        amount: Number(pack.usd_price ?? pack.price_usd),
+        amount: checkoutPricing.checkoutAmountNgn,
         callbackUrl: `${origin}/api/paystack/callback`,
-        currency: "USD",
+        currency: checkoutPricing.checkoutCurrency,
         email: user.email ?? `${user.id}@matchr.local`,
         metadata: {
+          checkout_amount_ngn: checkoutPricing.checkoutAmountNgn,
+          checkout_currency: checkoutPricing.checkoutCurrency,
+          fx_rate_used: checkoutPricing.fxRateUsed,
           gold_amount: pack.gold_amount + (pack.bonus_gold ?? 0),
           order_id: order.id,
           order_type: "gold_purchase",
+          usd_amount: checkoutPricing.usdAmount,
           user_id: user.id,
         },
         reference: paystackReference,
@@ -263,13 +301,21 @@ export async function startPremiumCheckout(formData?: FormData) {
   );
   const paystackReference =
     providerKey === "paystack" ? createPaystackReference() : null;
+  const usdAmount = Number(plan.price_usd);
+  const paystackPricing = paystackReference
+    ? getPaystackCheckoutPricing(usdAmount)
+    : null;
   const metadata = {
     duration_days: plan.duration_days,
     plan_id: plan.id,
     plan_name: plan.name ?? plan.plan_name,
     ...(paystackReference
       ? {
+          checkout_amount_ngn: paystackPricing?.checkoutAmountNgn,
+          checkout_currency: paystackPricing?.checkoutCurrency,
+          fx_rate_used: paystackPricing?.fxRateUsed,
           paystack_reference: paystackReference,
+          usd_amount: paystackPricing?.usdAmount,
         }
       : {
           provider_message: "Payment method coming next",
@@ -277,7 +323,7 @@ export async function startPremiumCheckout(formData?: FormData) {
   };
 
   const order = await createPaymentOrder(supabase, {
-    amount: plan.price_usd,
+    amount: usdAmount,
     metadata,
     orderType: "premium_subscription",
     provider: providerKey,
@@ -285,15 +331,22 @@ export async function startPremiumCheckout(formData?: FormData) {
 
   if (providerKey === "paystack" && paystackReference) {
     const origin = await getAppOrigin();
+    const checkoutPricing =
+      paystackPricing ?? getPaystackCheckoutPricing(usdAmount);
+
     const checkout = await initializePaystackTransaction({
-      amount: Number(plan.price_usd),
+      amount: checkoutPricing.checkoutAmountNgn,
       callbackUrl: `${origin}/api/paystack/callback`,
-      currency: "USD",
+      currency: checkoutPricing.checkoutCurrency,
       email: user.email ?? `${user.id}@matchr.local`,
       metadata: {
+        checkout_amount_ngn: checkoutPricing.checkoutAmountNgn,
+        checkout_currency: checkoutPricing.checkoutCurrency,
+        fx_rate_used: checkoutPricing.fxRateUsed,
         order_id: order.id,
         order_type: "premium_subscription",
         plan_id: plan.id,
+        usd_amount: checkoutPricing.usdAmount,
         user_id: user.id,
       },
       reference: paystackReference,

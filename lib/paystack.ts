@@ -229,9 +229,15 @@ export function paymentOrderMatchesPaystackTransaction(
   order: PaymentOrderRow,
   transaction: PaystackVerifyResponse["data"] | PaystackWebhookEvent["data"],
 ) {
-  const expectedAmount = toPaystackSubunit(Number(order.amount ?? order.amount_usd));
+  const metadata = (order.metadata ?? {}) as Record<string, unknown>;
+  const checkoutAmount =
+    typeof metadata.checkout_amount_ngn === "number"
+      ? metadata.checkout_amount_ngn
+      : Number(metadata.checkout_amount_ngn ?? order.amount ?? order.amount_usd);
+  const checkoutCurrency = String(metadata.checkout_currency ?? order.currency);
+  const expectedAmount = toPaystackSubunit(Number(checkoutAmount));
   const actualAmount = Number(transaction?.amount ?? 0);
-  const expectedCurrency = order.currency.toUpperCase();
+  const expectedCurrency = checkoutCurrency.toUpperCase();
   const actualCurrency = `${transaction?.currency ?? ""}`.toUpperCase();
 
   return expectedAmount === actualAmount && expectedCurrency === actualCurrency;
