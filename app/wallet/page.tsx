@@ -5,6 +5,7 @@ import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
+import { WalletCheckoutDiagnostics } from "./wallet-checkout-diagnostics";
 import { WalletProviderDebug } from "./wallet-provider-debug";
 
 export const dynamic = "force-dynamic";
@@ -150,6 +151,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             userCountry={currentProfile.country}
           />
         ) : null}
+        {isWalletDebugVisible ? <WalletCheckoutDiagnostics /> : null}
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
@@ -213,7 +215,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                   Select Package
                 </span>
               </summary>
-              <form action={startGoldCheckout} className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3">
+              <form
+                action={startGoldCheckout}
+                className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3"
+                data-wallet-checkout-form="gold"
+              >
                 <input type="hidden" name="package_id" value={pack.id} />
                 <p className="text-sm font-black text-emerald-50">
                   Payment Method

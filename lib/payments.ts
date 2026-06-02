@@ -30,6 +30,14 @@ export async function createPaymentOrder(
     provider?: PaymentProvider;
   },
 ) {
+  console.info("[WalletCheckout] createPaymentOrder started", {
+    amount: input.amount,
+    currency: input.currency ?? "USD",
+    goldAmount: input.goldAmount ?? null,
+    orderType: input.orderType,
+    provider: input.provider ?? "manual",
+  });
+
   const { data, error } = await supabase
     .rpc("create_payment_order", {
       selected_amount: input.amount,
@@ -40,6 +48,14 @@ export async function createPaymentOrder(
       selected_provider: input.provider ?? "manual",
     })
     .single();
+
+  const paymentOrder = data as PaymentOrderRow | null;
+
+  console.info("[WalletCheckout] createPaymentOrder rpc finished", {
+    error: error?.message ?? null,
+    orderId: paymentOrder?.id ?? null,
+    status: paymentOrder?.status ?? null,
+  });
 
   if (error) {
     throw new Error(error.message);

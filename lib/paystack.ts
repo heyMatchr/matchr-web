@@ -83,6 +83,14 @@ export async function initializePaystackTransaction(input: {
   metadata: Record<string, unknown>;
   reference: string;
 }) {
+  console.info("[WalletCheckout] Paystack initialize started", {
+    amount: input.amount,
+    currency: input.currency,
+    hasCallbackUrl: Boolean(input.callbackUrl),
+    hasEmail: Boolean(input.email),
+    reference: input.reference,
+  });
+
   const response = await fetch(`${PAYSTACK_BASE_URL}/transaction/initialize`, {
     body: JSON.stringify({
       amount: toPaystackSubunit(input.amount),
@@ -99,6 +107,13 @@ export async function initializePaystackTransaction(input: {
     method: "POST",
   });
   const result = (await response.json()) as PaystackInitializeResponse;
+
+  console.info("[WalletCheckout] Paystack initialize response", {
+    hasAuthorizationUrl: Boolean(result.data?.authorization_url),
+    message: result.message ?? null,
+    ok: response.ok,
+    status: result.status,
+  });
 
   if (!response.ok || !result.status || !result.data?.authorization_url) {
     throw new Error(result.message ?? "Paystack checkout could not be started.");

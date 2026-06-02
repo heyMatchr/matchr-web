@@ -74,79 +74,161 @@ async function getAppOrigin() {
   return origin;
 }
 
-export async function startGoldCheckout(formData: FormData) {
-  const packageId = String(formData.get("package_id") ?? "");
-  const packageKey = String(formData.get("package") ?? "");
-  const requestedProviderKey = String(formData.get("provider_key") ?? "");
-  const { supabase, user } = await currentUser();
-  let query = supabase
-    .from("gold_packages")
-    .select("id, name, gold_amount, bonus_gold, usd_price, price_usd")
-    .eq("active", true);
-
-  query = packageId
-    ? query.eq("id", packageId)
-    : query.eq("gold_amount", Number(packageKey));
-
-  const { data: pack, error } = await query.maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if (!pack) {
-    return;
-  }
-
-  const providerKey = await resolveProviderKey(
-    supabase,
-    user.id,
-    requestedProviderKey,
+function isNextRedirectError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    String((error as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
   );
-  const paystackReference =
-    providerKey === "paystack" ? createPaystackReference() : null;
-  const metadata = {
-    package_id: pack.id,
-    package_name: pack.name,
-    base_gold: pack.gold_amount,
-    bonus_gold: pack.bonus_gold ?? 0,
-    ...(paystackReference
-      ? {
-          paystack_reference: paystackReference,
-        }
-      : {
-          provider_message: "Payment method coming next",
-        }),
-  };
+}
 
-  const order = await createPaymentOrder(supabase, {
-    amount: pack.usd_price ?? pack.price_usd,
-    goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
-    metadata,
-    orderType: "gold_purchase",
-    provider: providerKey,
+function logCheckoutError(stage: string, error: unknown) {
+  console.error("[WalletCheckout] caught error", {
+    error: error instanceof Error ? error.message : String(error),
+    stage,
   });
+}
 
-  if (providerKey === "paystack" && paystackReference) {
-    const origin = await getAppOrigin();
-    const checkout = await initializePaystackTransaction({
-      amount: Number(pack.usd_price ?? pack.price_usd),
-      callbackUrl: `${origin}/api/paystack/callback`,
-      currency: "USD",
-      email: user.email ?? `${user.id}@matchr.local`,
-      metadata: {
-        gold_amount: pack.gold_amount + (pack.bonus_gold ?? 0),
-        order_id: order.id,
-        order_type: "gold_purchase",
-        user_id: user.id,
-      },
-      reference: paystackReference,
+export async function startGoldCheckout(formData: FormData) {
+  let stage = "read_form_data";
+
+  try {
+    const packageId = String(formData.get("package_id") ?? "");
+    const packageKey = String(formData.get("package") ?? "");
+    const requestedProviderKey = String(formData.get("provider_key") ?? "");
+
+    console.info("[WalletCheckout] startGoldCheckout entered", {
+      packageId,
+      packageKey,
+      requestedProviderKey,
     });
 
-    redirect(checkout.authorization_url);
-  }
+    stage = "load_current_user";
+    const { supabase, user } = await currentUser();
 
-  revalidatePath("/wallet");
+    console.info("[WalletCheckout] authenticated user resolved", {
+      hasUser: Boolean(user.id),
+      userId: user.id,
+    });
+
+    stage = "load_gold_package";
+    let query = supabase
+      .from("gold_packages")
+      .select("id, name, gold_amount, bonus_gold, usd_price, price_usd")
+      .eq("active", true);
+
+    query = packageId
+      ? query.eq("id", packageId)
+      : query.eq("gold_amount", Number(packageKey));
+
+    const { data: pack, error } = await query.maybeSingle();
+
+    console.info("[WalletCheckout] gold package query finished", {
+      error: error?.message ?? null,
+      packageFound: Boolean(pack),
+      packageId: pack?.id ?? packageId,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (!pack) {
+      console.warn("[WalletCheckout] stopping: no active package found", {
+        packageId,
+        packageKey,
+      });
+      return;
+    }
+
+    stage = "resolve_provider";
+    const providerKey = await resolveProviderKey(
+      supabase,
+      user.id,
+      requestedProviderKey,
+    );
+    const paystackReference =
+      providerKey === "paystack" ? createPaystackReference() : null;
+
+    console.info("[WalletCheckout] provider resolved", {
+      paystackReferenceCreated: Boolean(paystackReference),
+      providerKey,
+      requestedProviderKey,
+    });
+
+    const metadata = {
+      package_id: pack.id,
+      package_name: pack.name,
+      base_gold: pack.gold_amount,
+      bonus_gold: pack.bonus_gold ?? 0,
+      ...(paystackReference
+        ? {
+            paystack_reference: paystackReference,
+          }
+        : {
+            provider_message: "Payment method coming next",
+          }),
+    };
+
+    stage = "create_payment_order";
+    const order = await createPaymentOrder(supabase, {
+      amount: pack.usd_price ?? pack.price_usd,
+      goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
+      metadata,
+      orderType: "gold_purchase",
+      provider: providerKey,
+    });
+
+    console.info("[WalletCheckout] createPaymentOrder succeeded", {
+      amount: pack.usd_price ?? pack.price_usd,
+      goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
+      orderId: order.id,
+      providerKey,
+      status: order.status,
+    });
+
+    if (providerKey === "paystack" && paystackReference) {
+      stage = "initialize_paystack";
+      const origin = await getAppOrigin();
+      const checkout = await initializePaystackTransaction({
+        amount: Number(pack.usd_price ?? pack.price_usd),
+        callbackUrl: `${origin}/api/paystack/callback`,
+        currency: "USD",
+        email: user.email ?? `${user.id}@matchr.local`,
+        metadata: {
+          gold_amount: pack.gold_amount + (pack.bonus_gold ?? 0),
+          order_id: order.id,
+          order_type: "gold_purchase",
+          user_id: user.id,
+        },
+        reference: paystackReference,
+      });
+
+      console.info("[WalletCheckout] Paystack redirect URL generated", {
+        hasAuthorizationUrl: Boolean(checkout.authorization_url),
+        orderId: order.id,
+        providerKey,
+      });
+
+      redirect(checkout.authorization_url);
+    }
+
+    console.info("[WalletCheckout] non-Paystack checkout completed without redirect", {
+      orderId: order.id,
+      providerKey,
+    });
+
+    revalidatePath("/wallet");
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      console.info("[WalletCheckout] redirect thrown by Next.js", { stage });
+      throw error;
+    }
+
+    logCheckoutError(stage, error);
+    throw error;
+  }
 }
 
 export async function startPremiumCheckout(formData?: FormData) {
