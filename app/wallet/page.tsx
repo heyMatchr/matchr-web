@@ -7,6 +7,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
 import { WalletProviderDebug } from "./wallet-provider-debug";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type WalletPageProps = {
   searchParams?: Promise<{
     payment?: string | string[];
