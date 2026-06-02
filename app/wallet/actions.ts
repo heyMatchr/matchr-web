@@ -1,12 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getAvailablePaymentProviders,
   isProviderAvailable,
 } from "@/lib/payment-providers";
 import { createPaymentOrder } from "@/lib/payments";
+import {
+  createPaystackReference,
+  initializePaystackTransaction,
+} from "@/lib/paystack";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 async function currentUser() {
@@ -52,6 +57,23 @@ async function resolveProviderKey(
   return availableProviders[0].provider_key;
 }
 
+async function getAppOrigin() {
+  const headerStore = await headers();
+  const origin =
+    headerStore.get("origin") ??
+    (process.env.NEXT_PUBLIC_APP_URL
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "");
+
+  if (!origin) {
+    throw new Error("App origin is required to start checkout.");
+  }
+
+  return origin;
+}
+
 export async function startGoldCheckout(formData: FormData) {
   const packageId = String(formData.get("package_id") ?? "");
   const packageKey = String(formData.get("package") ?? "");
@@ -81,20 +103,48 @@ export async function startGoldCheckout(formData: FormData) {
     user.id,
     requestedProviderKey,
   );
+  const paystackReference =
+    providerKey === "paystack" ? createPaystackReference() : null;
+  const metadata = {
+    package_id: pack.id,
+    package_name: pack.name,
+    base_gold: pack.gold_amount,
+    bonus_gold: pack.bonus_gold ?? 0,
+    ...(paystackReference
+      ? {
+          paystack_reference: paystackReference,
+        }
+      : {
+          provider_message: "Payment method coming next",
+        }),
+  };
 
-  await createPaymentOrder(supabase, {
+  const order = await createPaymentOrder(supabase, {
     amount: pack.usd_price ?? pack.price_usd,
     goldAmount: pack.gold_amount + (pack.bonus_gold ?? 0),
-    metadata: {
-      package_id: pack.id,
-      package_name: pack.name,
-      base_gold: pack.gold_amount,
-      bonus_gold: pack.bonus_gold ?? 0,
-      provider_message: "Payment provider coming next",
-    },
+    metadata,
     orderType: "gold_purchase",
     provider: providerKey,
   });
+
+  if (providerKey === "paystack" && paystackReference) {
+    const origin = await getAppOrigin();
+    const checkout = await initializePaystackTransaction({
+      amount: Number(pack.usd_price ?? pack.price_usd),
+      callbackUrl: `${origin}/api/paystack/callback`,
+      currency: "USD",
+      email: user.email ?? `${user.id}@matchr.local`,
+      metadata: {
+        gold_amount: pack.gold_amount + (pack.bonus_gold ?? 0),
+        order_id: order.id,
+        order_type: "gold_purchase",
+        user_id: user.id,
+      },
+      reference: paystackReference,
+    });
+
+    redirect(checkout.authorization_url);
+  }
 
   revalidatePath("/wallet");
 }
@@ -125,18 +175,46 @@ export async function startPremiumCheckout(formData?: FormData) {
     user.id,
     requestedProviderKey,
   );
+  const paystackReference =
+    providerKey === "paystack" ? createPaystackReference() : null;
+  const metadata = {
+    duration_days: plan.duration_days,
+    plan_id: plan.id,
+    plan_name: plan.name ?? plan.plan_name,
+    ...(paystackReference
+      ? {
+          paystack_reference: paystackReference,
+        }
+      : {
+          provider_message: "Payment method coming next",
+        }),
+  };
 
-  await createPaymentOrder(supabase, {
+  const order = await createPaymentOrder(supabase, {
     amount: plan.price_usd,
-    metadata: {
-      duration_days: plan.duration_days,
-      plan_id: plan.id,
-      plan_name: plan.name ?? plan.plan_name,
-      provider_message: "Payment provider coming next",
-    },
+    metadata,
     orderType: "premium_subscription",
     provider: providerKey,
   });
+
+  if (providerKey === "paystack" && paystackReference) {
+    const origin = await getAppOrigin();
+    const checkout = await initializePaystackTransaction({
+      amount: Number(plan.price_usd),
+      callbackUrl: `${origin}/api/paystack/callback`,
+      currency: "USD",
+      email: user.email ?? `${user.id}@matchr.local`,
+      metadata: {
+        order_id: order.id,
+        order_type: "premium_subscription",
+        plan_id: plan.id,
+        user_id: user.id,
+      },
+      reference: paystackReference,
+    });
+
+    redirect(checkout.authorization_url);
+  }
 
   revalidatePath("/wallet");
 }

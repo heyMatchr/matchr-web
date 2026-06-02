@@ -5,7 +5,14 @@ import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startGoldCheckout, startPremiumCheckout } from "./actions";
 
-export default async function WalletPage() {
+type WalletPageProps = {
+  searchParams?: Promise<{
+    payment?: string;
+  }>;
+};
+
+export default async function WalletPage({ searchParams }: WalletPageProps) {
+  const params = await searchParams;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -67,6 +74,7 @@ export default async function WalletPage() {
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
+  const paymentState = params?.payment ?? "";
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
@@ -75,6 +83,16 @@ export default async function WalletPage() {
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">Messages · Gifts · Premium</p>
+          {paymentState === "processing" ? (
+            <p className="mt-3 rounded-2xl border border-emerald-300/20 bg-black/25 px-4 py-3 text-sm leading-6 text-emerald-50">
+              Payment processing. Gold appears after Paystack approves it.
+            </p>
+          ) : null}
+          {["failed", "missing-reference"].includes(paymentState) ? (
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
+              Payment failed. Try again or choose another method.
+            </p>
+          ) : null}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               ["✉", "Start", "Get noticed"],

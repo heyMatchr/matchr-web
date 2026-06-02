@@ -23,6 +23,26 @@ function providerSupports(
   );
 }
 
+function providerSupportsCurrency(
+  provider: PaymentProviderRow,
+  currency: string,
+) {
+  return providerSupports(provider.supported_currencies, currency, [
+    "global",
+    "*",
+  ]);
+}
+
+function providerSupportsCountry(
+  provider: PaymentProviderRow,
+  country: string,
+) {
+  return providerSupports(provider.supported_countries, country, [
+    "global",
+    "*",
+  ]);
+}
+
 export async function getAvailablePaymentProviders(
   supabase: Supabase,
   userCountry?: string | null,
@@ -39,16 +59,21 @@ export async function getAvailablePaymentProviders(
     throw new Error(error.message);
   }
 
-  const country = userCountry || "GLOBAL";
-  const providers = (data ?? []).filter(
-    (provider) =>
-      providerSupports(provider.supported_countries, country, ["global", "*"]) &&
-      providerSupports(provider.supported_currencies, currency, ["global", "*"]),
+  const activeProviders = data ?? [];
+  const currencyProviders = activeProviders.filter((provider) =>
+    providerSupportsCurrency(provider, currency),
+  );
+  const country = normalize(userCountry);
+
+  if (!country) {
+    return currencyProviders;
+  }
+
+  const countryProviders = currencyProviders.filter((provider) =>
+    providerSupportsCountry(provider, country),
   );
 
-  return providers.length ? providers : (data ?? []).filter((provider) =>
-    providerSupports(provider.supported_countries, "GLOBAL", ["global", "*"]),
-  );
+  return countryProviders.length ? countryProviders : currencyProviders;
 }
 
 export function isProviderAvailable(
