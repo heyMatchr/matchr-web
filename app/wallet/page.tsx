@@ -133,6 +133,9 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
       <div className="mt-8 grid gap-5">
+        <div className="w-fit rounded-full border border-amber-300/40 bg-amber-300/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-amber-100">
+          WALLET BUILD: provider-debug-v2
+        </div>
         {isWalletDebugVisible ? (
           <WalletProviderDebug
             currency="USD"
