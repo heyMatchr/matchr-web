@@ -5,7 +5,6 @@ import { AppShell } from "@/app/_components/app-shell";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
-import { likeProfile } from "@/app/discover/actions";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getProfileHref, isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
@@ -15,6 +14,7 @@ import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileOnlineStatus } from "./profile-online-status";
 import { CopyPublicIdButton } from "./copy-public-id-button";
+import { ProfileLikeButton } from "./profile-like-button";
 
 type ProfilePageProps = {
   params: Promise<{
@@ -23,10 +23,16 @@ type ProfilePageProps = {
 };
 
 function toChipList(value?: string | null) {
-  return (value ?? "")
+  return [
+    ...new Set((value ?? "")
     .split(/[,/|]/)
     .map((item) => item.trim())
-    .filter(Boolean);
+      .filter(Boolean)),
+  ];
+}
+
+function initialFor(name?: string | null) {
+  return name?.trim().charAt(0).toUpperCase() || "M";
 }
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
@@ -314,7 +320,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     ["Location", completedKeys.has("location")],
   ] as const;
   const intentChips = toChipList(profile.relationship_intent);
-  const interestChips = profile.interests ?? [];
+  const normalizedIntentChips = new Set(
+    intentChips.map((intent) => intent.toLowerCase()),
+  );
+  const interestChips = [
+    ...new Set(
+      (profile.interests ?? []).filter(
+        (interest) => !normalizedIntentChips.has(interest.toLowerCase()),
+      ),
+    ),
+  ];
   const lifestyleItems = [
     ["Height", profile.height],
     ["Body", profile.body_type],
@@ -335,9 +350,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           { href: "/wallet", label: "Wallet" },
         ]
       : [
-          { href: chatHref, label: "Say Hi" },
-          { href: chatHref, label: "Gift" },
-          { href: hasActiveStories ? "/discover" : null, label: "Story Reply" },
+          ...(chatHref ? [{ href: chatHref, label: "Say Hi" }] : []),
+          ...(chatHref ? [{ href: chatHref, label: "Gift" }] : []),
+          ...(hasActiveStories ? [{ href: "/discover", label: "Story Reply" }] : []),
         ];
 
   finishPerfTimer("[Perf] Profile queries", perfStartedAt);
@@ -366,7 +381,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               />
             ) : (
               <div className="flex h-full min-h-[340px] w-full items-center justify-center text-7xl font-black text-neutral-700 md:min-h-[420px]">
-                {profile.display_name.charAt(0)}
+                {initialFor(profile.display_name)}
               </div>
             )}
           </div>
@@ -450,15 +465,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       Message
                     </Link>
                   ) : (
-                    <form action={likeProfile.bind(null, profile.id)}>
-                      <button
-                        type="submit"
-                        disabled={Boolean(likeResult.data)}
-                        className="rounded-full border border-neutral-700 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {likeResult.data ? "Liked" : "Like"}
-                      </button>
-                    </form>
+                    <ProfileLikeButton
+                      initialLiked={Boolean(likeResult.data)}
+                      profileUserId={profile.id}
+                    />
                   )}
                 </>
               )}
@@ -653,8 +663,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                 Actions
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {attractionChips.map((chip) =>
-                  chip.href ? (
+                {attractionChips.length ? (
+                  attractionChips.map((chip) => (
                     <Link
                       key={chip.label}
                       href={chip.href}
@@ -662,14 +672,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                     >
                       {chip.label}
                     </Link>
-                  ) : (
-                    <span
-                      key={chip.label}
-                      className="rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm text-neutral-400"
-                    >
-                      {chip.label}
-                    </span>
-                  ),
+                  ))
+                ) : (
+                  <span className="rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm text-neutral-400">
+                    No quick actions
+                  </span>
                 )}
               </div>
             </div>
@@ -721,13 +728,14 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                             />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
-                              {visitor?.display_name.charAt(0)}
+                              {initialFor(visitor?.display_name)}
                             </div>
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-neutral-100">
-                            {visitor?.display_name}, {visitor?.age}
+                            {visitor?.display_name ?? "Someone"}
+                            {visitor?.age ? `, ${visitor.age}` : ""}
                           </p>
                           <p className="mt-1 truncate text-xs text-neutral-500">
                             {visitor?.location}

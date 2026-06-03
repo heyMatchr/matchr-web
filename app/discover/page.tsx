@@ -58,6 +58,59 @@ function isSchemaSelectionError(error: { message?: string } | null) {
   );
 }
 
+function normalizeDiscoveryIdentity(value?: string | null) {
+  const normalized = value?.trim().toLowerCase();
+
+  if (!normalized || normalized === "prefer not to say") {
+    return "broad";
+  }
+
+  if (normalized === "man" || normalized === "male") {
+    return "man";
+  }
+
+  if (normalized === "woman" || normalized === "female") {
+    return "woman";
+  }
+
+  if (
+    normalized === "lgbtq+ community" ||
+    normalized.includes("lgbtq") ||
+    normalized.includes("queer") ||
+    normalized.includes("non-binary") ||
+    normalized.includes("trans")
+  ) {
+    return "lgbtq";
+  }
+
+  return "broad";
+}
+
+function matchesApprovedDiscoveryIdentity({
+  candidateIdentity,
+  viewerIdentity,
+}: {
+  candidateIdentity?: string | null;
+  viewerIdentity?: string | null;
+}) {
+  const viewer = normalizeDiscoveryIdentity(viewerIdentity);
+  const candidate = normalizeDiscoveryIdentity(candidateIdentity);
+
+  if (viewer === "man") {
+    return candidate === "woman";
+  }
+
+  if (viewer === "woman") {
+    return candidate === "man";
+  }
+
+  if (viewer === "lgbtq") {
+    return candidate === "lgbtq";
+  }
+
+  return true;
+}
+
 async function fetchDiscoverProfiles({
   supabase,
   userId,
@@ -110,6 +163,7 @@ export default async function DiscoverPage() {
     blocksResult,
     currentSettingsResult,
     incomingLikesResult,
+    viewerIdentityResult,
   ] =
     await timeAsync("[Perf] Discover base profile filters", () =>
       Promise.all([
@@ -134,6 +188,11 @@ export default async function DiscoverPage() {
           .from("likes")
           .select("liker_id")
           .eq("liked_profile_id", user.id),
+        supabase
+          .from("profiles")
+          .select("gender_identity")
+          .eq("id", user.id)
+          .maybeSingle(),
       ]),
     );
 
@@ -161,13 +220,12 @@ export default async function DiscoverPage() {
     ),
   ]);
   const identityPreferences = currentSettingsResult.data;
+  const viewerGenderIdentity = viewerIdentityResult.data?.gender_identity ?? null;
   const viewerRankingContext = {
     id: user.id,
-    inclusiveDiscovery: identityPreferences?.inclusive_discovery ?? true,
-    interestedInGenderIdentities:
-      identityPreferences?.interested_in_gender_identities ?? [],
-    interestedInOrientations:
-      identityPreferences?.interested_in_orientations ?? [],
+    inclusiveDiscovery: true,
+    interestedInGenderIdentities: [],
+    interestedInOrientations: [],
     relationshipIntentPreference:
       identityPreferences?.relationship_intent_preference ?? null,
   };
@@ -368,7 +426,10 @@ export default async function DiscoverPage() {
       latestViewerViewByUser.set(view.viewed_user_id, view.created_at);
     }
   });
-  const discoverProfiles: DiscoverProfile[] = visibleProfiles.map((profile) => {
+  const sourceProfilesById = new Map(
+    visibleProfiles.map((profile) => [profile.id, profile]),
+  );
+  const allDiscoverProfiles: DiscoverProfile[] = visibleProfiles.map((profile) => {
     const momentCount = momentCounts.get(profile.id) ?? 0;
     const followerCount = followerCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
@@ -428,7 +489,7 @@ export default async function DiscoverPage() {
     };
   }).filter((profile) => {
     const setting = settingsByUser.get(profile.id);
-    const sourceProfile = visibleProfiles.find((candidate) => candidate.id === profile.id);
+    const sourceProfile = sourceProfilesById.get(profile.id);
 
     return sourceProfile
       ? canUserAppearInDiscover({
@@ -437,6 +498,14 @@ export default async function DiscoverPage() {
           viewer: viewerRankingContext,
         })
       : false;
+  });
+  const discoverProfiles = allDiscoverProfiles.filter((profile) => {
+    const sourceProfile = sourceProfilesById.get(profile.id);
+
+    return matchesApprovedDiscoveryIdentity({
+      candidateIdentity: sourceProfile?.gender_identity ?? null,
+      viewerIdentity: viewerGenderIdentity,
+    });
   }).sort((a, b) => b.compatibility - a.compatibility);
   const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
   const trendingProfiles = [...discoverProfiles].sort((a, b) => b.trendingScore - a.trendingScore).slice(0, 10);
@@ -461,6 +530,7 @@ export default async function DiscoverPage() {
         <DiscoverClient
           profiles={discoverProfiles}
           recentlyActive={recentlyActive}
+          searchProfiles={allDiscoverProfiles}
           trending={trendingProfiles}
         />
     </AppShell>

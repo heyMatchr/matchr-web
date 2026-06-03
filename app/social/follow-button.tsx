@@ -23,6 +23,11 @@ export function FollowButton({
   const [isPending, startTransition] = useTransition();
 
   function toggleFollow() {
+    if (!profileUserId) {
+      setMessage("Profile unavailable.");
+      return;
+    }
+
     const nextFollowing = !isFollowing;
     setMessage("");
     setIsFollowing(nextFollowing);

@@ -59,11 +59,18 @@ export async function likeProfile(profileUserId: string) {
     throw new Error(likeError.message);
   }
 
-  const { data: currentProfile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", userId)
-    .maybeSingle();
+  const [{ data: currentProfile }, { data: likedProfile }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("public_id")
+      .eq("id", profileUserId)
+      .maybeSingle(),
+  ]);
 
   await supabase.from("notifications").insert({
     actor_id: userId,
@@ -129,6 +136,10 @@ export async function likeProfile(profileUserId: string) {
   }
 
   revalidatePath("/discover");
+  revalidatePath(`/profile/${profileUserId}`);
+  if (likedProfile?.public_id) {
+    revalidatePath(`/profile/${likedProfile.public_id}`);
+  }
 }
 
 export async function passProfile(profileUserId: string) {

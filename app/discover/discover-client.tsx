@@ -39,6 +39,7 @@ export type DiscoverProfile = {
 type DiscoverClientProps = {
   profiles: DiscoverProfile[];
   recentlyActive: DiscoverProfile[];
+  searchProfiles?: DiscoverProfile[];
   trending: DiscoverProfile[];
 };
 
@@ -47,6 +48,7 @@ const sortOptions = ["compatible", "newest", "nearby", "trending", "most followe
 export function DiscoverClient({
   profiles,
   recentlyActive,
+  searchProfiles,
   trending,
 }: DiscoverClientProps) {
   const [isPending, startTransition] = useTransition();
@@ -71,7 +73,10 @@ export function DiscoverClient({
   const visibleProfiles = useMemo(() => {
     const dismissed = new Set(dismissedIds);
     const normalizedPublicIdSearch = normalizePublicId(searchQuery);
-    const filtered = profiles.filter((profile) => {
+    const sourceProfiles = normalizedPublicIdSearch
+      ? (searchProfiles ?? profiles)
+      : profiles;
+    const filtered = sourceProfiles.filter((profile) => {
       if (dismissed.has(profile.id)) return false;
       if (hasInvalidPublicIdSearch) {
         return false;
@@ -98,7 +103,7 @@ export function DiscoverClient({
       }
       return b.compatibility - a.compatibility;
     });
-  }, [dismissedIds, filters, hasInvalidPublicIdSearch, isUserOnline, profiles, searchQuery, sortBy]);
+  }, [dismissedIds, filters, hasInvalidPublicIdSearch, isUserOnline, profiles, searchProfiles, searchQuery, sortBy]);
   const liveRecentlyActive = useMemo(
     () =>
       profiles

@@ -62,41 +62,61 @@ export async function followUser(userToFollowId: string) {
     throw new Error(ACTION_LIMIT_MESSAGE);
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", user.id)
+  const [{ data: profile }, { data: targetProfile }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name, public_id")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("public_id")
+      .eq("id", userToFollowId)
+      .maybeSingle(),
+  ]);
+
+  const { data: existingFollow, error: existingFollowError } = await supabase
+    .from("follows")
+    .select("id")
+    .eq("follower_id", user.id)
+    .eq("following_id", userToFollowId)
     .maybeSingle();
 
-  const { error } = await supabase.from("follows").upsert(
-    {
-      follower_id: user.id,
-      following_id: userToFollowId,
-    },
-    {
-      ignoreDuplicates: true,
-      onConflict: "follower_id,following_id",
-    },
-  );
-
-  if (error) {
-    throw new Error(error.message);
+  if (existingFollowError) {
+    throw new Error(existingFollowError.message);
   }
 
-  await supabase.from("notifications").insert({
-    actor_id: user.id,
-    body: `${profile?.display_name ?? "Someone"} followed your profile.`,
-    metadata: {
-      profile_id: user.id,
-    },
-    title: "New follower",
-    type: "new_follower",
-    user_id: userToFollowId,
-  });
+  if (!existingFollow) {
+    const { error } = await supabase.from("follows").insert({
+      follower_id: user.id,
+      following_id: userToFollowId,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    await supabase.from("notifications").insert({
+      actor_id: user.id,
+      body: `${profile?.display_name ?? "Someone"} followed your profile.`,
+      metadata: {
+        profile_id: user.id,
+      },
+      title: "New follower",
+      type: "new_follower",
+      user_id: userToFollowId,
+    });
+  }
 
   revalidatePath(`/profile/${userToFollowId}`);
+  if (targetProfile?.public_id) {
+    revalidatePath(`/profile/${targetProfile.public_id}`);
+  }
   revalidatePath(`/profile/${userToFollowId}/followers`);
   revalidatePath(`/profile/${user.id}`);
+  if (profile?.public_id) {
+    revalidatePath(`/profile/${profile.public_id}`);
+  }
   revalidatePath(`/profile/${user.id}/following`);
   revalidatePath("/notifications");
 }
@@ -134,7 +154,16 @@ export async function unfollowUser(userToUnfollowId: string) {
     throw new Error(error.message);
   }
 
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("public_id")
+    .eq("id", userToUnfollowId)
+    .maybeSingle();
+
   revalidatePath(`/profile/${userToUnfollowId}`);
+  if (targetProfile?.public_id) {
+    revalidatePath(`/profile/${targetProfile.public_id}`);
+  }
   revalidatePath(`/profile/${userToUnfollowId}/followers`);
   revalidatePath(`/profile/${user.id}`);
   revalidatePath(`/profile/${user.id}/following`);
