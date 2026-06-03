@@ -6,11 +6,8 @@ import {
   MESSAGE_TEMPLATE_VISIBILITIES,
 } from "@/lib/message-templates";
 import type { MessageTemplateRow } from "@/lib/supabase/types";
-import {
-  deleteMessageTemplate,
-  saveMessageTemplate,
-  type MessageTemplateFormState,
-} from "./actions";
+import { deleteMessageTemplate, saveMessageTemplate } from "./actions";
+import type { MessageTemplateFormState } from "./message-template-types";
 
 const initialState: MessageTemplateFormState = {
   message: "",

@@ -7,10 +7,7 @@ import {
   STORY_BUCKET_NAME,
   STORY_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
-
-export type StoryFormState = {
-  message: string;
-};
+import type { StoryFormState } from "./stories-types";
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);

@@ -4,10 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { AVATAR_BUCKET_NAME } from "@/lib/supabase/storage";
 import type { Database } from "@/lib/supabase/types";
-
-export type OnboardingFormState = {
-  message: string;
-};
+import type { OnboardingFormState } from "./types";
 
 type ProfileInsert = Database["public"]["Tables"]["profiles"]["Insert"];
 type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];

@@ -3,16 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-export type AuthFormState = {
-  status: "idle" | "error" | "success";
-  message: string;
-};
-
-export type LogoutFormState = {
-  status: "idle" | "error";
-  message: string;
-};
+import type { AuthFormState, LogoutFormState } from "./types";
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);

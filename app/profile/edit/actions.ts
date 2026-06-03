@@ -8,10 +8,7 @@ import {
   AVATAR_BUCKET_NAME,
   AVATAR_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
-
-export type ProfileEditFormState = {
-  message: string;
-};
+import type { ProfileEditFormState } from "./types";
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);

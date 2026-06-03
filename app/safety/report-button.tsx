@@ -1,12 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
-import {
-  REPORT_REASONS,
-  submitReport,
-  type ReportFormState,
-  type ReportTarget,
-} from "./actions";
+import { submitReport } from "./actions";
+import { REPORT_REASONS, type ReportFormState, type ReportTarget } from "./types";
 
 const initialReportState: ReportFormState = {
   message: "",

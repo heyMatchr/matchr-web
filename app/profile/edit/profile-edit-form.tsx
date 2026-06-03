@@ -12,7 +12,8 @@ import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
-import { updateProfile, type ProfileEditFormState } from "./actions";
+import { updateProfile } from "./actions";
+import type { ProfileEditFormState } from "./types";
 
 type EditableProfile = Pick<
   ProfileRow,

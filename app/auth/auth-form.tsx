@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
-import type { AuthFormState } from "@/app/auth/actions";
+import type { AuthFormState } from "@/app/auth/types";
 
 const initialAuthFormState: AuthFormState = {
   status: "idle",

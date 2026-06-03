@@ -9,6 +9,7 @@ import {
   validateMessageTemplateContent,
 } from "@/lib/message-templates";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import type { MessageTemplateFormState } from "./message-template-types";
 
 function isChecked(formData: FormData, key: string) {
   return formData.get(key) === "on";
@@ -112,11 +113,6 @@ export async function unblockUser(blockedUserId: string) {
   revalidatePath("/messages");
   revalidatePath("/moments");
 }
-
-export type MessageTemplateFormState = {
-  message: string;
-  status: "idle" | "error" | "success";
-};
 
 export async function saveMessageTemplate(
   _previousState: MessageTemplateFormState,

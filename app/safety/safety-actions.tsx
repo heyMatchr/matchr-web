@@ -1,12 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useState, useTransition } from "react";
-import {
-  REPORT_REASONS,
-  blockUser,
-  reportUser,
-  type ReportFormState,
-} from "./actions";
+import { blockUser, reportUser } from "./actions";
+import { REPORT_REASONS, type ReportFormState } from "./types";
 
 type SafetyActionsProps = {
   blockRedirectTo?: string;

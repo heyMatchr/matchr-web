@@ -15,15 +15,7 @@ import {
   MEDIA_BUCKET_NAME,
   MEDIA_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
-
-export type MomentFormState = {
-  message: string;
-};
-
-export type GiftActionState = {
-  message: string;
-  status: "error" | "success";
-};
+import type { GiftActionState, MomentFormState } from "./types";
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);

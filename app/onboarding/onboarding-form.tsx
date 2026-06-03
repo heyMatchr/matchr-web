@@ -8,7 +8,8 @@ import {
   AVATAR_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
 import type { Database } from "@/lib/supabase/types";
-import { saveOnboarding, type OnboardingFormState } from "./actions";
+import { saveOnboarding } from "./actions";
+import type { OnboardingFormState } from "./types";
 
 const initialState: OnboardingFormState = {
   message: "",

@@ -27,9 +27,8 @@ import {
   giftMoment,
   toggleMomentLikesVisibility,
   toggleMomentLike,
-  type GiftActionState,
-  type MomentFormState,
 } from "./actions";
+import type { GiftActionState, MomentFormState } from "./types";
 
 type MomentProfile = {
   age: number;
