@@ -21,6 +21,7 @@ type RawDiscoverProfile = {
   created_at?: string | null;
   discover_hidden?: boolean | null;
   display_name?: string | null;
+  gender?: string | null;
   gender_identity?: string | null;
   id: string;
   identity_verified?: boolean | null;
@@ -44,10 +45,10 @@ type RawDiscoverProfile = {
 };
 
 const DISCOVER_PROFILE_SELECT =
-  "id, public_id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at";
+  "id, public_id, display_name, age, location, country, bio, avatar_url, occupation, interests, relationship_intent, gender, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, accepting_dating, is_online, last_seen_at, moderation_score, under_review, discover_hidden, shadow_restricted, trusted_user, phone_verified, identity_verified, created_at";
 
 const CORE_DISCOVER_PROFILE_SELECT =
-  "id, public_id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, verified, created_at";
+  "id, public_id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, gender, verified, created_at";
 
 function isSchemaSelectionError(error: { message?: string } | null) {
   const message = error?.message?.toLowerCase() ?? "";
@@ -58,8 +59,16 @@ function isSchemaSelectionError(error: { message?: string } | null) {
   );
 }
 
-function normalizeDiscoveryIdentity(value?: string | null) {
-  const normalized = value?.trim().toLowerCase();
+function normalizeDiscoveryIdentity({
+  gender,
+  genderIdentity,
+}: {
+  gender?: string | null;
+  genderIdentity?: string | null;
+}) {
+  const normalizedGender = gender?.trim().toLowerCase();
+  const normalizedIdentity = genderIdentity?.trim().toLowerCase();
+  const normalized = normalizedIdentity || normalizedGender;
 
   if (!normalized || normalized === "prefer not to say") {
     return "broad";
@@ -74,7 +83,15 @@ function normalizeDiscoveryIdentity(value?: string | null) {
   }
 
   if (
+    normalizedGender === "lgbtq+ community" ||
     normalized === "lgbtq+ community" ||
+    (normalized === "other" && normalizedGender === "lgbtq+ community") ||
+    normalized === "non-binary" ||
+    normalized === "trans woman" ||
+    normalized === "trans man" ||
+    normalized === "genderfluid" ||
+    normalized === "agender" ||
+    normalized === "queer" ||
     normalized.includes("lgbtq") ||
     normalized.includes("queer") ||
     normalized.includes("non-binary") ||
@@ -87,25 +104,37 @@ function normalizeDiscoveryIdentity(value?: string | null) {
 }
 
 function matchesApprovedDiscoveryIdentity({
-  candidateIdentity,
-  viewerIdentity,
+  candidate,
+  viewer,
 }: {
-  candidateIdentity?: string | null;
-  viewerIdentity?: string | null;
+  candidate: {
+    gender?: string | null;
+    gender_identity?: string | null;
+  };
+  viewer: {
+    gender?: string | null;
+    gender_identity?: string | null;
+  };
 }) {
-  const viewer = normalizeDiscoveryIdentity(viewerIdentity);
-  const candidate = normalizeDiscoveryIdentity(candidateIdentity);
+  const viewerIdentity = normalizeDiscoveryIdentity({
+    gender: viewer.gender,
+    genderIdentity: viewer.gender_identity,
+  });
+  const candidateIdentity = normalizeDiscoveryIdentity({
+    gender: candidate.gender,
+    genderIdentity: candidate.gender_identity,
+  });
 
-  if (viewer === "man") {
-    return candidate === "woman";
+  if (viewerIdentity === "man") {
+    return candidateIdentity === "woman";
   }
 
-  if (viewer === "woman") {
-    return candidate === "man";
+  if (viewerIdentity === "woman") {
+    return candidateIdentity === "man";
   }
 
-  if (viewer === "lgbtq") {
-    return candidate === "lgbtq";
+  if (viewerIdentity === "lgbtq") {
+    return candidateIdentity === "lgbtq";
   }
 
   return true;
@@ -190,7 +219,7 @@ export default async function DiscoverPage() {
           .eq("liked_profile_id", user.id),
         supabase
           .from("profiles")
-          .select("gender_identity")
+          .select("gender, gender_identity")
           .eq("id", user.id)
           .maybeSingle(),
       ]),
@@ -220,7 +249,10 @@ export default async function DiscoverPage() {
     ),
   ]);
   const identityPreferences = currentSettingsResult.data;
-  const viewerGenderIdentity = viewerIdentityResult.data?.gender_identity ?? null;
+  const viewerIdentity = {
+    gender: viewerIdentityResult.data?.gender ?? null,
+    gender_identity: viewerIdentityResult.data?.gender_identity ?? null,
+  };
   const viewerRankingContext = {
     id: user.id,
     inclusiveDiscovery: true,
@@ -503,8 +535,11 @@ export default async function DiscoverPage() {
     const sourceProfile = sourceProfilesById.get(profile.id);
 
     return matchesApprovedDiscoveryIdentity({
-      candidateIdentity: sourceProfile?.gender_identity ?? null,
-      viewerIdentity: viewerGenderIdentity,
+      candidate: {
+        gender: sourceProfile?.gender ?? null,
+        gender_identity: sourceProfile?.gender_identity ?? null,
+      },
+      viewer: viewerIdentity,
     });
   }).sort((a, b) => b.compatibility - a.compatibility);
   const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
