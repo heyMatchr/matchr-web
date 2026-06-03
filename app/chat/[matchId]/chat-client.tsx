@@ -135,6 +135,7 @@ export function ChatClient({
     useState<MessageRow | null>(null);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
   const [now, setNow] = useState(0);
+  const [chatToast, setChatToast] = useState("");
   const [privacyWarning, setPrivacyWarning] = useState("");
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
   const [goldModal, setGoldModal] = useState("");
@@ -383,6 +384,15 @@ export function ChatClient({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!chatToast) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => setChatToast(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [chatToast]);
 
   useEffect(() => {
     function updateProtectionState() {
@@ -680,6 +690,7 @@ export function ChatClient({
       triggerMatchrHaptic(10);
       if (messageGoldCost > 0) {
         setSpendableGold((current) => Math.max(0, current - messageGoldCost));
+        setChatToast(`Sent • -${messageGoldCost} Gold`);
       }
       if (!receiverIsGloballyOnline) {
         await supabase.from("notifications").insert({
@@ -1413,11 +1424,6 @@ export function ChatClient({
             </div>
           </div>
         ) : null}
-        {messageGoldCost > 0 ? (
-          <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm leading-5 text-amber-50">
-            {messageCostLabel}
-          </p>
-        ) : null}
         <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">
           <button
             type="button"
@@ -1647,6 +1653,12 @@ export function ChatClient({
       {privacyWarning ? (
         <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
           {privacyWarning}
+        </div>
+      ) : null}
+
+      {chatToast ? (
+        <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
+          {chatToast}
         </div>
       ) : null}
 
