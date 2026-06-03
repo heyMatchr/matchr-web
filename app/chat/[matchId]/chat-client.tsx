@@ -139,7 +139,6 @@ export function ChatClient({
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
   const [goldModal, setGoldModal] = useState("");
   const [spendableGold, setSpendableGold] = useState(goldBalance);
-  const [paidMessageDraft, setPaidMessageDraft] = useState("");
   const [pendingGift, setPendingGift] = useState<GiftOption | null>(null);
   const [activeReportMessageId, setActiveReportMessageId] = useState<
     string | null
@@ -194,7 +193,7 @@ export function ChatClient({
     (!lastReceiverMessage ||
       new Date(lastOwnMessage?.created_at ?? 0) >
         new Date(lastReceiverMessage.created_at)) &&
-    Date.now() - new Date(lastOwnMessage?.created_at ?? 0).getTime() >
+    now - new Date(lastOwnMessage?.created_at ?? 0).getTime() >
       1000 * 60 * 60 * 6;
   const conversationSuggestions = getConversationSuggestions(
     {
@@ -575,11 +574,6 @@ export function ChatClient({
       return;
     }
 
-    if (messageGoldCost > 0) {
-      setPaidMessageDraft(trimmedContent);
-      return;
-    }
-
     await sendTextMessage(trimmedContent);
   }
 
@@ -636,7 +630,6 @@ export function ChatClient({
 
     setSending(true);
     setError("");
-    setPaidMessageDraft("");
     setContent("");
     trackPresence(false);
 
@@ -1654,37 +1647,6 @@ export function ChatClient({
       {privacyWarning ? (
         <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
           {privacyWarning}
-        </div>
-      ) : null}
-
-      {paidMessageDraft ? (
-        <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
-            <p className="text-xl font-black">Send paid message?</p>
-            <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-              {messageCostLabel}
-            </p>
-            <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
-              {spendableGold} Gold available
-            </p>
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setPaidMessageDraft("")}
-                className="rounded-full border border-neutral-700 px-4 py-3 text-sm text-neutral-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={sending}
-                onClick={() => void sendTextMessage(paidMessageDraft)}
-                className="rounded-full bg-white px-4 py-3 text-sm font-medium text-black disabled:opacity-60"
-              >
-                Send for {messageGoldCost}
-              </button>
-            </div>
-          </div>
         </div>
       ) : null}
 
