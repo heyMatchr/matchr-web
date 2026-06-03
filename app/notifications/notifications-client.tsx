@@ -164,26 +164,6 @@ export function NotificationsClient({
     };
   }, [currentUserId, supabase]);
 
-  useEffect(() => {
-    const unreadIds = notifications
-      .filter((notification) => !notification.read_at)
-      .map((notification) => notification.id);
-
-    if (unreadIds.length === 0) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      void supabase
-        .from("notifications")
-        .update({ read_at: new Date().toISOString() })
-        .eq("user_id", currentUserId)
-        .in("id", unreadIds);
-    }, 900);
-
-    return () => clearTimeout(timer);
-  }, [currentUserId, notifications, supabase]);
-
   const unreadCount = notifications.filter(
     (notification) => !notification.read_at,
   ).length;

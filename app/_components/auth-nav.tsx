@@ -249,6 +249,28 @@ export function AuthNav({
   }, [pathname]);
 
   useEffect(() => {
+    let active = true;
+
+    async function refreshNotificationCountForPath() {
+      const { count } = await supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", currentUserId)
+        .is("read_at", null);
+
+      if (active) {
+        setNotificationCount(count ?? 0);
+      }
+    }
+
+    void refreshNotificationCountForPath();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, pathname, supabase]);
+
+  useEffect(() => {
     if (!pathname.startsWith("/matches")) {
       return;
     }

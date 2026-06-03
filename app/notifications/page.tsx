@@ -24,6 +24,21 @@ export default async function NotificationsPage() {
     redirect("/onboarding");
   }
 
+  const openedAt = new Date().toISOString();
+  const { error: markReadError } = await supabase
+    .from("notifications")
+    .update({ read_at: openedAt })
+    .eq("user_id", user.id)
+    .is("read_at", null)
+    .lte("created_at", openedAt);
+
+  if (markReadError) {
+    console.error("[Notifications] Failed to mark notifications read", {
+      error: markReadError.message,
+      userId: user.id,
+    });
+  }
+
   const { data: notifications, error } = await supabase
     .from("notifications")
     .select("id, user_id, actor_id, type, title, body, metadata, read_at, created_at")
