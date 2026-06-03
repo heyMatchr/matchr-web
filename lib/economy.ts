@@ -12,8 +12,10 @@ type MessageRules = {
   conversation_free_after_reply: boolean;
   female_to_female: number;
   female_to_male: number;
+  female_message_cost?: number;
   male_to_female: number;
   male_to_male: number;
+  male_message_cost?: number;
   nonbinary_default: number;
   premium_discount_percent: number;
 };
@@ -29,11 +31,13 @@ export type EconomyProfile = {
 };
 
 export const DEFAULT_MESSAGE_RULES: MessageRules = {
-  conversation_free_after_reply: true,
+  conversation_free_after_reply: false,
   female_to_female: 0,
   female_to_male: 0,
+  female_message_cost: 0,
   male_to_female: 5,
   male_to_male: 3,
+  male_message_cost: 5,
   nonbinary_default: 2,
   premium_discount_percent: 60,
 };
@@ -190,28 +194,32 @@ function identityBucket(profile: EconomyProfile) {
 
 export function calculateMessageCost({
   hasPremium,
-  hasReceiverReply,
   receiver,
   rules = DEFAULT_MESSAGE_RULES,
   sender,
 }: {
   hasPremium: boolean;
-  hasReceiverReply: boolean;
+  hasReceiverReply?: boolean;
   receiver: EconomyProfile;
   rules?: MessageRules;
   sender: EconomyProfile;
 }) {
-  if (rules.conversation_free_after_reply && hasReceiverReply) {
-    return 0;
-  }
-
   const senderBucket = identityBucket(sender);
   const receiverBucket = identityBucket(receiver);
   const ruleKey = `${senderBucket}_to_${receiverBucket}` as keyof MessageRules;
-  const rawCost =
-    typeof rules[ruleKey] === "number"
+  const rawCost = (() => {
+    if (senderBucket === "male") {
+      return Number(rules.male_message_cost ?? rules.male_to_female ?? 5);
+    }
+
+    if (senderBucket === "female") {
+      return Number(rules.female_message_cost ?? 0);
+    }
+
+    return typeof rules[ruleKey] === "number"
       ? Number(rules[ruleKey])
-      : rules.nonbinary_default;
+      : Number(rules.nonbinary_default ?? 2);
+  })();
 
   if (!hasPremium || rawCost <= 0) {
     return rawCost;
@@ -225,7 +233,7 @@ export async function getMessageCost(
   supabase: EconomyClient,
   options: {
     hasPremium: boolean;
-    hasReceiverReply: boolean;
+    hasReceiverReply?: boolean;
     receiver: EconomyProfile;
     sender: EconomyProfile;
   },

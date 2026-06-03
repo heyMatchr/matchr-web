@@ -213,15 +213,8 @@ export function ChatClient({
           ),
         )
       : 0;
-  const hasReceiverReply = messages.some(
-    (message) => message.sender_id === receiverId && !message.optimistic,
-  );
-  const hasOwnMessage = messages.some(
-    (message) => message.sender_id === currentUserId && !message.optimistic,
-  );
   const messageGoldCost = calculateMessageCost({
     hasPremium,
-    hasReceiverReply,
     receiver: {
       gender: receiverGender,
       gender_identity: receiverGenderIdentity,
@@ -232,6 +225,10 @@ export function ChatClient({
       gender_identity: currentUserGenderIdentity,
     },
   });
+  const messageCostLabel =
+    messageGoldCost > 0
+      ? `${hasPremium ? "Premium: " : ""}${messageGoldCost} Gold/message`
+      : "";
   const mobileChatHeightStyle = mobileViewportHeight
     ? {
         height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.25rem)`,
@@ -563,6 +560,10 @@ export function ChatClient({
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (sending) {
+      return;
+    }
+
     const trimmedContent = content.trim();
 
     if (!trimmedContent) {
@@ -570,7 +571,7 @@ export function ChatClient({
     }
 
     if (messageGoldCost > 0 && spendableGold < messageGoldCost) {
-      setGoldModal("Not enough Gold to send this paid first message.");
+      setGoldModal("Need Gold to send this message.");
       return;
     }
 
@@ -583,7 +584,7 @@ export function ChatClient({
   }
 
   async function sendTextMessage(trimmedContent: string) {
-    if (!trimmedContent) {
+    if (!trimmedContent || sending) {
       return;
     }
 
@@ -1421,22 +1422,7 @@ export function ChatClient({
         ) : null}
         {messageGoldCost > 0 ? (
           <p className="mb-2 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm leading-5 text-amber-50">
-            {messageGoldCost} Gold to send · Free after reply
-          </p>
-        ) : null}
-        {messageGoldCost === 0 && hasOwnMessage && !hasReceiverReply ? (
-          <p className="mb-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2 text-sm leading-5 text-emerald-50">
-            Waiting for reply
-          </p>
-        ) : null}
-        {hasReceiverReply && !hasOwnMessage ? (
-          <p className="mb-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2 text-sm leading-5 text-emerald-50">
-            Reply unlocks chat
-          </p>
-        ) : null}
-        {hasReceiverReply && hasOwnMessage ? (
-          <p className="mb-2 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-2 text-sm leading-5 text-emerald-50">
-            Chat unlocked
+            {messageCostLabel}
           </p>
         ) : null}
         <div className="relative flex min-w-0 items-end gap-2 sm:gap-3">
@@ -1569,7 +1555,7 @@ export function ChatClient({
                 <p className="mt-1 text-sm leading-5 text-neutral-400">
                   {spendableGold} Gold
                   {messageGoldCost > 0
-                    ? ` · ${messageGoldCost} to send`
+                    ? ` · ${messageCostLabel}`
                     : ""}
                 </p>
               </div>
@@ -1676,7 +1662,7 @@ export function ChatClient({
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
             <p className="text-xl font-black">Send paid message?</p>
             <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-              First message: {messageGoldCost} Gold. Free after reply.
+              {messageCostLabel}
             </p>
             <p className="mt-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-300">
               {spendableGold} Gold available
