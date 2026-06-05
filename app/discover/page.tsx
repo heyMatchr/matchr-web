@@ -5,6 +5,7 @@ import {
 } from "@/lib/discovery-ranking";
 import { getGiftCatalog } from "@/lib/economy";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+import { isActivePremiumSubscription } from "@/lib/premium";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -399,7 +400,7 @@ export default async function DiscoverPage() {
       visibleProfileIds.length
         ? supabase
             .from("premium_subscriptions")
-            .select("user_id")
+            .select("user_id, status, expires_at")
             .eq("status", "active")
             .in("user_id", visibleProfileIds)
         : Promise.resolve({ data: [] }),
@@ -447,7 +448,9 @@ export default async function DiscoverPage() {
     incomingLikesResult.data?.map((like) => like.liker_id) ?? [],
   );
   const premiumUserIds = new Set(
-    premiumResult.data?.map((subscription) => subscription.user_id) ?? [],
+    premiumResult.data
+      ?.filter((subscription) => isActivePremiumSubscription(subscription))
+      .map((subscription) => subscription.user_id) ?? [],
   );
   const profileViewCounts = countBy(profileViewsResult.data, "viewed_user_id");
   const latestViewerViewByUser = new Map<string, string>();
@@ -501,6 +504,7 @@ export default async function DiscoverPage() {
       display_name: profile.display_name || "Someone",
       followerCount,
       hasMoments: momentCount > 0,
+      hasPremium: premiumUserIds.has(profile.id),
       hasStories,
       id: profile.id,
       public_id: profile.public_id ?? null,

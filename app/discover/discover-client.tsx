@@ -22,6 +22,7 @@ export type DiscoverProfile = {
   followerCount: number;
   gender_identity: string | null;
   hasMoments: boolean;
+  hasPremium: boolean;
   hasStories: boolean;
   id: string;
   interests: string[];
@@ -350,6 +351,7 @@ const SwipeCard = memo(function SwipeCard({
         <div className="absolute left-3 top-3 flex gap-2">
           {profileIsOnline ? <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black">Online</span> : null}
           {profile.verified ? <span className="rounded-full border border-white/20 bg-black/45 px-3 py-1 text-xs text-white">Verified</span> : null}
+          {profile.hasPremium ? <span className="rounded-full border border-[#D4AF37]/45 bg-black/45 px-3 py-1 text-xs font-black text-[#D4AF37]">✦ Premium</span> : null}
         </div>
       </div>
       <div className="p-5">

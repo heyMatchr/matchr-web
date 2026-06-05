@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
 import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
+import { isActivePremiumSubscription } from "@/lib/premium";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { startPremiumCheckout } from "./actions";
 
@@ -51,7 +52,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     incomingGiftsResult,
     outgoingGiftsResult,
     messageChargesResult,
-    premiumResult,
+    premiumSubscriptionsResult,
     paymentOrdersResult,
     premiumPlansResult,
     eliteLevelsResult,
@@ -70,7 +71,13 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("receiver_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
-    supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("premium_subscriptions")
+      .select("plan_name, status, price_usd, interval, expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(5),
     supabase.from("payment_orders").select("provider, order_type, status, amount, amount_usd, currency, gold_amount, metadata, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase
       .from("premium_plans")
@@ -87,6 +94,15 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
+  const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
+    isActivePremiumSubscription(subscription),
+  );
+  const latestPaidPaymentOrder = (paymentOrdersResult.data ?? []).find(
+    (order) => order.status === "paid",
+  );
+  const paymentSuccessMessage = getPaymentSuccessMessage(
+    latestPaidPaymentOrder?.order_type ?? null,
+  );
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
@@ -97,7 +113,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">Messages · Gifts · Premium</p>
           {paymentState === "success" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
-              Payment successful. Your Gold has been added.
+              {paymentSuccessMessage}
             </p>
           ) : null}
           {paymentState === "processing" ? (
@@ -199,9 +215,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
         </section>
 
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
-          <h2 className="text-lg font-black">Premium</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-black">Premium</h2>
+            {activePremium ? <PremiumPill /> : null}
+          </div>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            {premiumResult.data ? `${premiumResult.data.plan_name} · ${premiumResult.data.status}` : "No active premium plan."}
+            {activePremium ? `${activePremium.plan_name} · Active` : "No active premium plan."}
           </p>
           <form action={startPremiumCheckout} className="mt-4">
             <input
@@ -355,12 +374,32 @@ function formatPaymentStatus(status: string | null) {
 
 function formatPaymentType(type: string | null) {
   const labels: Record<string, string> = {
+    boost_purchase: "Boost",
     gift_purchase: "Gift purchase",
     gold_purchase: "Gold purchase",
     premium_subscription: "Premium",
   };
 
   return labels[type ?? ""] ?? "Purchase";
+}
+
+function getPaymentSuccessMessage(type: string | null) {
+  const labels: Record<string, string> = {
+    boost_purchase: "Boost activated successfully.",
+    gold_purchase: "Payment successful. Gold has been added.",
+    premium_subscription: "Premium activated successfully.",
+  };
+
+  return labels[type ?? ""] ?? "Payment successful.";
+}
+
+function PremiumPill() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-2.5 py-1 text-xs font-black text-[#D4AF37]">
+      <span aria-hidden="true">✦</span>
+      Premium
+    </span>
+  );
 }
 
 function History({

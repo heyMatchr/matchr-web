@@ -10,6 +10,7 @@ import {
   getGiftCatalog,
 } from "@/lib/economy";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+import { isActivePremiumSubscription } from "@/lib/premium";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 
@@ -76,7 +77,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
   const [
     { data: receiverProfile },
     { data: wallet },
-    { data: premium },
+    { data: premiumSubscriptions },
     giftCatalog,
     messageRules,
     creatorSplit,
@@ -95,10 +96,11 @@ export default async function ChatPage({ params }: ChatPageProps) {
           .maybeSingle(),
         supabase
           .from("premium_subscriptions")
-          .select("id")
+          .select("id, status, expires_at")
           .eq("user_id", user.id)
           .eq("status", "active")
-          .maybeSingle(),
+          .order("expires_at", { ascending: false })
+          .limit(5),
         getGiftCatalog(supabase),
         getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(
           supabase,
@@ -126,6 +128,9 @@ export default async function ChatPage({ params }: ChatPageProps) {
   );
 
   finishPerfTimer("[Perf] Chat queries", perfStartedAt);
+  const activePremium = (premiumSubscriptions ?? []).find((subscription) =>
+    isActivePremiumSubscription(subscription),
+  );
 
   return (
     <AppShell
@@ -143,7 +148,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           creatorSplit={creatorSplit}
           giftCatalog={giftCatalog}
           goldBalance={wallet?.gold_balance ?? 0}
-          hasPremium={Boolean(premium)}
+          hasPremium={Boolean(activePremium)}
           messageRules={messageRules}
           headerActions={
             <div className="flex min-w-fit shrink-0 items-center gap-1 sm:gap-2">

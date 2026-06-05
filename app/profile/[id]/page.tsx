@@ -7,6 +7,7 @@ import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+import { isActivePremiumSubscription } from "@/lib/premium";
 import { getProfileHref, isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
 import { getProfileCompletion } from "@/lib/profile-completion";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
@@ -212,12 +213,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         .eq("user_id", user.id)
         .maybeSingle(),
       supabase
-        .from("subscriptions")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("plan_name", "Matchr Premium")
+        .from("premium_subscriptions")
+        .select("id, status, expires_at")
+        .eq("user_id", profile.id)
         .eq("status", "active")
-        .maybeSingle(),
+        .order("expires_at", { ascending: false })
+        .limit(5),
       supabase
         .from("gift_transactions")
         .select("id", { count: "exact", head: true })
@@ -302,8 +303,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     storyPosted: hasActiveStories,
   });
   const completion = profileCompletion.score;
+  const activePremium = (premiumResult.data ?? []).find((subscription) =>
+    isActivePremiumSubscription(subscription),
+  );
   const profileBadges = [
-    premiumResult.data ? "Premium" : "",
     profile.verified ? "Verified" : "",
     (giftsReceivedResult.count ?? 0) >= 3 ? "Top gifted" : "",
     (followersResult.count ?? 0) >= 10 ? "Trending" : "",
@@ -395,6 +398,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   {profile.verified ? (
                     <span className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs text-emerald-200">
                       Verified
+                    </span>
+                  ) : null}
+                  {activePremium ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1 text-xs font-black text-[#D4AF37]">
+                      <span aria-hidden="true">✦</span>
+                      Premium
                     </span>
                   ) : null}
                 </div>
@@ -531,7 +540,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                   {walletResult.data?.gold_balance ?? 0} Gold
                 </span>
                 <span className="rounded-full bg-black/35 px-3 py-1.5 text-sm text-neutral-200">
-                  {premiumResult.data ? "Premium Active" : "Premium Inactive"}
+                  {activePremium ? "Premium Active" : "Premium Inactive"}
                 </span>
                 <Link
                   href="/wallet"
