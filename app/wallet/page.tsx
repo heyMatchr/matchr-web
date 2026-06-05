@@ -332,7 +332,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           const gold = row.gold_amount ? ` · ${row.gold_amount} Gold` : "";
           return `${formatPaymentType(row.order_type)} · ${formatPaymentStatus(row.status)} · ${currency} ${amount}${gold}${row.provider ? ` · ${row.provider}` : ""}`;
         })} />
-        <History title="Gifts in" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · +${row.gold_cost ?? 0}`)} />
+        <History actionHref="/earnings" actionLabel="Earnings" emptyText="No gift earnings yet" title="Gift earnings" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · Diamonds credited`)} />
         <History title="Gifts out" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0}`)} />
         <History title="Messages" rows={(messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost}`)} />
       </div>
@@ -346,6 +346,10 @@ function formatWalletTransaction(row: {
   reference_type: string | null;
   transaction_type: string;
 }) {
+  if (row.transaction_type === "gift_received") {
+    return "Gift received · creator earnings";
+  }
+
   const labels: Record<string, string> = {
     adjustment:
       row.reference_type === "Starter Gold Bonus"
