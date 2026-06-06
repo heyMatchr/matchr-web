@@ -276,7 +276,7 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
     } satisfies GiftActionState;
   }
 
-  const { error: transactionError } = await supabase.rpc(
+  const { data: giftResult, error: transactionError } = await supabase.rpc(
     "record_social_gift_with_economy",
     {
       gift_source: "moment",
@@ -295,22 +295,19 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
     } satisfies GiftActionState;
   }
 
-  const { error } = await supabase.from("moment_gifts").insert({
-    gift_type: gift.type,
-    moment_id: momentId,
-    receiver_id: ownerId,
-    sender_id: user.id,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
   await supabase.from("notifications").insert({
     actor_id: user.id,
     body: `Sent you ${gift.icon} ${gift.name}.`,
     metadata: {
       coin_price: gift.coinPrice,
+      gift_activity_id:
+        typeof giftResult?.activity_row_id === "string"
+          ? giftResult.activity_row_id
+          : null,
+      gift_transaction_id:
+        typeof giftResult?.gift_transaction_id === "string"
+          ? giftResult.gift_transaction_id
+          : null,
       gift_type: gift.type,
       moment_id: momentId,
     },

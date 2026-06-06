@@ -237,6 +237,18 @@ export function StoriesBar({
   }, []);
 
   useEffect(() => {
+    if (activeGroupIndex !== null) {
+      return;
+    }
+
+    const syncId = window.setTimeout(() => {
+      setGroups(initialGroups);
+    }, 0);
+
+    return () => window.clearTimeout(syncId);
+  }, [activeGroupIndex, initialGroups]);
+
+  useEffect(() => {
     return () => {
       if (mediaPreview) {
         URL.revokeObjectURL(mediaPreview);
@@ -871,7 +883,7 @@ export function StoriesBar({
 
     setInteractionMessage("");
     await recordAction(supabase, currentUserId, "gift", activeStory.id);
-    const { error: transactionError } = await supabase.rpc(
+    const { data: giftResult, error: transactionError } = await supabase.rpc(
       "record_social_gift_with_economy",
       {
         gift_source: "story",
@@ -890,18 +902,6 @@ export function StoriesBar({
       return;
     }
 
-    const { error } = await supabase.from("story_gifts").insert({
-      gift_type: gift.type,
-      receiver_id: activeStory.user_id,
-      sender_id: currentUserId,
-      story_id: activeStory.id,
-    });
-
-    if (error) {
-      setInteractionMessage(error.message);
-      return;
-    }
-
     const sent = await sendStoryDm(
       activeStory.user_id,
       "story_gift",
@@ -914,6 +914,14 @@ export function StoriesBar({
       body: `Sent you ${gift.icon} ${gift.name} from your story.`,
       metadata: {
         coin_price: gift.coinPrice,
+        gift_activity_id:
+          typeof giftResult?.activity_row_id === "string"
+            ? giftResult.activity_row_id
+            : null,
+        gift_transaction_id:
+          typeof giftResult?.gift_transaction_id === "string"
+            ? giftResult.gift_transaction_id
+            : null,
         gift_type: gift.type,
         story_id: activeStory.id,
       },

@@ -191,6 +191,7 @@ export default async function DiscoverPage() {
     likesResult,
     passesResult,
     blocksResult,
+    matchesResult,
     currentSettingsResult,
     incomingLikesResult,
     viewerIdentityResult,
@@ -207,6 +208,10 @@ export default async function DiscoverPage() {
           .from("blocks")
           .select("blocker_id, blocked_user_id")
           .or(`blocker_id.eq.${user.id},blocked_user_id.eq.${user.id}`),
+        supabase
+          .from("matches")
+          .select("user_one_id, user_two_id")
+          .or(`user_one_id.eq.${user.id},user_two_id.eq.${user.id}`),
         supabase
           .from("user_settings")
           .select(
@@ -242,12 +247,28 @@ export default async function DiscoverPage() {
     throw new Error(blocksResult.error.message);
   }
 
-  const excludedUserIds = new Set([
-    ...(likesResult.data ?? []).map((like) => like.liked_profile_id),
-    ...(passesResult.data ?? []).map((pass) => pass.passed_profile_id),
-    ...(blocksResult.data ?? []).map((block) =>
-      block.blocker_id === user.id ? block.blocked_user_id : block.blocker_id,
+  if (matchesResult.error) {
+    throw new Error(matchesResult.error.message);
+  }
+
+  const likedUserIds = (likesResult.data ?? []).map((like) => like.liked_profile_id);
+  const passedUserIds = (passesResult.data ?? []).map((pass) => pass.passed_profile_id);
+  const blockedUserIds = (blocksResult.data ?? []).map((block) =>
+    block.blocker_id === user.id ? block.blocked_user_id : block.blocker_id,
+  );
+  const matchedUserIds = new Set(
+    (matchesResult.data ?? []).map((match) =>
+      match.user_one_id === user.id ? match.user_two_id : match.user_one_id,
     ),
+  );
+  const excludedUserIds = new Set([
+    ...likedUserIds,
+    ...passedUserIds,
+    ...blockedUserIds,
+  ]);
+  const storyExcludedUserIds = new Set([
+    ...blockedUserIds,
+    ...passedUserIds.filter((passedUserId) => !matchedUserIds.has(passedUserId)),
   ]);
   const identityPreferences = currentSettingsResult.data;
   const viewerIdentity = {
@@ -312,7 +333,7 @@ export default async function DiscoverPage() {
   const storyGroupsByUser = new Map<string, StoryGroup>();
 
   stories?.forEach((story) => {
-    if (excludedUserIds.has(story.user_id)) {
+    if (storyExcludedUserIds.has(story.user_id)) {
       return;
     }
 
