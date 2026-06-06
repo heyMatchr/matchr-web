@@ -898,7 +898,7 @@ export function ChatClient({
         setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
         await supabase.from("notifications").insert({
           actor_id: currentUserId,
-          body: `Sent you ${gift.icon} ${gift.name}.`,
+          body: `Sent you ${gift.name}.`,
           metadata: {
             client_request_id: clientRequestId,
             coin_price: gift.coinPrice,
@@ -1050,7 +1050,7 @@ export function ChatClient({
           </p>
           <p className="mt-1 text-sm text-neutral-300">
             {gift
-              ? `${gift.icon} ${gift.name} · ${gift.coinPrice} coins`
+              ? `${gift.name} · ${gift.coinPrice} Gold`
               : message.content}
           </p>
         </div>
@@ -1062,12 +1062,15 @@ export function ChatClient({
 
       return (
         <div className="min-w-36 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2.5 text-center shadow-[0_0_26px_rgba(16,185,129,0.08)] sm:min-w-40 sm:px-4 sm:py-3">
-          <p className="text-2xl sm:text-3xl">{gift?.icon ?? "✦"}</p>
+          <GiftVisual
+            className="mx-auto h-10 w-10 rounded-2xl border border-emerald-300/20 bg-black/30 p-2 text-emerald-100"
+            type={gift?.type ?? message.gift_type}
+          />
           <p className="mt-2 text-sm font-black">
             {gift?.name ?? message.gift_type ?? "Gift"}
           </p>
           <p className="mt-1 text-xs text-neutral-500">
-            {gift ? `${gift.coinPrice} coins` : "Gift"}
+            {gift ? `${gift.coinPrice} Gold` : "Gift"}
           </p>
         </div>
       );
@@ -1643,7 +1646,7 @@ export function ChatClient({
 
               <div
                 ref={giftListRef}
-                className="mt-4 rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-3"
+                className="mt-4 rounded-3xl border border-emerald-300/15 bg-black/35 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
               >
                 <p className="px-1 text-sm font-black text-emerald-50">
                   Gifts
@@ -1654,23 +1657,23 @@ export function ChatClient({
                       <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
                         {category}
                       </p>
-                      <div className="grid gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {gifts.map((gift) => (
                           <button
                             key={gift.type}
                             type="button"
                             onClick={() => void sendGift(gift)}
-                            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/35 px-3 py-3 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+                            className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-3 text-center text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 active:scale-[0.98]"
                           >
-                            <span className="text-xl">{gift.icon}</span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-medium text-white">
-                                {gift.name}
-                              </span>
-                              <span className="text-sm text-neutral-400">
-                                {gift.coinPrice} Gold
-                                {gift.description ? ` · ${gift.description}` : ""}
-                              </span>
+                            <GiftVisual
+                              className="h-10 w-10 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-2 text-emerald-100"
+                              type={gift.type}
+                            />
+                            <span className="line-clamp-1 max-w-full font-black text-white">
+                              {gift.name}
+                            </span>
+                            <span className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100">
+                              {gift.coinPrice} Gold
                             </span>
                           </button>
                         ))}
@@ -1699,7 +1702,10 @@ export function ChatClient({
       {pendingGift ? (
         <div className="fixed inset-0 z-[75] grid place-items-center bg-black/75 p-5 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-emerald-300/20 bg-black p-6 text-center shadow-[0_0_60px_rgba(16,185,129,0.14)]">
-            <p className="text-4xl">{pendingGift.icon}</p>
+            <GiftVisual
+              className="mx-auto h-16 w-16 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-emerald-100"
+              type={pendingGift.type}
+            />
             <p className="mt-3 text-xl font-black">Send {pendingGift.name}?</p>
             <p className="mt-2 text-[15px] leading-6 text-neutral-300">
               {pendingGift.coinPrice} Gold ·{" "}
@@ -1863,6 +1869,86 @@ function PrivateVideoIcon() {
       <path d="M4.5 8h8A2.5 2.5 0 0 1 15 10.5v3A2.5 2.5 0 0 1 12.5 16h-8A2.5 2.5 0 0 1 2 13.5v-3A2.5 2.5 0 0 1 4.5 8Z" />
       <path d="m15 11 4-2.4v6.8L15 13" />
       <path d="M8 8V7a4 4 0 0 1 8 0v1" />
+    </svg>
+  );
+}
+
+function GiftVisual({
+  className,
+  type,
+}: {
+  className?: string;
+  type?: string | null;
+}) {
+  const normalizedType = type?.toLowerCase() ?? "";
+
+  if (normalizedType.includes("rose")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M12 20v-8" />
+        <path d="M12 12c-2.2-1.4-3.3-3.1-2.6-5 .5-1.5 2.1-2.4 3.6-1.8 1.5.5 2.4 2.1 1.8 3.6-.4 1.2-1.3 2.2-2.8 3.2Z" />
+        <path d="M12 12c2.4-1 4.2-1 5.3.4.9 1.1.8 2.8-.3 3.7-1.2 1-2.9.8-3.9-.4-.7-.8-1-2-.9-3.7Z" />
+        <path d="M12 15c-1.8-.7-3.2-.5-4.2.6" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("diamond") || normalizedType.includes("ring")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M7.5 5h9L20 9l-8 10L4 9l3.5-4Z" />
+        <path d="M4 9h16" />
+        <path d="m9 9 3 10 3-10" />
+        <path d="m7.5 5 1.5 4 3-4 3 4 1.5-4" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("crown")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M5 18h14" />
+        <path d="M6 15 5 7l5 4 2-6 2 6 5-4-1 8H6Z" />
+        <path d="M8 21h8" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("heart") || normalizedType.includes("kiss")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M12 20s-7-4.4-7-9.6C5 7.6 6.9 6 9.1 6c1.3 0 2.3.6 2.9 1.5C12.6 6.6 13.6 6 14.9 6 17.1 6 19 7.6 19 10.4 19 15.6 12 20 12 20Z" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("jet")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="m3.5 11 17-7-6.8 16-3-6.5L3.5 11Z" />
+        <path d="m10.7 13.5 3.5-3.7" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("wine")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" />
+        <path d="M8 8h8" />
+        <path d="M12 13v6" />
+        <path d="M9 20h6" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+      <path d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9Z" />
+      <path d="M3 6h18v4H3z" />
+      <path d="M12 6v14" />
+      <path d="M12 6c-2.4 0-4-1-4-2.3C8 2.8 8.8 2 9.8 2 11.2 2 12 3.4 12 6Z" />
+      <path d="M12 6c2.4 0 4-1 4-2.3 0-.9-.8-1.7-1.8-1.7C12.8 2 12 3.4 12 6Z" />
     </svg>
   );
 }
