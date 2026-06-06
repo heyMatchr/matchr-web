@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
@@ -21,6 +22,9 @@ type ProfilePageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams?: Promise<{
+    panel?: string | string[];
+  }>;
 };
 
 function toChipList(value?: string | null) {
@@ -36,9 +40,45 @@ function initialFor(name?: string | null) {
   return name?.trim().charAt(0).toUpperCase() || "M";
 }
 
-export default async function ProfilePage({ params }: ProfilePageProps) {
+function searchValue(value?: string | string[]) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function ProfilePanel({
+  children,
+  href,
+  title,
+}: {
+  children: ReactNode;
+  href: string;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 px-4 py-5 backdrop-blur-sm sm:px-6">
+      <div className="mx-auto flex max-h-[86vh] max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-300/20 bg-neutral-950 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-neutral-900 px-4 py-3">
+          <p className="text-sm font-black text-neutral-100">{title}</p>
+          <Link
+            href={href}
+            className="rounded-full border border-neutral-800 px-3 py-1 text-sm text-neutral-300 transition-colors hover:border-neutral-600 hover:text-white"
+          >
+            Close
+          </Link>
+        </div>
+        <div className="overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export default async function ProfilePage({
+  params,
+  searchParams,
+}: ProfilePageProps) {
   const perfStartedAt = startPerfTimer();
   const { id } = await params;
+  const query = searchParams ? await searchParams : undefined;
+  const activePanel = searchValue(query?.panel);
   const supabase = await createSupabaseServerClient();
   const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
   const anonKey = requiredSupabaseEnv("SUPABASE_ANON_KEY");
@@ -359,6 +399,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             ? [{ href: `/discover?storyUserId=${profile.id}`, label: "Story Reply" }]
             : []),
         ];
+  const profileHref = getProfileHref(profile);
+  const panelHref = (panel: string) => `${profileHref}?panel=${panel}`;
 
   finishPerfTimer("[Perf] Profile queries", perfStartedAt);
 
@@ -485,39 +527,42 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               )}
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-2">
+            <div className="mt-5 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
               <Link
-                href={`${getProfileHref(profile)}/followers`}
-                className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 transition-colors hover:border-neutral-700"
+                href={panelHref("followers")}
+                className="rounded-lg border border-neutral-900 bg-white/[0.03] p-2.5 transition-colors hover:border-neutral-700"
               >
-                <p className="text-xl font-black">{followersResult.count ?? 0}</p>
-                <p className="mt-1 text-xs text-neutral-500">Followers</p>
+                <p className="text-lg font-black">{followersResult.count ?? 0}</p>
+                <p className="text-[11px] text-neutral-500">Followers</p>
               </Link>
               <Link
-                href={`${getProfileHref(profile)}/following`}
-                className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 transition-colors hover:border-neutral-700"
+                href={panelHref("following")}
+                className="rounded-lg border border-neutral-900 bg-white/[0.03] p-2.5 transition-colors hover:border-neutral-700"
               >
-                <p className="text-xl font-black">{followingResult.count ?? 0}</p>
-                <p className="mt-1 text-xs text-neutral-500">Following</p>
+                <p className="text-lg font-black">{followingResult.count ?? 0}</p>
+                <p className="text-[11px] text-neutral-500">Following</p>
               </Link>
-              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
-                <p className="text-xl font-black">{viewsResult.count ?? 0}</p>
-                <p className="mt-1 text-xs text-neutral-500">Views</p>
+              <Link
+                href={panelHref("visitors")}
+                className="rounded-lg border border-neutral-900 bg-white/[0.03] p-2.5 transition-colors hover:border-neutral-700"
+              >
+                <p className="text-lg font-black">{viewsResult.count ?? 0}</p>
+                <p className="text-[11px] text-neutral-500">Views</p>
+              </Link>
+              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-2.5">
+                <p className="text-lg font-black">{giftsReceivedResult.count ?? 0}</p>
+                <p className="text-[11px] text-neutral-500">Gifts</p>
               </div>
-            </div>
-
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
-                <p className="text-xl font-black">{giftsReceivedResult.count ?? 0}</p>
-                <p className="mt-1 text-xs text-neutral-500">Gifts received</p>
-              </div>
-              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
-                <p className="text-xl font-black">{profileMomentsResult.data?.length ?? 0}</p>
-                <p className="mt-1 text-xs text-neutral-500">Moments posted</p>
-              </div>
-              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3">
-                <p className="text-xl font-black">{completion}%</p>
-                <p className="mt-1 text-xs text-neutral-500">Complete</p>
+              <Link
+                href={panelHref("moments")}
+                className="rounded-lg border border-neutral-900 bg-white/[0.03] p-2.5 transition-colors hover:border-neutral-700"
+              >
+                <p className="text-lg font-black">{profileMomentsResult.data?.length ?? 0}</p>
+                <p className="text-[11px] text-neutral-500">Moments</p>
+              </Link>
+              <div className="rounded-lg border border-neutral-900 bg-white/[0.03] p-2.5">
+                <p className="text-lg font-black">{completion}%</p>
+                <p className="text-[11px] text-neutral-500">Complete</p>
               </div>
             </div>
 
@@ -595,20 +640,20 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             ) : null}
 
             {profile.bio ? (
-              <div className="mt-8">
+              <div className="mt-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
                   Bio
                 </p>
-                <p className="mt-2 leading-7 text-neutral-200">{profile.bio}</p>
+                <p className="mt-1.5 leading-6 text-neutral-200">{profile.bio}</p>
               </div>
             ) : null}
 
             {intentChips.length ? (
-              <div className="mt-8">
+              <div className="mt-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
                   Intent
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {intentChips.map((intent) => (
                     <span
                       key={intent}
@@ -622,11 +667,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             ) : null}
 
             {interestChips.length ? (
-              <div className="mt-8">
+              <div className="mt-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
                   Interests
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {interestChips.map((interest) => (
                     <span
                       key={interest}
@@ -644,11 +689,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               isVisibleIdentityValue(profile.gender_identity)) ||
             (profile.show_orientation_on_profile &&
               isVisibleIdentityValue(profile.sexual_orientation)) ? (
-              <div className="mt-8">
+              <div className="mt-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
                   Identity
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {[
                     profile.pronouns,
                     profile.show_gender_on_profile ? profile.gender_identity : null,
@@ -669,11 +714,11 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
               </div>
             ) : null}
 
-            <div className="mt-8">
+            <div className="mt-5">
               <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
                 Actions
               </p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 {attractionChips.length ? (
                   attractionChips.map((chip) => (
                     <Link
@@ -693,105 +738,132 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             </div>
 
             {lifestyleItems.length ? (
-              <div className="mt-8">
+              <div className="mt-5">
                 <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
                   Basic info
                 </p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-2 overflow-hidden rounded-xl border border-neutral-900 bg-white/[0.03]">
                   {lifestyleItems.map(([label, value]) => (
                     <div
                       key={label}
-                      className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3"
+                      className="flex items-center justify-between gap-4 border-b border-neutral-900 px-3 py-2.5 last:border-b-0"
                     >
                       <p className="text-xs text-neutral-500">{label}</p>
-                      <p className="mt-1 text-sm text-neutral-200">{value}</p>
+                      <p className="text-right text-sm text-neutral-200">{value}</p>
                     </div>
                   ))}
                 </div>
               </div>
             ) : null}
 
-            {profile.id === user.id ? (
-              <div className="mt-8">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                  Visitors
-                </p>
-                {recentVisitors.length > 0 ? (
-                  <div className="mt-3 grid gap-2">
-                    {recentVisitors.map((visitor) => (
-                    <div
-                      key={`${visitor?.id}-${visitor?.viewed_at}`}
-                      className="flex items-center gap-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-3 transition-colors hover:border-neutral-700"
-                    >
-                      <Link
-                        href={visitor ? getProfileHref(visitor) : "#"}
-                        className="flex min-w-0 flex-1 items-center gap-3"
-                      >
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-950">
-                          {visitor?.avatar_url ? (
-                            <Image
-                              src={visitor.avatar_url}
-                              alt={visitor.display_name}
-                              width={48}
-                              height={48}
-                              sizes="48px"
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
-                              {initialFor(visitor?.display_name)}
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-neutral-100">
-                            {visitor?.display_name ?? "Someone"}
-                            {visitor?.age ? `, ${visitor.age}` : ""}
-                          </p>
-                          <p className="mt-1 truncate text-xs text-neutral-500">
-                            {visitor?.location}
-                          </p>
-                        </div>
-                        <p className="shrink-0 text-xs text-neutral-500">
-                          {visitor?.viewed_at
-                            ? new Date(visitor.viewed_at).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: "numeric",
-                                  minute: "2-digit",
-                                },
-                              )
-                            : ""}
-                        </p>
-                      </Link>
-                      {visitor?.id !== user.id ? (
-                        <FollowButton
-                          compact
-                          initialFollowing={currentUserFollowingIds.has(
-                            visitor?.id ?? "",
-                          )}
-                          profileUserId={visitor?.id ?? ""}
-                        />
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-4 text-sm text-neutral-500">
-                  No visitors yet
-                </div>
-              )}
+            <div className="mt-5">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                Activity
+              </p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-neutral-900 bg-white/[0.03]">
+                {profile.id === user.id ? (
+                  <Link
+                    href={panelHref("visitors")}
+                    className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+                  >
+                    <span className="text-neutral-200">Visitors</span>
+                    <span className="text-neutral-500">
+                      {viewsResult.count ?? 0} &gt;
+                    </span>
+                  </Link>
+                ) : null}
+                <Link
+                  href={panelHref("followers")}
+                  className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+                >
+                  <span className="text-neutral-200">Followers</span>
+                  <span className="text-neutral-500">
+                    {followersResult.count ?? 0} &gt;
+                  </span>
+                </Link>
+                <Link
+                  href={panelHref("following")}
+                  className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+                >
+                  <span className="text-neutral-200">Following</span>
+                  <span className="text-neutral-500">
+                    {followingResult.count ?? 0} &gt;
+                  </span>
+                </Link>
+                <Link
+                  href={panelHref("moments")}
+                  className="flex items-center justify-between gap-3 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+                >
+                  <span className="text-neutral-200">Moments</span>
+                  <span className="text-neutral-500">
+                    {profileMomentsResult.data?.length ?? 0} &gt;
+                  </span>
+                </Link>
+              </div>
             </div>
-          ) : null}
 
-            <div className="mt-8 grid gap-6 sm:grid-cols-2">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                  Followers
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {followers.length > 0 ? (
-                    followers.map((follower) => (
+            {activePanel === "visitors" && profile.id === user.id ? (
+              <ProfilePanel href={profileHref} title="Visitors">
+                {recentVisitors.length > 0 ? (
+                  <div className="grid gap-2">
+                    {recentVisitors.map((visitor) => (
+                      <div
+                        key={`${visitor?.id}-${visitor?.viewed_at}`}
+                        className="flex items-center gap-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-3"
+                      >
+                        <Link
+                          href={visitor ? getProfileHref(visitor) : "#"}
+                          className="flex min-w-0 flex-1 items-center gap-3"
+                        >
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-neutral-950">
+                            {visitor?.avatar_url ? (
+                              <Image
+                                src={visitor.avatar_url}
+                                alt={visitor.display_name}
+                                width={44}
+                                height={44}
+                                sizes="44px"
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
+                                {initialFor(visitor?.display_name)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-neutral-100">
+                              {visitor?.display_name ?? "Someone"}
+                              {visitor?.age ? `, ${visitor.age}` : ""}
+                            </p>
+                            <p className="truncate text-xs text-neutral-500">
+                              {visitor?.location}
+                            </p>
+                          </div>
+                        </Link>
+                        {visitor?.id !== user.id ? (
+                          <FollowButton
+                            compact
+                            initialFollowing={currentUserFollowingIds.has(
+                              visitor?.id ?? "",
+                            )}
+                            profileUserId={visitor?.id ?? ""}
+                          />
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">No visitors yet</p>
+                )}
+              </ProfilePanel>
+            ) : null}
+
+            {activePanel === "followers" ? (
+              <ProfilePanel href={profileHref} title="Followers">
+                {followers.length > 0 ? (
+                  <div className="grid gap-2">
+                    {followers.map((follower) => (
                       <Link
                         key={follower?.id}
                         href={follower ? getProfileHref(follower) : "#"}
@@ -799,19 +871,19 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       >
                         {follower?.display_name}
                       </Link>
-                    ))
-                  ) : (
-                    <p className="text-sm text-neutral-500">Followers 0</p>
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                  Following
-                </p>
-                <div className="mt-3 grid gap-2">
-                  {following.length > 0 ? (
-                    following.map((followedProfile) => (
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">Followers 0</p>
+                )}
+              </ProfilePanel>
+            ) : null}
+
+            {activePanel === "following" ? (
+              <ProfilePanel href={profileHref} title="Following">
+                {following.length > 0 ? (
+                  <div className="grid gap-2">
+                    {following.map((followedProfile) => (
                       <Link
                         key={followedProfile?.id}
                         href={followedProfile ? getProfileHref(followedProfile) : "#"}
@@ -819,63 +891,50 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
                       >
                         {followedProfile?.display_name}
                       </Link>
-                    ))
-                  ) : (
-                    <p className="text-sm text-neutral-500">
-                      Following 0
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">Following 0</p>
+                )}
+              </ProfilePanel>
+            ) : null}
 
-            <div className="mt-8">
-              <div className="flex items-center justify-between gap-4">
-                <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                  Moments
-                </p>
-                <Link
-                  href="/moments"
-                  className="text-xs text-neutral-500 transition-colors hover:text-white"
-                >
-                  Open feed
-                </Link>
-              </div>
-              {profileMomentsResult.data?.length ? (
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {profileMomentsResult.data.map((moment) => (
-                    <Link
-                      key={moment.id}
-                      href="/moments"
-                      className="aspect-square overflow-hidden rounded-lg bg-neutral-950"
-                    >
-                      {moment.media_type === "video" ? (
-                        <video
-                          src={moment.media_url}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Image
-                          src={moment.media_url}
-                          alt=""
-                          width={220}
-                          height={220}
-                          sizes="(min-width: 640px) 160px, 33vw"
-                          className="h-full w-full object-cover"
-                        />
-                      )}
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-4 text-sm text-neutral-500">
-                  No moments yet.
-                </div>
-              )}
-            </div>
+            {activePanel === "moments" ? (
+              <ProfilePanel href={profileHref} title="Moments">
+                {profileMomentsResult.data?.length ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {profileMomentsResult.data.map((moment) => (
+                      <Link
+                        key={moment.id}
+                        href="/moments"
+                        className="aspect-square overflow-hidden rounded-lg bg-neutral-950"
+                      >
+                        {moment.media_type === "video" ? (
+                          <video
+                            src={moment.media_url}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Image
+                            src={moment.media_url}
+                            alt=""
+                            width={220}
+                            height={220}
+                            sizes="(min-width: 640px) 160px, 33vw"
+                            className="h-full w-full object-cover"
+                          />
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">No moments yet</p>
+                )}
+              </ProfilePanel>
+            ) : null}
           </div>
         </div>
     </AppShell>
