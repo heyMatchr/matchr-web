@@ -354,8 +354,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
         ]
       : [
           ...(chatHref ? [{ href: chatHref, label: "Say Hi" }] : []),
-          ...(chatHref ? [{ href: chatHref, label: "Gift" }] : []),
-          ...(hasActiveStories ? [{ href: "/discover", label: "Story Reply" }] : []),
+          ...(chatHref ? [{ href: `${chatHref}?gift=1`, label: "Gift" }] : []),
+          ...(hasActiveStories
+            ? [{ href: `/discover?storyUserId=${profile.id}`, label: "Story Reply" }]
+            : []),
         ];
 
   finishPerfTimer("[Perf] Profile queries", perfStartedAt);

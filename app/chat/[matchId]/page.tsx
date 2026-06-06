@@ -18,11 +18,15 @@ type ChatPageProps = {
   params: Promise<{
     matchId: string;
   }>;
+  searchParams?: Promise<{
+    gift?: string;
+  }>;
 };
 
-export default async function ChatPage({ params }: ChatPageProps) {
+export default async function ChatPage({ params, searchParams }: ChatPageProps) {
   const perfStartedAt = startPerfTimer();
   const { matchId } = await params;
+  const query = await searchParams;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -149,6 +153,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
           giftCatalog={giftCatalog}
           goldBalance={wallet?.gold_balance ?? 0}
           hasPremium={Boolean(activePremium)}
+          initialGiftPickerOpen={query?.gift === "1"}
           messageRules={messageRules}
           headerActions={
             <div className="flex min-w-fit shrink-0 items-center gap-1 sm:gap-2">

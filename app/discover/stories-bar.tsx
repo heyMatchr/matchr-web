@@ -3,7 +3,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import type { GiftOption } from "@/lib/gifts";
@@ -46,6 +46,7 @@ export type StoriesBarProps = {
   giftCatalog: GiftOption[];
   initialGroups: StoryGroup[];
   supabaseUrl: string;
+  targetStoryUserId?: string | null;
 };
 
 type StoryEngagementItem = {
@@ -194,6 +195,7 @@ export function StoriesBar({
   giftCatalog,
   initialGroups,
   supabaseUrl,
+  targetStoryUserId = null,
 }: StoriesBarProps) {
   const router = useRouter();
   const [groups, setGroups] = useState(initialGroups);
@@ -215,6 +217,7 @@ export function StoriesBar({
   const [progressKey, setProgressKey] = useState(0);
   const [replyText, setReplyText] = useState("");
   const [selectedReaction, setSelectedReaction] = useState("");
+  const openedTargetStoryUserIdRef = useRef<string | null>(null);
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
@@ -260,6 +263,35 @@ export function StoriesBar({
 
     return () => window.clearTimeout(syncId);
   }, [activeGroupIndex, initialGroups]);
+
+  useEffect(() => {
+    if (!targetStoryUserId) {
+      openedTargetStoryUserIdRef.current = null;
+      return;
+    }
+
+    if (openedTargetStoryUserIdRef.current === targetStoryUserId) {
+      return;
+    }
+
+    const targetIndex = groups.findIndex(
+      (group) => group.user_id === targetStoryUserId,
+    );
+
+    if (targetIndex === -1) {
+      return;
+    }
+
+    const openId = window.setTimeout(() => {
+      openedTargetStoryUserIdRef.current = targetStoryUserId;
+      setActiveGroupIndex(targetIndex);
+      setActiveStoryIndex(0);
+      setInteractionMessage("");
+      setIsCreateOpen(false);
+    }, 0);
+
+    return () => window.clearTimeout(openId);
+  }, [groups, targetStoryUserId]);
 
   useEffect(() => {
     return () => {

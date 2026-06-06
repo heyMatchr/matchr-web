@@ -65,6 +65,7 @@ type ChatClientProps = {
   goldBalance: number;
   hasPremium: boolean;
   headerActions?: ReactNode;
+  initialGiftPickerOpen?: boolean;
   initialMessages: LocalMessage[];
   matchId: string;
   messageRules: typeof DEFAULT_MESSAGE_RULES;
@@ -119,6 +120,7 @@ export function ChatClient({
   goldBalance,
   hasPremium,
   headerActions,
+  initialGiftPickerOpen = false,
   initialMessages,
   matchId,
   messageRules,
@@ -133,7 +135,7 @@ export function ChatClient({
   const [messages, setMessages] = useState(initialMessages);
   const [content, setContent] = useState("");
   const [isReceiverTyping, setIsReceiverTyping] = useState(false);
-  const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(false);
+  const [isMediaMenuOpen, setIsMediaMenuOpen] = useState(initialGiftPickerOpen);
   const [isAssistOpen, setIsAssistOpen] = useState(false);
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [assistTone, setAssistTone] = useState<ConversationTone>("Playful");

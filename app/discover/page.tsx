@@ -178,8 +178,15 @@ async function fetchDiscoverProfiles({
   };
 }
 
-export default async function DiscoverPage() {
+type DiscoverPageProps = {
+  searchParams?: Promise<{
+    storyUserId?: string;
+  }>;
+};
+
+export default async function DiscoverPage({ searchParams }: DiscoverPageProps) {
   const perfStartedAt = startPerfTimer();
+  const query = await searchParams;
   const supabase = await createSupabaseServerClient();
   const { currentProfile, user } = await timeAsync(
     "[Perf] Discover auth/profile",
@@ -584,6 +591,7 @@ export default async function DiscoverPage() {
           currentUserId={user.id}
           giftCatalog={giftCatalog}
           initialGroups={storyGroups}
+          targetStoryUserId={query?.storyUserId ?? null}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
         />
 
