@@ -56,8 +56,6 @@ type TokenResponse =
 
 type CallStage = "config-missing" | "error" | "loading" | "ready";
 
-const CALL_SELECT =
-  "id, caller_id, receiver_id, match_id, call_type, status, started_at, accepted_at, ended_at, offer, answer, ice_candidates, connection_state, ended_reason, created_at";
 const ENABLE_CALL_DEBUG = process.env.NODE_ENV === "development";
 
 function debugLog(...args: Parameters<typeof console.log>) {
@@ -228,7 +226,6 @@ export function LiveKitCallRoom({
   const [tokenError, setTokenError] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const hasEndedRef = useRef(false);
-  const endedMessageRef = useRef(false);
   const isVideoCall = initialCall.call_type === "video";
   const otherName = otherProfile?.display_name ?? "Matchr call";
   const peerUserId =
@@ -283,19 +280,6 @@ export function LiveKitCallRoom({
     }, 500);
   }, [initialCall.id, router]);
 
-  const insertEndedMessage = useCallback(async () => {
-    if (endedMessageRef.current) return;
-    endedMessageRef.current = true;
-
-    await supabase.from("messages").insert({
-      content: `${isVideoCall ? "Video" : "Audio"} call ended.`,
-      match_id: matchId,
-      message_type: "call_event",
-      receiver_id: peerUserId,
-      sender_id: currentUserId,
-    });
-  }, [currentUserId, isVideoCall, matchId, peerUserId, supabase]);
-
   const applyTerminalCallState = useCallback((nextCall: CallSessionRow) => {
     const endedAt = nextCall.ended_at ?? new Date().toISOString();
 
@@ -346,17 +330,9 @@ export function LiveKitCallRoom({
     });
     setNow(new Date(endedAt).getTime());
 
-    const { data, error } = await supabase
-      .from("call_sessions")
-      .update({
-        connection_state: "ended",
-        ended_at: endedAt,
-        ended_reason: "ended_by_user",
-        status: "ended",
-      })
-      .eq("id", initialCall.id)
-      .select(CALL_SELECT)
-      .single();
+    const { data, error } = await supabase.rpc("end_call", {
+      target_call_id: initialCall.id,
+    });
 
     debugLog("[CallEndDebug] update result", {
       callId: initialCall.id,
@@ -386,7 +362,6 @@ export function LiveKitCallRoom({
     }));
     setConnectionState("ended");
     setEndedRemotely(true);
-    await insertEndedMessage();
     exitEndedCall();
   }, [
     call.status,
@@ -394,7 +369,6 @@ export function LiveKitCallRoom({
     currentUserId,
     exitEndedCall,
     initialCall.id,
-    insertEndedMessage,
     supabase,
   ]);
 
@@ -617,43 +591,6 @@ export function LiveKitCallRoom({
       onConnected={() => {
         debugLog("[Matchr LiveKit] room connected");
         setConnectionState(ConnectionState.Connected);
-        void (async () => {
-          const { data: latestCall, error: fetchError } = await supabase
-            .from("call_sessions")
-            .select(CALL_SELECT)
-            .eq("id", initialCall.id)
-            .maybeSingle();
-
-          if (fetchError) {
-            debugError("[CallLifecycle] started update failed", {
-              callId: initialCall.id,
-              error: fetchError,
-            });
-            return;
-          }
-
-          const startedAt = latestCall?.started_at ?? new Date().toISOString();
-          debugLog("[CallLifecycle] started", { callId: initialCall.id });
-          const { data, error } = await supabase
-            .from("call_sessions")
-            .update({
-              connection_state: "connected",
-              started_at: startedAt,
-            })
-            .eq("id", initialCall.id)
-            .select(CALL_SELECT)
-            .single();
-
-          if (error) {
-            debugError("[CallLifecycle] started update failed", {
-              callId: initialCall.id,
-              error,
-            });
-            return;
-          }
-
-          debugLog("[CallLifecycle] started row", data);
-        })();
       }}
       onDisconnected={() => {
         debugLog("[Matchr LiveKit] room disconnected");

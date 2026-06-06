@@ -138,18 +138,6 @@ export function CallControls({
     [router],
   );
 
-  const insertCallMessage = useCallback(
-    async (body: string) => {
-      await supabase.from("messages").insert({
-        content: body,
-        match_id: matchId,
-        message_type: "call_event",
-        receiver_id: receiverId,
-        sender_id: currentUserId,
-      });
-    },
-    [currentUserId, matchId, receiverId, supabase],
-  );
   useEffect(() => {
     function handleCallUpdate(call: CallSessionRow) {
       debugLog("[Matchr calls] status update", call.id, call.status);
@@ -215,15 +203,9 @@ export function CallControls({
         return;
       }
 
-      const { error: missedError } = await supabase
-        .from("call_sessions")
-        .update({
-          connection_state: "ended",
-          ended_at: new Date().toISOString(),
-          ended_reason: "missed_timeout",
-          status: "missed",
-        })
-        .eq("id", outgoingCall.id);
+      const { error: missedError } = await supabase.rpc("mark_call_missed", {
+        target_call_id: outgoingCall.id,
+      });
       if (missedError) {
         debugError("[CallLifecycle] missed update failed", {
           callId: outgoingCall.id,
@@ -232,33 +214,6 @@ export function CallControls({
       } else {
         debugLog("[CallLifecycle] marked missed", { callId: outgoingCall.id });
       }
-      await insertCallMessage(`Missed ${outgoingCall.call_type} call.`);
-      await supabase.from("notifications").insert([
-        {
-          actor_id: currentUserId,
-          body: `Missed ${outgoingCall.call_type} call.`,
-          metadata: {
-            call_id: outgoingCall.id,
-            call_type: outgoingCall.call_type,
-            match_id: matchId,
-          },
-          title: "Missed call",
-          type: "missed_call",
-          user_id: receiverId,
-        },
-        {
-          actor_id: receiverId,
-          body: `${callLabel(outgoingCall.call_type)} call was not answered.`,
-          metadata: {
-            call_id: outgoingCall.id,
-            call_type: outgoingCall.call_type,
-            match_id: matchId,
-          },
-          title: "Call not answered",
-          type: "missed_call",
-          user_id: currentUserId,
-        },
-      ]);
       setOutgoingCall(null);
     }, MISSED_CALL_TIMEOUT_MS);
 
@@ -293,10 +248,8 @@ export function CallControls({
   }, [
     currentUserId,
     enterCallRoom,
-    insertCallMessage,
     matchId,
     outgoingCall,
-    receiverId,
     supabase,
   ]);
 
@@ -350,16 +303,11 @@ export function CallControls({
         return;
       }
 
-      const { data, error: insertError } = await supabase
-        .from("call_sessions")
-        .insert({
-          call_type: callType,
-          caller_id: currentUserId,
-          match_id: matchId,
-          receiver_id: receiverId,
-        })
-        .select(CALL_SELECT)
-        .single();
+      const { data, error: insertError } = await supabase.rpc("start_call", {
+        active_match_id: matchId,
+        receiver_user_id: receiverId,
+        requested_call_type: callType,
+      });
 
       if (insertError) {
         debugError("[CallLifecycle] create failed", insertError);
@@ -376,37 +324,35 @@ export function CallControls({
       debugLog("[CallLifecycle] created row", data);
       setLastCallStartedAt(Date.now());
       setOutgoingCall(data);
-      await insertCallMessage(`${callLabel(callType)} call started.`);
-      await supabase.from("notifications").insert({
-        actor_id: currentUserId,
-        body: `Incoming ${callType} call.`,
-        metadata: { call_id: data.id, call_type: callType, match_id: matchId },
-        title: `Incoming ${callLabel(callType).toLowerCase()} call`,
-        type: "incoming_call",
-        user_id: receiverId,
-      });
     });
   }
 
   async function updateCall(call: CallSessionRow, status: "accepted" | "declined" | "ended" | "missed") {
-    const timestamp = new Date().toISOString();
     if (status === "accepted") {
       debugLog("[CallLifecycle] accepted", { callId: call.id });
     }
     if (status === "ended") {
       debugLog("[CallLifecycle] ended", { callId: call.id });
     }
-    const { data } = await supabase
-      .from("call_sessions")
-      .update({
-        accepted_at: status === "accepted" ? timestamp : call.accepted_at,
-        connection_state: status === "accepted" ? "connected" : status === "declined" || status === "ended" || status === "missed" ? "ended" : call.connection_state,
-        ended_at: status === "declined" || status === "ended" || status === "missed" ? timestamp : null,
+    const rpcName = status === "accepted"
+      ? "accept_call"
+      : status === "declined"
+        ? "decline_call"
+        : status === "ended"
+          ? "end_call"
+          : "mark_call_missed";
+    const { data, error: updateError } = await supabase.rpc(rpcName, {
+      target_call_id: call.id,
+    });
+
+    if (updateError) {
+      debugError("[CallLifecycle] update failed", {
+        callId: call.id,
+        error: updateError,
         status,
-      })
-      .eq("id", call.id)
-      .select(CALL_SELECT)
-      .single();
+      });
+      return;
+    }
 
     if (!data) {
       return;
@@ -415,32 +361,6 @@ export function CallControls({
     if (status === "accepted") {
       debugLog("[Matchr calls] accepted", data.id);
       enterCallRoom(data.id);
-    }
-
-    if (status === "ended") {
-      await insertCallMessage(`${callLabel(data.call_type)} call ended.`);
-    }
-
-    if (status === "missed") {
-      await insertCallMessage(`Missed ${data.call_type} call.`);
-      await supabase.from("notifications").insert([
-        {
-          actor_id: currentUserId,
-          body: `Missed ${data.call_type} call.`,
-          metadata: { call_id: data.id, call_type: data.call_type, match_id: matchId },
-          title: "Missed call",
-          type: "missed_call",
-          user_id: receiverId,
-        },
-        {
-          actor_id: receiverId,
-          body: `${callLabel(data.call_type)} call was not answered.`,
-          metadata: { call_id: data.id, call_type: data.call_type, match_id: matchId },
-          title: "Call not answered",
-          type: "missed_call",
-          user_id: currentUserId,
-        },
-      ]);
     }
 
     if (status === "declined" || status === "ended" || status === "missed") {

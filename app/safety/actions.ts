@@ -170,18 +170,21 @@ export async function blockUser(blockedUserId: string, redirectTo = "/discover")
     },
   );
 
-  await supabase
+  const { data: activeCalls } = await supabase
     .from("call_sessions")
-    .update({
-      connection_state: "ended",
-      ended_at: new Date().toISOString(),
-      ended_reason: "blocked",
-      status: "ended",
-    })
+    .select("id, status")
     .or(
       `and(caller_id.eq.${user.id},receiver_id.eq.${blockedUserId}),and(caller_id.eq.${blockedUserId},receiver_id.eq.${user.id})`,
     )
     .in("status", ["ringing", "accepted"]);
+
+  await Promise.all(
+    (activeCalls ?? []).map((call) =>
+      call.status === "accepted"
+        ? supabase.rpc("end_call", { target_call_id: call.id })
+        : supabase.rpc("mark_call_missed", { target_call_id: call.id }),
+    ),
+  );
 
   revalidatePath("/discover");
   revalidatePath("/matches");

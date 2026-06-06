@@ -1689,6 +1689,38 @@ export type Database = {
         };
         Returns: Record<string, unknown>;
       };
+      start_call: {
+        Args: {
+          receiver_user_id: string;
+          active_match_id: string;
+          requested_call_type?: string;
+        };
+        Returns: CallSessionRow;
+      };
+      accept_call: {
+        Args: {
+          target_call_id: string;
+        };
+        Returns: CallSessionRow;
+      };
+      decline_call: {
+        Args: {
+          target_call_id: string;
+        };
+        Returns: CallSessionRow;
+      };
+      end_call: {
+        Args: {
+          target_call_id: string;
+        };
+        Returns: CallSessionRow;
+      };
+      mark_call_missed: {
+        Args: {
+          target_call_id: string;
+        };
+        Returns: CallSessionRow;
+      };
       users_are_blocked: {
         Args: {
           first_user_id: string;

@@ -158,43 +158,12 @@ export function GlobalCallListener({
           return;
         }
 
-        await supabase
-          .from("call_sessions")
-          .update({
-            connection_state: "ended",
-            ended_at: new Date().toISOString(),
-            ended_reason: "missed_timeout",
-            status: "missed",
-          })
-          .eq("id", call.id);
-        await supabase.from("messages").insert({
-          content: `Missed ${call.call_type} call.`,
-          match_id: call.match_id,
-          message_type: "call_event",
-          receiver_id: call.caller_id,
-          sender_id: currentUserId,
+        await supabase.rpc("mark_call_missed", {
+          target_call_id: call.id,
         });
-        await supabase.from("notifications").insert([
-          {
-            actor_id: currentUserId,
-            body: `Missed ${call.call_type} call.`,
-            metadata: { call_id: call.id, call_type: call.call_type, match_id: call.match_id },
-            title: "Missed call",
-            type: "missed_call",
-            user_id: call.caller_id,
-          },
-          {
-            actor_id: call.caller_id,
-            body: `${callLabel(call.call_type)} call was not answered.`,
-            metadata: { call_id: call.id, call_type: call.call_type, match_id: call.match_id },
-            title: "Call not answered",
-            type: "missed_call",
-            user_id: currentUserId,
-          },
-        ]);
       }, MISSED_CALL_TIMEOUT_MS);
     },
-    [alertsEnabled, currentUserId, playRingtone, supabase],
+    [alertsEnabled, playRingtone, supabase],
   );
 
   useEffect(() => {
@@ -352,21 +321,12 @@ export function GlobalCallListener({
       clearTimeout(missedTimerRef.current);
     }
 
-    const timestamp = new Date().toISOString();
     if (status === "accepted") {
       debugLog("[CallLifecycle] accepted", { callId: call.id });
     }
-    const { data, error } = await supabase
-      .from("call_sessions")
-      .update({
-        accepted_at: status === "accepted" ? timestamp : call.accepted_at,
-        connection_state: status === "accepted" ? "connected" : "ended",
-        ended_at: status === "declined" ? timestamp : null,
-        status,
-      })
-      .eq("id", call.id)
-      .select(CALL_SELECT)
-      .single();
+    const { data, error } = status === "accepted"
+      ? await supabase.rpc("accept_call", { target_call_id: call.id })
+      : await supabase.rpc("decline_call", { target_call_id: call.id });
 
     if (error) {
       debugError("[CallLifecycle] accept update failed", {
