@@ -239,10 +239,6 @@ export function ChatClient({
       gender_identity: currentUserGenderIdentity,
     },
   });
-  const messageCostLabel =
-    messageGoldCost > 0
-      ? `${hasPremium ? "Premium: " : ""}${messageGoldCost} Gold/message`
-      : "";
   const mobileChatHeightStyle = mobileViewportHeight
     ? {
         height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.25rem)`,
@@ -866,6 +862,7 @@ export function ChatClient({
     }
 
     setPendingGift(gift);
+    setIsMediaMenuOpen(false);
   }
 
   async function confirmGift(gift: GiftOption) {
@@ -1587,15 +1584,9 @@ export function ChatClient({
             className="flex max-h-[82dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] border border-neutral-800 bg-black shadow-[0_-18px_60px_rgba(0,0,0,0.55)] sm:rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-neutral-800 px-4 py-4">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-800 px-4 py-4">
               <div>
-                <p className="text-lg font-black text-white">Add to chat</p>
-                <p className="mt-1 text-sm leading-5 text-neutral-400">
-                  {spendableGold} Gold
-                  {messageGoldCost > 0
-                    ? ` · ${messageCostLabel}`
-                    : ""}
-                </p>
+                <p className="text-lg font-black text-white">Add</p>
               </div>
               <button
                 type="button"
@@ -1607,41 +1598,45 @@ export function ChatClient({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
-              <div className="grid gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 <MediaMenuButton
-                  description="Catalog"
-                  label="Send Gift"
+                  icon={<GiftIcon />}
+                  label="Gift"
                   onClick={() => giftListRef.current?.scrollIntoView({
                     behavior: "smooth",
                     block: "start",
                   })}
                 />
                 <MediaMenuButton
-                  description="Image"
+                  icon={<PhotoIcon />}
                   label="Photo"
-                  onClick={() => photoInputRef.current?.click()}
-                />
-                <MediaMenuButton
-                  description="View once"
-                  label="Private Photo"
-                  onClick={() => privatePhotoInputRef.current?.click()}
-                />
-                <MediaMenuButton
-                  description="15 seconds"
-                  label="Video max 15s"
-                  onClick={() => videoInputRef.current?.click()}
-                />
-                <MediaMenuButton
-                  description="View once · 15s"
-                  label="Private Video max 15s"
-                  onClick={() => privateVideoInputRef.current?.click()}
-                />
-                <MediaMenuButton
-                  description="Soon"
-                  label="Voice Note"
                   onClick={() => {
-                    setError("Voice notes are coming soon.");
                     setIsMediaMenuOpen(false);
+                    photoInputRef.current?.click();
+                  }}
+                />
+                <MediaMenuButton
+                  icon={<PrivateIcon />}
+                  label="Private"
+                  onClick={() => {
+                    setIsMediaMenuOpen(false);
+                    privatePhotoInputRef.current?.click();
+                  }}
+                />
+                <MediaMenuButton
+                  icon={<VideoIcon />}
+                  label="Video"
+                  onClick={() => {
+                    setIsMediaMenuOpen(false);
+                    videoInputRef.current?.click();
+                  }}
+                />
+                <MediaMenuButton
+                  icon={<PrivateVideoIcon />}
+                  label="Private Video"
+                  onClick={() => {
+                    setIsMediaMenuOpen(false);
+                    privateVideoInputRef.current?.click();
                   }}
                 />
               </div>
@@ -1833,12 +1828,63 @@ export function ChatClient({
   );
 }
 
+function PhotoIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5v-9Z" />
+      <path d="m5 16 4.5-4.5 3.5 3.5 2-2 4 4" />
+      <path d="M15.5 9h.01" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4.5 7h9A2.5 2.5 0 0 1 16 9.5v5A2.5 2.5 0 0 1 13.5 17h-9A2.5 2.5 0 0 1 2 14.5v-5A2.5 2.5 0 0 1 4.5 7Z" />
+      <path d="m16 10 5-3v10l-5-3" />
+    </svg>
+  );
+}
+
+function PrivateIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path d="M7 10V8a5 5 0 0 1 10 0v2" />
+      <path d="M6.5 10h11A1.5 1.5 0 0 1 19 11.5v6A1.5 1.5 0 0 1 17.5 19h-11A1.5 1.5 0 0 1 5 17.5v-6A1.5 1.5 0 0 1 6.5 10Z" />
+      <path d="M12 14v2" />
+    </svg>
+  );
+}
+
+function PrivateVideoIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4.5 8h8A2.5 2.5 0 0 1 15 10.5v3A2.5 2.5 0 0 1 12.5 16h-8A2.5 2.5 0 0 1 2 13.5v-3A2.5 2.5 0 0 1 4.5 8Z" />
+      <path d="m15 11 4-2.4v6.8L15 13" />
+      <path d="M8 8V7a4 4 0 0 1 8 0v1" />
+    </svg>
+  );
+}
+
+function GiftIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9Z" />
+      <path d="M3 6h18v4H3z" />
+      <path d="M12 6v14" />
+      <path d="M12 6c-2.4 0-4-1-4-2.3C8 2.8 8.8 2 9.8 2 11.2 2 12 3.4 12 6Z" />
+      <path d="M12 6c2.4 0 4-1 4-2.3 0-.9-.8-1.7-1.8-1.7C12.8 2 12 3.4 12 6Z" />
+    </svg>
+  );
+}
+
 function MediaMenuButton({
-  description,
+  icon,
   label,
   onClick,
 }: {
-  description: string;
+  icon: ReactNode;
   label: string;
   onClick: () => void;
 }) {
@@ -1846,11 +1892,13 @@ function MediaMenuButton({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-left transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+      className="flex min-h-24 flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-3 py-4 text-center text-emerald-50 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 active:scale-[0.98]"
     >
-      <span className="block text-sm font-black text-white">{label}</span>
-      <span className="mt-1 block text-sm leading-5 text-neutral-400">
-        {description}
+      <span className="grid h-11 w-11 place-items-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-emerald-100">
+        {icon}
+      </span>
+      <span className="text-sm font-black text-white">
+        {label}
       </span>
     </button>
   );
