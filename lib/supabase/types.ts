@@ -1660,6 +1660,16 @@ export type Database = {
         };
         Returns: MessageRow;
       };
+      send_media_message_with_economy: {
+        Args: {
+          receiver_user_id: string;
+          active_match_id: string;
+          media_message_type: string;
+          stored_media_url: string;
+          stored_media_type: string;
+        };
+        Returns: MessageRow;
+      };
       send_chat_gift_with_economy: {
         Args: {
           receiver_user_id: string;

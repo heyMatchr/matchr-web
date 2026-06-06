@@ -752,6 +752,11 @@ export function ChatClient({
 
     const mediaType = file.type.startsWith("video/") ? "video" : "image";
 
+    if (messageGoldCost > 0 && spendableGold < messageGoldCost) {
+      setGoldModal("Need Gold to send this media.");
+      return;
+    }
+
     if (mediaType === "video") {
       const duration = await getVideoDuration(file);
 
@@ -804,22 +809,24 @@ export function ChatClient({
       : supabase.storage.from(MEDIA_BUCKET_NAME).getPublicUrl(path).data.publicUrl;
     const storedMediaUrl = isPrivate ? path : publicUrl;
 
-    const { data: savedMessage, error: sendError } = await supabase
-      .from("messages")
-      .insert({
-        content: "",
-        match_id: matchId,
-        media_type: mediaType,
-        media_url: storedMediaUrl,
-        message_type: isPrivate ? "private_media" : mediaType,
-        receiver_id: receiverId,
-        sender_id: currentUserId,
-      })
-      .select(MESSAGE_SELECT)
-      .single();
+    const { data: savedMessage, error: sendError } = await supabase.rpc(
+      "send_media_message_with_economy",
+      {
+        active_match_id: matchId,
+        media_message_type: isPrivate ? "private_media" : mediaType,
+        stored_media_type: mediaType,
+        stored_media_url: storedMediaUrl,
+        receiver_user_id: receiverId,
+      },
+    );
 
     if (sendError) {
-      setError(sendError.message);
+      await supabase.storage.from(uploadBucket).remove([path]);
+      if (sendError.message.includes("insufficient_gold")) {
+        setGoldModal("Not enough Gold to send this media.");
+      } else {
+        setError(sendError.message);
+      }
     } else {
       await createMediaModerationPlaceholder(supabase, {
         mediaUrl: storedMediaUrl,
@@ -828,6 +835,10 @@ export function ChatClient({
         userId: currentUserId,
       });
       mergeConfirmedMessage(savedMessage);
+      if (messageGoldCost > 0) {
+        setSpendableGold((current) => Math.max(0, current - messageGoldCost));
+        setChatToast(`Sent • -${messageGoldCost} Gold`);
+      }
       await supabase.from("notifications").insert({
         actor_id: currentUserId,
         body: isPrivate ? "Sent you private media." : `Sent you a ${mediaType}.`,
