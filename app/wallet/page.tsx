@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
@@ -13,12 +14,13 @@ type WalletPageProps = {
   searchParams?: Promise<{
     boost?: string | string[];
     payment?: string | string[];
+    panel?: string | string[];
   }>;
 };
 
 function getSearchValue(
   params: Awaited<NonNullable<WalletPageProps["searchParams"]>> | undefined,
-  key: "boost" | "payment",
+  key: "boost" | "payment" | "panel",
 ) {
   const value = params?.[key];
 
@@ -106,6 +108,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
   const boostState = getSearchValue(params, "boost") ?? "";
+  const activePanel = getSearchValue(params, "panel") ?? "";
   const activeBoost = activeBoostResult.data;
   const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
     isActivePremiumSubscription(subscription),
@@ -116,6 +119,25 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   const paymentSuccessMessage = getPaymentSuccessMessage(
     latestPaidPaymentOrder?.order_type ?? null,
   );
+  const activityRows = {
+    giftsIn: (incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · Diamonds credited`),
+    giftsOut: (outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0}`),
+    messages: (messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost}`),
+    payments: (paymentOrdersResult.data ?? []).map((row) => {
+      const amount = row.amount ?? row.amount_usd ?? 0;
+      const currency = row.currency ?? "USD";
+      const gold = row.gold_amount ? ` · ${row.gold_amount} Gold` : "";
+
+      return `${formatPaymentType(row.order_type)} · ${formatPaymentStatus(row.status)} · ${currency} ${amount}${gold}${row.provider ? ` · ${row.provider}` : ""}`;
+    }),
+    transactions: (walletTransactionsResult.data ?? []).map(formatWalletTransaction),
+  };
+  const recentActivityPreview = [
+    ...activityRows.transactions,
+    ...activityRows.payments,
+    ...activityRows.giftsOut,
+    ...activityRows.messages,
+  ].slice(0, 3);
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
@@ -154,12 +176,34 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               Boost failed. Try again.
             </p>
           ) : null}
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <ActionCard icon="✉" label="Start" sublabel="Get noticed" />
-            <ActionCard icon="◆" label="Gift" sublabel="Send signal" />
+          <div className="mt-5 flex flex-wrap gap-2">
+            <a href="#gold-packages" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</a>
+            {!activePremium ? (
+              <a href="#premium" className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Premium</a>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-black">Quick Actions</h2>
+            {activeBoost ? (
+              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
+                Boost active
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <a href="#premium" className="block">
+              <ActionCard
+                icon="♛"
+                label={activePremium ? "Premium Active" : "Premium"}
+                sublabel={activePremium ? formatPremiumExpiry(activePremium.expires_at) : "More access"}
+              />
+            </a>
             <form action={activateProfileBoost}>
               <button
-                className="h-full w-full rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3 text-left transition-colors hover:border-emerald-300/35 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-70"
+                className="h-full w-full rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-3 text-left transition-colors hover:border-emerald-300/50 hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-75"
                 disabled={Boolean(activeBoost)}
                 type="submit"
               >
@@ -167,21 +211,19 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 <p className="mt-2 text-sm font-black text-white">
                   {activeBoost ? "Boost active" : "Boost profile"}
                 </p>
-                <p className="mt-0.5 text-xs text-emerald-50/65">
+                <p className="mt-0.5 text-xs text-emerald-50/75">
                   {activeBoost
                     ? `Ends in ${formatTimeRemaining(activeBoost.expires_at)}`
                     : `${profileBoostCost} Gold · 24h`}
                 </p>
               </button>
             </form>
-            <ActionCard icon="♛" label="Premium" sublabel="More access" />
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2">
-            <a href="#gold-packages" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</a>
-            <form action={startPremiumCheckout}>
-              <input type="hidden" name="provider_key" value={defaultProvider} />
-              <button className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Upgrade to Premium</button>
-            </form>
+            <a href="#elite" className="block">
+              <ActionCard icon="◇" label="Elite" sublabel="Levels" />
+            </a>
+            <a href="/earnings" className="block">
+              <ActionCard icon="◆" label="Gifts" sublabel="Earnings" />
+            </a>
           </div>
         </section>
 
@@ -247,28 +289,17 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           ))}
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+        <section id="premium" className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-black">Premium</h2>
             {activePremium ? <PremiumPill /> : null}
           </div>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            {activePremium ? `${activePremium.plan_name} · Active` : "No active premium plan."}
+            {activePremium
+              ? `${activePremium.plan_name} · ${formatPremiumExpiry(activePremium.expires_at)}`
+              : "Inactive"}
           </p>
-          <form action={startPremiumCheckout} className="mt-4">
-            <input
-              type="hidden"
-              name="plan_id"
-              value={premiumPlansResult.data?.[0]?.id ?? ""}
-            />
-            <input type="hidden" name="provider_key" value={defaultProvider} />
-            <button className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
-              {premiumPlansResult.data?.[0]
-                ? `Start ${premiumPlansResult.data[0].name ?? premiumPlansResult.data[0].plan_name} · $${premiumPlansResult.data[0].price_usd}`
-                : "Premium unavailable"}
-            </button>
-          </form>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             {["Priority", "Insights", "Discounts", "Badge"].map((benefit) => (
               <span
                 key={benefit}
@@ -278,96 +309,129 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </span>
             ))}
           </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {(premiumPlansResult.data ?? []).length ? (
-              (premiumPlansResult.data ?? []).map((plan) => (
-                <form key={plan.id} action={startPremiumCheckout}>
-                  <input type="hidden" name="plan_id" value={plan.id} />
-                  <input type="hidden" name="provider_key" value={defaultProvider} />
-                  <button className="h-full w-full rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-left text-[15px] leading-6 text-neutral-200 transition-colors hover:border-emerald-300/30">
-                    <span className="block font-black text-white">
-                      {plan.name ?? plan.plan_name}
-                    </span>
-                    <span className="mt-1 block text-neutral-300">
-                      ${plan.price_usd} · {plan.duration_days} days
-                    </span>
-                    {plan.description ? (
-                      <span className="mt-1 block text-sm text-neutral-500">
-                        {plan.description}
-                      </span>
-                    ) : null}
-                  </button>
-                </form>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">
-                Premium plans are not available right now.
+          {!activePremium ? (
+            <details className="mt-4 rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+              <summary className="cursor-pointer list-none text-sm font-black text-white">
+                Premium plans
+              </summary>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {(premiumPlansResult.data ?? []).length ? (
+                  (premiumPlansResult.data ?? []).map((plan) => (
+                    <form key={plan.id} action={startPremiumCheckout}>
+                      <input type="hidden" name="plan_id" value={plan.id} />
+                      <input type="hidden" name="provider_key" value={defaultProvider} />
+                      <button className="h-full w-full rounded-2xl border border-neutral-800 bg-black/30 p-4 text-left text-[15px] leading-6 text-neutral-200 transition-colors hover:border-emerald-300/30">
+                        <span className="block font-black text-white">
+                          {plan.name ?? plan.plan_name}
+                        </span>
+                        <span className="mt-1 block text-neutral-300">
+                          ${plan.price_usd} · {plan.duration_days} days
+                        </span>
+                      </button>
+                    </form>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-neutral-800 bg-black/30 p-4 text-[15px] leading-6 text-neutral-200">
+                    Premium unavailable
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </details>
+          ) : null}
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
-          <h2 className="text-lg font-black">Payment methods</h2>
-          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            Available here: {currentProfile.country ?? "your region"}.
-          </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {availableProviders.length ? (
-              availableProviders.map((provider) => (
-                <div
-                  key={provider.provider_key}
-                  className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
-                >
-                  <p className="font-black text-white">{provider.name}</p>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    {provider.supported_currencies.join(", ")}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <p className="text-sm text-neutral-400">
-                No payment methods are available right now.
-              </p>
-            )}
-          </div>
+        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+          <a
+            href="/wallet?panel=payment-methods"
+            className="flex items-center justify-between gap-4"
+          >
+            <span>
+              <span className="block text-lg font-black">Payment Methods</span>
+              <span className="mt-1 block text-sm text-neutral-400">
+                {availableProviders.length} available
+              </span>
+            </span>
+            <span className="rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-300">
+              View
+            </span>
+          </a>
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+        <section id="elite" className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
           <h2 className="text-lg font-black">Elite levels</h2>
-          <p className="mt-2 text-[15px] leading-6 text-neutral-300">
-            Priority: {priorityMessageCost} Gold · Boost: {profileBoostCost} Gold
-          </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
             {(eliteLevelsResult.data ?? []).map((level) => (
               <div
                 key={level.level}
-                className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
+                className="min-w-36 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3 text-sm text-neutral-200"
               >
                 <p className="font-black text-white">
-                  Level {level.level} · {level.badge}
+                  L{level.level} · {level.badge}
                 </p>
                 <p className="mt-1 text-neutral-400">
-                  {level.monthly_gold_requirement.toLocaleString()} Gold/month
-                </p>
-                <p className="mt-1 text-sm text-neutral-500">
-                  {Object.keys(level.benefits_json ?? {}).join(", ") || "Soon"}
+                  {level.monthly_gold_requirement.toLocaleString()} Gold/mo
                 </p>
               </div>
             ))}
           </div>
+          <p className="mt-3 text-xs text-neutral-500">
+            Priority {priorityMessageCost} · Boost {profileBoostCost}
+          </p>
         </section>
 
-        <History actionHref="#gold-packages" actionLabel="Buy Gold" emptyText="No purchases yet" title="Transactions" rows={(walletTransactionsResult.data ?? []).map(formatWalletTransaction)} />
-        <History title="Payments" rows={(paymentOrdersResult.data ?? []).map((row) => {
-          const amount = row.amount ?? row.amount_usd ?? 0;
-          const currency = row.currency ?? "USD";
-          const gold = row.gold_amount ? ` · ${row.gold_amount} Gold` : "";
-          return `${formatPaymentType(row.order_type)} · ${formatPaymentStatus(row.status)} · ${currency} ${amount}${gold}${row.provider ? ` · ${row.provider}` : ""}`;
-        })} />
-        <History actionHref="/earnings" actionLabel="Earnings" emptyText="No gift earnings yet" title="Gift earnings" rows={(incomingGiftsResult.data ?? []).map((row) => `${row.gift_type} · Diamonds credited`)} />
-        <History title="Gifts out" rows={(outgoingGiftsResult.data ?? []).map((row) => `${row.gift_type} · -${row.gold_cost ?? 0}`)} />
-        <History title="Messages" rows={(messageChargesResult.data ?? []).map((row) => `Message · -${row.gold_cost}`)} />
+        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+          <a
+            href="/wallet?panel=activity"
+            className="flex items-center justify-between gap-4"
+          >
+            <span>
+              <span className="block text-lg font-black">Recent Activity</span>
+              <span className="mt-1 block text-sm text-neutral-400">
+                {recentActivityPreview[0] ?? "No purchases yet"}
+              </span>
+            </span>
+            <span className="rounded-full border border-neutral-700 px-3 py-1 text-sm text-neutral-300">
+              View
+            </span>
+          </a>
+        </section>
+
+        {activePanel === "payment-methods" ? (
+          <WalletPanel title="Payment Methods">
+            <p className="text-sm leading-6 text-neutral-400">
+              Available here: {currentProfile.country ?? "your region"}.
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {availableProviders.length ? (
+                availableProviders.map((provider) => (
+                  <div
+                    key={provider.provider_key}
+                    className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
+                  >
+                    <p className="font-black text-white">{provider.name}</p>
+                    <p className="mt-1 text-sm text-neutral-500">
+                      {provider.supported_currencies.join(", ")}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-neutral-400">
+                  No payment methods are available right now.
+                </p>
+              )}
+            </div>
+          </WalletPanel>
+        ) : null}
+
+        {activePanel === "activity" ? (
+          <WalletPanel title="Recent Activity">
+            <History actionHref="#gold-packages" actionLabel="Buy Gold" emptyText="No purchases yet" title="Transactions" rows={activityRows.transactions} />
+            <History title="Payments" rows={activityRows.payments} />
+            <History actionHref="/earnings" actionLabel="Earnings" emptyText="No gift earnings yet" title="Gift earnings" rows={activityRows.giftsIn} />
+            <History title="Gifts out" rows={activityRows.giftsOut} />
+            <History title="Messages" rows={activityRows.messages} />
+          </WalletPanel>
+        ) : null}
       </div>
     </AppShell>
   );
@@ -448,6 +512,14 @@ function formatTimeRemaining(expiresAt: string) {
   return `${minutes}m`;
 }
 
+function formatPremiumExpiry(expiresAt: string | null) {
+  if (!expiresAt) {
+    return "Active";
+  }
+
+  return `Ends in ${formatTimeRemaining(expiresAt)}`;
+}
+
 function ActionCard({
   icon,
   label,
@@ -462,6 +534,31 @@ function ActionCard({
       <p className="text-lg leading-none text-emerald-100">{icon}</p>
       <p className="mt-2 text-sm font-black text-white">{label}</p>
       <p className="mt-0.5 text-xs text-emerald-50/65">{sublabel}</p>
+    </div>
+  );
+}
+
+function WalletPanel({
+  children,
+  title,
+}: {
+  children: ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/75 px-4 py-5 backdrop-blur-sm">
+      <section className="mx-auto max-h-[calc(100dvh-2.5rem)] max-w-2xl overflow-y-auto rounded-3xl border border-neutral-800 bg-black p-5 shadow-[0_0_70px_rgba(0,0,0,0.45)]">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-black">{title}</h2>
+          <a
+            href="/wallet"
+            className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+          >
+            Close
+          </a>
+        </div>
+        <div className="mt-5 grid gap-4">{children}</div>
+      </section>
     </div>
   );
 }
