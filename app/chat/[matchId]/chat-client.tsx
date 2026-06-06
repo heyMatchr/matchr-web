@@ -97,6 +97,18 @@ const conversationTones: ConversationTone[] = [
   "Funny",
 ];
 
+function createGiftRequestId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = char === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
+}
+
 export function ChatClient({
   anonKey,
   currentUserId,
@@ -831,6 +843,10 @@ export function ChatClient({
   }
 
   async function sendGift(gift: GiftOption) {
+    if (sending) {
+      return;
+    }
+
     if (spendableGold < gift.coinPrice) {
       setGoldModal("Not enough gold to send this gift.");
       return;
@@ -840,44 +856,54 @@ export function ChatClient({
   }
 
   async function confirmGift(gift: GiftOption) {
-    await recordAction(supabase, currentUserId, "gift", receiverId);
+    if (sending) {
+      return;
+    }
 
     setSending(true);
     setPendingGift(null);
-    const { data: savedMessage, error: sendError } = await supabase.rpc(
-      "send_chat_gift_with_economy",
-      {
-        active_match_id: matchId,
-        receiver_user_id: receiverId,
-        selected_gift_type: gift.type,
-      },
-    );
+    const clientRequestId = createGiftRequestId();
 
-    if (sendError) {
-      if (sendError.message.includes("insufficient_gold")) {
-        setGoldModal("Not enough Gold to send this gift.");
-      } else {
-        setError(sendError.message);
-      }
-    } else {
-      mergeConfirmedMessage(savedMessage);
-      setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
-      await supabase.from("notifications").insert({
-        actor_id: currentUserId,
-        body: `Sent you ${gift.icon} ${gift.name}.`,
-        metadata: {
-          coin_price: gift.coinPrice,
-          gift_type: gift.type,
-          match_id: matchId,
+    try {
+      await recordAction(supabase, currentUserId, "gift", receiverId);
+
+      const { data: savedMessage, error: sendError } = await supabase.rpc(
+        "send_chat_gift_with_economy",
+        {
+          active_match_id: matchId,
+          client_request_id: clientRequestId,
+          receiver_user_id: receiverId,
+          selected_gift_type: gift.type,
         },
-        title: "Gift received",
-        type: "gift_received",
-        user_id: receiverId,
-      });
-    }
+      );
 
-    setSending(false);
-    setIsMediaMenuOpen(false);
+      if (sendError) {
+        if (sendError.message.includes("insufficient_gold")) {
+          setGoldModal("Not enough Gold to send this gift.");
+        } else {
+          setError(sendError.message);
+        }
+      } else {
+        mergeConfirmedMessage(savedMessage);
+        setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
+        await supabase.from("notifications").insert({
+          actor_id: currentUserId,
+          body: `Sent you ${gift.icon} ${gift.name}.`,
+          metadata: {
+            client_request_id: clientRequestId,
+            coin_price: gift.coinPrice,
+            gift_type: gift.type,
+            match_id: matchId,
+          },
+          title: "Gift received",
+          type: "gift_received",
+          user_id: receiverId,
+        });
+      }
+    } finally {
+      setSending(false);
+      setIsMediaMenuOpen(false);
+    }
   }
 
   async function insertSystemMessage(messageType: string, body: string) {

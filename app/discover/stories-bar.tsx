@@ -96,6 +96,18 @@ function storyAge(timestamp: string) {
   return `${Math.floor(minutes / 60)}h`;
 }
 
+function createGiftRequestId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = char === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
+}
+
 function getStoryFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -197,6 +209,7 @@ export function StoriesBar({
   const [engagement, setEngagement] = useState<StoryEngagement>(emptyEngagement);
   const [interactionMessage, setInteractionMessage] = useState("");
   const [isGiftPickerOpen, setIsGiftPickerOpen] = useState(false);
+  const [sendingGiftType, setSendingGiftType] = useState<string | null>(null);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
@@ -877,61 +890,75 @@ export function StoriesBar({
   }
 
   async function giftStory(gift: GiftOption) {
-    if (!activeStory || activeStory.user_id === currentUserId) {
+    if (!activeStory || activeStory.user_id === currentUserId || sendingGiftType) {
       return;
     }
 
     setInteractionMessage("");
-    await recordAction(supabase, currentUserId, "gift", activeStory.id);
-    const { data: giftResult, error: transactionError } = await supabase.rpc(
-      "record_social_gift_with_economy",
-      {
-        gift_source: "story",
-        receiver_user_id: activeStory.user_id,
-        selected_gift_type: gift.type,
-        source_uuid: activeStory.id,
-      },
-    );
+    setSendingGiftType(gift.type);
+    const clientRequestId = createGiftRequestId();
 
-    if (transactionError) {
-      setInteractionMessage(
-        transactionError.message.includes("insufficient_gold")
-          ? "Not enough gold. Add gold to continue."
-          : transactionError.message,
+    try {
+      await recordAction(supabase, currentUserId, "gift", activeStory.id);
+      const { data: giftResult, error: transactionError } = await supabase.rpc(
+        "record_social_gift_with_economy",
+        {
+          client_request_id: clientRequestId,
+          gift_source: "story",
+          receiver_user_id: activeStory.user_id,
+          selected_gift_type: gift.type,
+          source_uuid: activeStory.id,
+        },
       );
-      return;
+
+      if (transactionError) {
+        setInteractionMessage(
+          transactionError.message.includes("insufficient_gold")
+            ? "Not enough gold. Add gold to continue."
+            : transactionError.message,
+        );
+        return;
+      }
+
+      const isDuplicateGift = giftResult?.idempotent === true;
+      const sent = isDuplicateGift
+        ? false
+        : await sendStoryDm(
+            activeStory.user_id,
+            "story_gift",
+            `Sent ${gift.icon} ${gift.name} from your story.`,
+            { giftType: gift.type },
+          );
+
+      if (!isDuplicateGift) {
+        await supabase.from("notifications").insert({
+          actor_id: currentUserId,
+          body: `Sent you ${gift.icon} ${gift.name} from your story.`,
+          metadata: {
+            client_request_id: clientRequestId,
+            coin_price: gift.coinPrice,
+            gift_activity_id:
+              typeof giftResult?.activity_row_id === "string"
+                ? giftResult.activity_row_id
+                : null,
+            gift_transaction_id:
+              typeof giftResult?.gift_transaction_id === "string"
+                ? giftResult.gift_transaction_id
+                : null,
+            gift_type: gift.type,
+            story_id: activeStory.id,
+          },
+          title: "Story gift",
+          type: "story_gift",
+          user_id: activeStory.user_id,
+        });
+      }
+
+      setIsGiftPickerOpen(false);
+      setInteractionMessage(sent ? "Gift sent to messages." : "Gift sent.");
+    } finally {
+      setSendingGiftType(null);
     }
-
-    const sent = await sendStoryDm(
-      activeStory.user_id,
-      "story_gift",
-      `Sent ${gift.icon} ${gift.name} from your story.`,
-      { giftType: gift.type },
-    );
-
-    await supabase.from("notifications").insert({
-      actor_id: currentUserId,
-      body: `Sent you ${gift.icon} ${gift.name} from your story.`,
-      metadata: {
-        coin_price: gift.coinPrice,
-        gift_activity_id:
-          typeof giftResult?.activity_row_id === "string"
-            ? giftResult.activity_row_id
-            : null,
-        gift_transaction_id:
-          typeof giftResult?.gift_transaction_id === "string"
-            ? giftResult.gift_transaction_id
-            : null,
-        gift_type: gift.type,
-        story_id: activeStory.id,
-      },
-      title: "Story gift",
-      type: "story_gift",
-      user_id: activeStory.user_id,
-    });
-
-    setIsGiftPickerOpen(false);
-    setInteractionMessage(sent ? "Gift sent to messages." : "Gift sent.");
   }
 
   function goPrevious() {
@@ -1307,8 +1334,9 @@ export function StoriesBar({
                           <button
                             key={gift.type}
                             type="button"
+                            disabled={Boolean(sendingGiftType)}
                             onClick={() => void giftStory(gift)}
-                            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30"
+                            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-55"
                           >
                             <span className="text-2xl">{gift.icon}</span>
                             <span className="min-w-0 flex-1">
@@ -1318,6 +1346,11 @@ export function StoriesBar({
                                 {gift.description ? ` · ${gift.description}` : ""}
                               </span>
                             </span>
+                            {sendingGiftType === gift.type ? (
+                              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
+                                Sending
+                              </span>
+                            ) : null}
                           </button>
                         ))}
                       </div>

@@ -39,6 +39,18 @@ type MomentProfile = {
   location: string;
 };
 
+function createGiftRequestId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const value = Math.floor(Math.random() * 16);
+    const nibble = char === "x" ? value : (value & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
+}
+
 export type MomentCard = {
   id: string;
   caption: string;
@@ -866,6 +878,7 @@ function GiftsSheet({
   onClose: () => void;
 }) {
   const [giftState, setGiftState] = useState<GiftActionState | null>(null);
+  const [sendingGiftType, setSendingGiftType] = useState<string | null>(null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
@@ -905,15 +918,33 @@ function GiftsSheet({
             <form
               key={gift.type}
               action={async () => {
-                const result = await giftMoment(moment.id, moment.user_id, gift.type);
-                setGiftState(result);
+                if (sendingGiftType) {
+                  return;
+                }
 
-                if (result?.status === "success") {
-                  onClose();
+                setSendingGiftType(gift.type);
+
+                try {
+                  const result = await giftMoment(
+                    moment.id,
+                    moment.user_id,
+                    gift.type,
+                    createGiftRequestId(),
+                  );
+                  setGiftState(result);
+
+                  if (result?.status === "success") {
+                    onClose();
+                  }
+                } finally {
+                  setSendingGiftType(null);
                 }
               }}
             >
-              <button className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10">
+              <button
+                disabled={Boolean(sendingGiftType)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55"
+              >
                 <span className="text-2xl">{gift.icon}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium text-white">{gift.name}</span>
@@ -923,7 +954,7 @@ function GiftsSheet({
                   </span>
                 </span>
                 <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
-                  Send Gift
+                  {sendingGiftType === gift.type ? "Sending" : "Send Gift"}
                 </span>
               </button>
             </form>

@@ -206,6 +206,7 @@ export type StoryGiftRow = {
   sender_id: string;
   receiver_id: string;
   gift_type: string;
+  client_request_id: string | null;
   created_at: string;
 };
 
@@ -272,6 +273,7 @@ export type GiftTransactionRow = {
   source: string;
   source_id: string | null;
   message_id: string | null;
+  client_request_id: string | null;
   created_at: string;
 };
 
@@ -562,6 +564,7 @@ export type MomentGiftRow = {
   sender_id: string;
   receiver_id: string;
   gift_type: string;
+  client_request_id: string | null;
   created_at: string;
 };
 
@@ -892,6 +895,7 @@ export type Database = {
           source: string;
           source_id?: string | null;
           message_id?: string | null;
+          client_request_id?: string | null;
           created_at?: string;
         };
         Update: never;
@@ -1065,6 +1069,7 @@ export type Database = {
           sender_id: string;
           receiver_id: string;
           gift_type: string;
+          client_request_id?: string | null;
           created_at?: string;
         };
         Update: never;
@@ -1487,6 +1492,7 @@ export type Database = {
           sender_id: string;
           receiver_id: string;
           gift_type: string;
+          client_request_id?: string | null;
           created_at?: string;
         };
         Update: never;
@@ -1659,6 +1665,7 @@ export type Database = {
           receiver_user_id: string;
           active_match_id: string;
           selected_gift_type: string;
+          client_request_id?: string;
         };
         Returns: MessageRow;
       };
@@ -1668,6 +1675,7 @@ export type Database = {
           selected_gift_type: string;
           gift_source: string;
           source_uuid: string;
+          client_request_id?: string;
         };
         Returns: Record<string, unknown>;
       };

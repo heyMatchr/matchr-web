@@ -22,6 +22,10 @@ function getFormString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function createServerGiftRequestId() {
+  return crypto.randomUUID();
+}
+
 function getMediaExtension(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -241,7 +245,12 @@ export async function commentOnMoment(
   return { message: "" };
 }
 
-export async function giftMoment(momentId: string, ownerId: string, giftType: string) {
+export async function giftMoment(
+  momentId: string,
+  ownerId: string,
+  giftType: string,
+  clientRequestId?: string,
+) {
   const { supabase, user } = await currentUser();
   const gift = getGiftOption(giftType, await getGiftCatalog(supabase));
 
@@ -279,6 +288,7 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
   const { data: giftResult, error: transactionError } = await supabase.rpc(
     "record_social_gift_with_economy",
     {
+      client_request_id: clientRequestId ?? createServerGiftRequestId(),
       gift_source: "moment",
       receiver_user_id: ownerId,
       selected_gift_type: gift.type,
@@ -295,26 +305,29 @@ export async function giftMoment(momentId: string, ownerId: string, giftType: st
     } satisfies GiftActionState;
   }
 
-  await supabase.from("notifications").insert({
-    actor_id: user.id,
-    body: `Sent you ${gift.icon} ${gift.name}.`,
-    metadata: {
-      coin_price: gift.coinPrice,
-      gift_activity_id:
-        typeof giftResult?.activity_row_id === "string"
-          ? giftResult.activity_row_id
-          : null,
-      gift_transaction_id:
-        typeof giftResult?.gift_transaction_id === "string"
-          ? giftResult.gift_transaction_id
-          : null,
-      gift_type: gift.type,
-      moment_id: momentId,
-    },
-    title: "Gift received",
-    type: "gift_received",
-    user_id: ownerId,
-  });
+  if (giftResult?.idempotent !== true) {
+    await supabase.from("notifications").insert({
+      actor_id: user.id,
+      body: `Sent you ${gift.icon} ${gift.name}.`,
+      metadata: {
+        client_request_id: clientRequestId ?? null,
+        coin_price: gift.coinPrice,
+        gift_activity_id:
+          typeof giftResult?.activity_row_id === "string"
+            ? giftResult.activity_row_id
+            : null,
+        gift_transaction_id:
+          typeof giftResult?.gift_transaction_id === "string"
+            ? giftResult.gift_transaction_id
+            : null,
+        gift_type: gift.type,
+        moment_id: momentId,
+      },
+      title: "Gift received",
+      type: "gift_received",
+      user_id: ownerId,
+    });
+  }
 
   revalidatePath("/moments");
   return {
