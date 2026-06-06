@@ -301,3 +301,23 @@ export async function startPremiumCheckout(formData?: FormData) {
 
   revalidatePath("/wallet");
 }
+
+export async function activateProfileBoost() {
+  const { supabase } = await currentUser();
+  const { error } = await supabase.rpc("activate_profile_boost");
+
+  if (error) {
+    if (error.message.includes("insufficient_gold")) {
+      redirect("/wallet?boost=insufficient#gold-packages");
+    }
+
+    console.error("[Wallet] profile boost failed", {
+      error: error.message,
+    });
+    redirect("/wallet?boost=failed");
+  }
+
+  revalidatePath("/wallet");
+  revalidatePath("/discover");
+  redirect("/wallet?boost=success");
+}

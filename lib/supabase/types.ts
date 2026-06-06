@@ -317,6 +317,23 @@ export type SubscriptionRow = {
   expires_at: string | null;
 };
 
+export type ProfileBoostRow = {
+  id: string;
+  user_id: string;
+  gold_cost: number;
+  starts_at: string;
+  expires_at: string;
+  status: string;
+  created_at: string;
+};
+
+export type ProfileBoostActivationResult = {
+  boost_id: string;
+  expires_at: string;
+  gold_cost: number;
+  remaining_gold: number;
+};
+
 export type UserSettingsRow = {
   user_id: string;
   private_profile: boolean;
@@ -1424,6 +1441,20 @@ export type Database = {
           },
         ];
       };
+      profile_boosts: {
+        Row: ProfileBoostRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          gold_cost: number;
+          starts_at?: string;
+          expires_at: string;
+          status?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       reports: {
         Row: ReportRow;
         Insert: {
@@ -1688,6 +1719,10 @@ export type Database = {
           client_request_id?: string;
         };
         Returns: Record<string, unknown>;
+      };
+      activate_profile_boost: {
+        Args: Record<string, never>;
+        Returns: ProfileBoostActivationResult;
       };
       start_call: {
         Args: {

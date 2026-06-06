@@ -396,6 +396,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     giftTransactionsResult,
     profileViewsResult,
     premiumResult,
+    activeBoostsResult,
   ] = await timeAsync("[Perf] Discover profile enrichment", () =>
     Promise.all([
       visibleProfileIds.length
@@ -430,6 +431,14 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
             .from("premium_subscriptions")
             .select("user_id, status, expires_at")
             .eq("status", "active")
+            .in("user_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase
+            .from("profile_boosts")
+            .select("user_id, status, expires_at")
+            .eq("status", "active")
+            .gt("expires_at", new Date().toISOString())
             .in("user_id", visibleProfileIds)
         : Promise.resolve({ data: [] }),
     ]),
@@ -480,6 +489,9 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       ?.filter((subscription) => isActivePremiumSubscription(subscription))
       .map((subscription) => subscription.user_id) ?? [],
   );
+  const boostedUserIds = new Set(
+    activeBoostsResult.data?.map((boost) => boost.user_id) ?? [],
+  );
   const profileViewCounts = countBy(profileViewsResult.data, "viewed_user_id");
   const latestViewerViewByUser = new Map<string, string>();
   profileViewsResult.data?.forEach((view) => {
@@ -496,6 +508,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     const momentCount = momentCounts.get(profile.id) ?? 0;
     const followerCount = followerCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
+    const hasActiveBoost = boostedUserIds.has(profile.id);
     const isOnline = Boolean(profile.is_online);
     const engagementCount = engagementByUser.get(profile.id) ?? 0;
     const giftCount = giftCounts.get(profile.id) ?? 0;
@@ -512,6 +525,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
         engagementCount,
         followerCount,
         giftCount,
+        hasActiveBoost,
         hasIncomingLike: incomingLikeIds.has(profile.id),
         hasPremium: premiumUserIds.has(profile.id),
         hasStories,
@@ -545,6 +559,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       gender_identity: profile.show_gender_on_profile
         ? profile.gender_identity ?? null
         : null,
+      hasActiveBoost,
       sexual_orientation: profile.show_orientation_on_profile
         ? profile.sexual_orientation ?? null
         : null,

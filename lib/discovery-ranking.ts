@@ -39,6 +39,7 @@ type CandidateRankingSignals = {
   engagementCount: number;
   followerCount: number;
   giftCount: number;
+  hasActiveBoost: boolean;
   hasIncomingLike: boolean;
   hasPremium: boolean;
   hasStories: boolean;
@@ -187,7 +188,9 @@ export function scoreProfileForUser({
     Math.min(12, signals.giftCount * 3) +
     Math.min(8, signals.profileViewCount);
   const positiveAffinity =
-    (signals.hasIncomingLike ? 14 : 0) + (signals.hasPremium ? 4 : 0);
+    (signals.hasIncomingLike ? 14 : 0) +
+    (signals.hasActiveBoost ? 18 : 0) +
+    (signals.hasPremium ? 4 : 0);
   const antiRepetition =
     signals.viewedByViewerAt
       ? hoursSince(signals.viewedByViewerAt) <= 24

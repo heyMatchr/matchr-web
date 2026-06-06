@@ -4,20 +4,21 @@ import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { startPremiumCheckout } from "./actions";
+import { activateProfileBoost, startPremiumCheckout } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type WalletPageProps = {
   searchParams?: Promise<{
+    boost?: string | string[];
     payment?: string | string[];
   }>;
 };
 
 function getSearchValue(
   params: Awaited<NonNullable<WalletPageProps["searchParams"]>> | undefined,
-  key: "payment",
+  key: "boost" | "payment",
 ) {
   const value = params?.[key];
 
@@ -54,6 +55,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     messageChargesResult,
     premiumSubscriptionsResult,
     paymentOrdersResult,
+    activeBoostResult,
     premiumPlansResult,
     eliteLevelsResult,
     priorityMessageCost,
@@ -80,6 +82,15 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .limit(5),
     supabase.from("payment_orders").select("provider, order_type, status, amount, amount_usd, currency, gold_amount, metadata, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase
+      .from("profile_boosts")
+      .select("id, gold_cost, expires_at, status")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .gt("expires_at", new Date().toISOString())
+      .order("expires_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
       .from("premium_plans")
       .select("id, name, plan_name, duration_days, price_usd, description")
       .eq("active", true)
@@ -94,6 +105,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
+  const boostState = getSearchValue(params, "boost") ?? "";
+  const activeBoost = activeBoostResult.data;
   const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
     isActivePremiumSubscription(subscription),
   );
@@ -126,22 +139,42 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               Payment failed. Try again or choose another method.
             </p>
           ) : null}
+          {boostState === "success" ? (
+            <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+              Profile boosted for 24 hours.
+            </p>
+          ) : null}
+          {boostState === "insufficient" ? (
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
+              Need Gold to boost.
+            </p>
+          ) : null}
+          {boostState === "failed" ? (
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
+              Boost failed. Try again.
+            </p>
+          ) : null}
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              ["✉", "Start", "Get noticed"],
-              ["◆", "Gift", "Send signal"],
-              ["↟", "Boost", "Stand out"],
-              ["♛", "Premium", "More access"],
-            ].map(([icon, label, sublabel]) => (
-              <div
-                key={label}
-                className="rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3"
+            <ActionCard icon="✉" label="Start" sublabel="Get noticed" />
+            <ActionCard icon="◆" label="Gift" sublabel="Send signal" />
+            <form action={activateProfileBoost}>
+              <button
+                className="h-full w-full rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3 text-left transition-colors hover:border-emerald-300/35 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-70"
+                disabled={Boolean(activeBoost)}
+                type="submit"
               >
-                <p className="text-lg leading-none text-emerald-100">{icon}</p>
-                <p className="mt-2 text-sm font-black text-white">{label}</p>
-                <p className="mt-0.5 text-xs text-emerald-50/65">{sublabel}</p>
-              </div>
-            ))}
+                <p className="text-lg leading-none text-emerald-100">↟</p>
+                <p className="mt-2 text-sm font-black text-white">
+                  {activeBoost ? "Boost active" : "Boost profile"}
+                </p>
+                <p className="mt-0.5 text-xs text-emerald-50/65">
+                  {activeBoost
+                    ? `Ends in ${formatTimeRemaining(activeBoost.expires_at)}`
+                    : `${profileBoostCost} Gold · 24h`}
+                </p>
+              </button>
+            </form>
+            <ActionCard icon="♛" label="Premium" sublabel="More access" />
           </div>
           <div className="mt-5 flex flex-wrap gap-2">
             <a href="#gold-packages" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</a>
@@ -358,6 +391,7 @@ function formatWalletTransaction(row: {
     gift_received: "Gift received",
     gift_sent: "Gift sent",
     message_charge: "Message charge",
+    profile_boost: "Profile boost",
     top_up: "Gold top-up",
   };
   const sign = row.gold_delta > 0 ? "+" : "";
@@ -395,6 +429,41 @@ function getPaymentSuccessMessage(type: string | null) {
   };
 
   return labels[type ?? ""] ?? "Payment successful.";
+}
+
+function formatTimeRemaining(expiresAt: string) {
+  const milliseconds = new Date(expiresAt).getTime() - Date.now();
+
+  if (milliseconds <= 0) {
+    return "soon";
+  }
+
+  const hours = Math.floor(milliseconds / 36e5);
+  const minutes = Math.max(1, Math.floor((milliseconds % 36e5) / 60000));
+
+  if (hours >= 1) {
+    return `${hours}h`;
+  }
+
+  return `${minutes}m`;
+}
+
+function ActionCard({
+  icon,
+  label,
+  sublabel,
+}: {
+  icon: string;
+  label: string;
+  sublabel: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3">
+      <p className="text-lg leading-none text-emerald-100">{icon}</p>
+      <p className="mt-2 text-sm font-black text-white">{label}</p>
+      <p className="mt-0.5 text-xs text-emerald-50/65">{sublabel}</p>
+    </div>
+  );
 }
 
 function PremiumPill() {
