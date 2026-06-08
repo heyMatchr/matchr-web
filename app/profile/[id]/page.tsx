@@ -1,7 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
@@ -17,6 +16,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileOnlineStatus } from "./profile-online-status";
 import { CopyPublicIdButton } from "./copy-public-id-button";
 import { ProfileLikeButton } from "./profile-like-button";
+import { ProfileActivityPanel } from "./profile-activity-panel";
 
 type ProfilePageProps = {
   params: Promise<{
@@ -42,40 +42,6 @@ function initialFor(name?: string | null) {
 
 function searchValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function ProfilePanel({
-  children,
-  href,
-  title,
-}: {
-  children: ReactNode;
-  href: string;
-  title: string;
-}) {
-  return (
-    <div className="fixed inset-0 z-[80] isolate flex items-end justify-center overflow-hidden bg-black/70 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:items-center sm:px-6">
-      <Link
-        aria-label="Close panel"
-        className="absolute inset-0 z-0"
-        href={href}
-      />
-      <div className="relative z-10 flex max-h-[calc(100dvh_-_1.5rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-300/20 bg-neutral-950 shadow-2xl sm:max-h-[min(760px,calc(100dvh_-_2rem))]">
-        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-900 bg-neutral-950/95 px-4 py-3 backdrop-blur">
-          <p className="text-sm font-black text-neutral-100">{title}</p>
-          <Link
-            href={href}
-            className="min-h-11 rounded-full border border-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-600 hover:text-white"
-          >
-            Close
-          </Link>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default async function ProfilePage({
@@ -807,7 +773,7 @@ export default async function ProfilePage({
           </div>
         </div>
         {activePanel === "visitors" && profile.id === user.id ? (
-          <ProfilePanel href={profileHref} title="Visitors">
+          <ProfileActivityPanel href={profileHref} title="Visitors">
             {recentVisitors.length > 0 ? (
               <div className="grid gap-2">
                 {recentVisitors.map((visitor) => (
@@ -860,11 +826,11 @@ export default async function ProfilePage({
             ) : (
               <p className="text-sm text-neutral-500">No visitors yet</p>
             )}
-          </ProfilePanel>
+          </ProfileActivityPanel>
         ) : null}
 
         {activePanel === "followers" ? (
-          <ProfilePanel href={profileHref} title="Followers">
+          <ProfileActivityPanel href={profileHref} title="Followers">
             {followers.length > 0 ? (
               <div className="grid gap-2">
                 {followers.map((follower) => (
@@ -880,11 +846,11 @@ export default async function ProfilePage({
             ) : (
               <p className="text-sm text-neutral-500">Followers 0</p>
             )}
-          </ProfilePanel>
+          </ProfileActivityPanel>
         ) : null}
 
         {activePanel === "following" ? (
-          <ProfilePanel href={profileHref} title="Following">
+          <ProfileActivityPanel href={profileHref} title="Following">
             {following.length > 0 ? (
               <div className="grid gap-2">
                 {following.map((followedProfile) => (
@@ -900,11 +866,11 @@ export default async function ProfilePage({
             ) : (
               <p className="text-sm text-neutral-500">Following 0</p>
             )}
-          </ProfilePanel>
+          </ProfileActivityPanel>
         ) : null}
 
         {activePanel === "moments" ? (
-          <ProfilePanel href={profileHref} title="Moments">
+          <ProfileActivityPanel href={profileHref} title="Moments">
             {profileMomentsResult.data?.length ? (
               <div className="grid grid-cols-3 gap-2">
                 {profileMomentsResult.data.map((moment) => (
@@ -937,7 +903,7 @@ export default async function ProfilePage({
             ) : (
               <p className="text-sm text-neutral-500">No moments yet</p>
             )}
-          </ProfilePanel>
+          </ProfileActivityPanel>
         ) : null}
     </AppShell>
   );
