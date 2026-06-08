@@ -1,10 +1,13 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ProfileEditForm } from "./profile-edit-form";
 
 export default async function EditProfilePage() {
   const supabase = await createSupabaseServerClient();
+  const supabaseUrl = requiredSupabaseEnv("SUPABASE_URL");
+  const anonKey = requiredSupabaseEnv("SUPABASE_ANON_KEY");
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -75,7 +78,10 @@ export default async function EditProfilePage() {
 
       <ProfileEditForm
         activePreviewVideo={previewVideoResult.data ?? null}
+        anonKey={anonKey}
         profile={profile}
+        supabaseUrl={supabaseUrl}
+        userId={user.id}
       />
     </AppShell>
   );

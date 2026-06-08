@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import {
   GENDER_IDENTITY_OPTIONS,
@@ -11,10 +12,12 @@ import type { ProfileRow } from "@/lib/supabase/types";
 import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_MAX_SIZE_BYTES,
+  PROFILE_MEDIA_BUCKET_NAME,
   PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES,
   PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS,
   PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
+import type { Database } from "@/lib/supabase/types";
 import { updateProfile } from "./actions";
 import type { ProfileEditFormState } from "./types";
 
@@ -56,27 +59,58 @@ type ActiveProfilePreviewVideo = {
 
 type ProfileEditFormProps = {
   activePreviewVideo?: ActiveProfilePreviewVideo | null;
+  anonKey: string;
   profile: EditableProfile;
+  supabaseUrl: string;
+  userId: string;
 };
 
 const initialState: ProfileEditFormState = {
   message: "",
 };
 
+function getPreviewVideoExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["mp4", "webm", "mov"].includes(extension)) {
+    return extension;
+  }
+
+  if (file.type === "video/quicktime") {
+    return "mov";
+  }
+
+  return file.type.split("/").pop() || "mp4";
+}
+
 export function ProfileEditForm({
   activePreviewVideo,
+  anonKey,
   profile,
+  supabaseUrl,
+  userId,
 }: ProfileEditFormProps) {
   const [avatarError, setAvatarError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(profile.avatar_url ?? "");
   const [previewVideoDuration, setPreviewVideoDuration] = useState("");
   const [previewVideoError, setPreviewVideoError] = useState("");
+  const [previewVideoMimeType, setPreviewVideoMimeType] = useState("");
+  const [previewVideoName, setPreviewVideoName] = useState("");
+  const [previewVideoPath, setPreviewVideoPath] = useState("");
+  const [previewVideoStatus, setPreviewVideoStatus] = useState(
+    activePreviewVideo ? "Current preview saved" : "",
+  );
+  const [previewVideoUploading, setPreviewVideoUploading] = useState(false);
   const [previewVideoUrl, setPreviewVideoUrl] = useState(
     activePreviewVideo?.media_url ?? "",
   );
   const [state, formAction, pending] = useActionState(
     updateProfile,
     initialState,
+  );
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(supabaseUrl, anonKey),
+    [anonKey, supabaseUrl],
   );
 
   useEffect(() => {
@@ -121,7 +155,7 @@ export function ProfileEditForm({
     setAvatarPreview(URL.createObjectURL(file));
   }
 
-  function handlePreviewVideoChange(event: ChangeEvent<HTMLInputElement>) {
+  async function handlePreviewVideoChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (previewVideoUrl.startsWith("blob:")) {
@@ -130,9 +164,14 @@ export function ProfileEditForm({
 
     setPreviewVideoDuration("");
     setPreviewVideoError("");
+    setPreviewVideoMimeType("");
+    setPreviewVideoName("");
+    setPreviewVideoPath("");
+    setPreviewVideoStatus("");
 
     if (!file) {
       setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
       return;
     }
 
@@ -143,6 +182,7 @@ export function ProfileEditForm({
     ) {
       event.target.value = "";
       setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
       setPreviewVideoError("Upload an MP4, WebM, or MOV preview video.");
       return;
     }
@@ -150,14 +190,18 @@ export function ProfileEditForm({
     if (file.size > PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES) {
       event.target.value = "";
       setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
       setPreviewVideoError("Keep preview videos under 20 MB.");
       return;
     }
 
     const objectUrl = URL.createObjectURL(file);
+    setPreviewVideoUrl(objectUrl);
+    setPreviewVideoName(file.name || "Preview video");
+    setPreviewVideoStatus("Checking duration...");
     const video = document.createElement("video");
     video.preload = "metadata";
-    video.onloadedmetadata = () => {
+    video.onloadedmetadata = async () => {
       const duration = video.duration;
       setPreviewVideoDuration(String(duration));
 
@@ -166,16 +210,72 @@ export function ProfileEditForm({
         URL.revokeObjectURL(objectUrl);
         setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
         setPreviewVideoDuration("");
+        setPreviewVideoName("");
+        setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
         setPreviewVideoError("Keep preview videos at 15 seconds or less.");
         return;
       }
 
-      setPreviewVideoUrl(objectUrl);
+      setPreviewVideoStatus("Preview ready");
+      setPreviewVideoUploading(true);
+
+      try {
+        const nextPath = `${userId}/preview-${Date.now()}.${getPreviewVideoExtension(
+          file,
+        )}`;
+        const { error } = await supabase.storage
+          .from(PROFILE_MEDIA_BUCKET_NAME)
+          .upload(nextPath, file, {
+            cacheControl: "3600",
+            contentType: file.type,
+          });
+
+        if (error) {
+          event.target.value = "";
+          setPreviewVideoDuration("");
+          setPreviewVideoMimeType("");
+          setPreviewVideoName("");
+          setPreviewVideoPath("");
+          setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+          setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
+          setPreviewVideoError(error.message || "Preview upload failed.");
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(PROFILE_MEDIA_BUCKET_NAME).getPublicUrl(nextPath);
+
+        setPreviewVideoPath(nextPath);
+        setPreviewVideoMimeType(file.type);
+        setPreviewVideoUrl(publicUrl || objectUrl);
+        setPreviewVideoStatus("Preview uploaded. Save profile to publish.");
+        if (publicUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
+      } catch (error) {
+        event.target.value = "";
+        setPreviewVideoDuration("");
+        setPreviewVideoMimeType("");
+        setPreviewVideoName("");
+        setPreviewVideoPath("");
+        setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+        setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
+        setPreviewVideoError(
+          error instanceof Error ? error.message : "Preview upload failed.",
+        );
+        URL.revokeObjectURL(objectUrl);
+      } finally {
+        setPreviewVideoUploading(false);
+      }
     };
     video.onerror = () => {
       event.target.value = "";
       URL.revokeObjectURL(objectUrl);
       setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoName("");
+      setPreviewVideoStatus(activePreviewVideo ? "Current preview saved" : "");
       setPreviewVideoError("Could not read this video. Try another file.");
     };
     video.src = objectUrl;
@@ -183,6 +283,20 @@ export function ProfileEditForm({
 
   const inputClass =
     "rounded-full border border-neutral-700 bg-black/40 px-5 py-3.5 text-white placeholder:text-neutral-400 transition-colors focus:border-emerald-300 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 md:px-6 md:py-4";
+  const previewPublished =
+    Boolean(previewVideoPath) &&
+    state.success &&
+    state.savedPreviewVideoPath === previewVideoPath;
+  const submittedPreviewVideoDuration = previewPublished
+    ? ""
+    : previewVideoDuration;
+  const submittedPreviewVideoMimeType = previewPublished
+    ? ""
+    : previewVideoMimeType;
+  const submittedPreviewVideoPath = previewPublished ? "" : previewVideoPath;
+  const displayedPreviewVideoStatus = previewPublished
+    ? "Preview video saved"
+    : previewVideoStatus;
 
   return (
     <form
@@ -263,7 +377,6 @@ export function ProfileEditForm({
         </label>
         <input
           id="preview_video"
-          name="preview_video"
           type="file"
           accept="video/mp4,video/webm,video/quicktime"
           disabled={pending}
@@ -271,10 +384,39 @@ export function ProfileEditForm({
           className="sr-only"
         />
         <input
+          name="preview_video_path"
+          type="hidden"
+          value={submittedPreviewVideoPath}
+        />
+        <input
           name="preview_video_duration"
           type="hidden"
-          value={previewVideoDuration}
+          value={submittedPreviewVideoDuration}
         />
+        <input
+          name="preview_video_mime_type"
+          type="hidden"
+          value={submittedPreviewVideoMimeType}
+        />
+        {previewVideoName || displayedPreviewVideoStatus ? (
+          <div className="mt-3 rounded-2xl border border-emerald-300/15 bg-black/30 px-4 py-3 text-left">
+            {previewVideoName ? (
+              <p className="truncate text-sm font-medium text-emerald-50">
+                {previewVideoName}
+              </p>
+            ) : null}
+            <p className="mt-1 text-xs text-emerald-100/75">
+              {previewVideoUploading
+                ? "Uploading preview..."
+                : displayedPreviewVideoStatus || "Preview ready"}
+            </p>
+            {previewVideoDuration ? (
+              <p className="mt-1 text-xs text-neutral-500">
+                Duration checked: {Number(previewVideoDuration).toFixed(1)}s
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <p
           aria-live="polite"
           className="mt-3 min-h-5 text-sm text-red-300"
@@ -644,7 +786,9 @@ export function ProfileEditForm({
 
       <p
         aria-live="polite"
-        className="min-h-5 text-sm text-red-300 sm:col-span-2"
+        className={`min-h-5 text-sm sm:col-span-2 ${
+          state.success ? "text-emerald-200" : "text-red-300"
+        }`}
         role={state.message ? "alert" : undefined}
       >
         {state.message}
@@ -652,10 +796,19 @@ export function ProfileEditForm({
 
       <button
         type="submit"
-        disabled={pending || Boolean(avatarError) || Boolean(previewVideoError)}
+        disabled={
+          pending ||
+          previewVideoUploading ||
+          Boolean(avatarError) ||
+          Boolean(previewVideoError)
+        }
         className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition-all duration-300 hover:scale-[1.02] hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-neutral-300 sm:col-span-2"
       >
-        {pending ? "Saving profile..." : "Save profile"}
+        {previewVideoUploading
+          ? "Uploading preview..."
+          : pending
+            ? "Saving profile..."
+            : "Save profile"}
       </button>
     </form>
   );
