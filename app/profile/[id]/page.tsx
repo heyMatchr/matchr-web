@@ -54,18 +54,25 @@ function ProfilePanel({
   title: string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 px-4 py-5 backdrop-blur-sm sm:px-6">
-      <div className="mx-auto flex max-h-[86vh] max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-300/20 bg-neutral-950 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-neutral-900 px-4 py-3">
+    <div className="fixed inset-0 z-50 isolate flex items-end justify-center overflow-hidden bg-black/70 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:items-center sm:px-6">
+      <Link
+        aria-label="Close panel"
+        className="absolute inset-0 z-0"
+        href={href}
+      />
+      <div className="relative z-10 flex max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-300/20 bg-neutral-950 shadow-2xl sm:max-h-[min(760px,calc(100dvh-2rem))]">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-900 bg-neutral-950/95 px-4 py-3 backdrop-blur">
           <p className="text-sm font-black text-neutral-100">{title}</p>
           <Link
             href={href}
-            className="rounded-full border border-neutral-800 px-3 py-1 text-sm text-neutral-300 transition-colors hover:border-neutral-600 hover:text-white"
+            className="min-h-11 rounded-full border border-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-600 hover:text-white"
           >
             Close
           </Link>
         </div>
-        <div className="overflow-y-auto p-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          {children}
+        </div>
       </div>
     </div>
   );
