@@ -82,6 +82,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
     { data: receiverProfile },
     { data: wallet },
     { data: premiumSubscriptions },
+    { data: receiverPreviewVideo },
     giftCatalog,
     messageRules,
     creatorSplit,
@@ -105,6 +106,15 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
           .eq("status", "active")
           .order("expires_at", { ascending: false })
           .limit(5),
+        supabase
+          .from("profile_media")
+          .select("id, media_url, duration_seconds")
+          .eq("user_id", receiverId)
+          .eq("media_type", "preview_video")
+          .eq("active", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
         getGiftCatalog(supabase),
         getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(
           supabase,
@@ -180,6 +190,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
           receiverGenderIdentity={receiverProfile?.gender_identity ?? null}
           receiverId={receiverId}
           receiverName={receiverProfile?.display_name ?? "Chat"}
+          receiverPreviewVideo={receiverPreviewVideo ?? null}
           receiverPublicId={receiverProfile?.public_id ?? null}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
         />

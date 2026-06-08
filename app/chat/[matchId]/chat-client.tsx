@@ -74,6 +74,11 @@ type ChatClientProps = {
   receiverGenderIdentity: string | null;
   receiverId: string;
   receiverName: string;
+  receiverPreviewVideo: {
+    duration_seconds: number | null;
+    id: string;
+    media_url: string;
+  } | null;
   receiverPublicId: string | null;
   supabaseUrl: string;
 };
@@ -129,6 +134,7 @@ export function ChatClient({
   receiverGenderIdentity,
   receiverId,
   receiverName,
+  receiverPreviewVideo,
   receiverPublicId,
   supabaseUrl,
 }: ChatClientProps) {
@@ -152,6 +158,7 @@ export function ChatClient({
   const [chatToast, setChatToast] = useState("");
   const [privacyWarning, setPrivacyWarning] = useState("");
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
+  const [isPreviewVideoOpen, setIsPreviewVideoOpen] = useState(false);
   const [goldModal, setGoldModal] = useState("");
   const [spendableGold, setSpendableGold] = useState(goldBalance);
   const [pendingGift, setPendingGift] = useState<GiftOption | null>(null);
@@ -403,6 +410,31 @@ export function ChatClient({
     const timer = window.setTimeout(() => setChatToast(""), 1800);
     return () => window.clearTimeout(timer);
   }, [chatToast]);
+
+  useEffect(() => {
+    if (!isPreviewVideoOpen) return undefined;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const appShell = document.querySelector<HTMLElement>(".matchr-app-shell");
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    const previousShellOverflow = appShell?.style.overflow;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    if (appShell) {
+      appShell.style.overflow = "hidden";
+    }
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      if (appShell) {
+        appShell.style.overflow = previousShellOverflow ?? "";
+      }
+    };
+  }, [isPreviewVideoOpen]);
 
   useEffect(() => {
     function updateProtectionState() {
@@ -1178,7 +1210,7 @@ export function ChatClient({
 
   return (
     <div
-      className="mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.25rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
+      className="relative mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.25rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
       style={mobileChatHeightStyle}
     >
       <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
@@ -1225,6 +1257,28 @@ export function ChatClient({
           {headerActions}
         </div>
       </div>
+
+      {receiverPreviewVideo?.media_url ? (
+        <button
+          type="button"
+          aria-label="Open profile preview video"
+          onClick={() => setIsPreviewVideoOpen(true)}
+          className="absolute right-2 top-[4.5rem] z-30 h-28 w-20 overflow-hidden rounded-2xl border border-emerald-300/25 bg-neutral-950 shadow-[0_16px_45px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-emerald-300/50 sm:right-4 sm:top-20 sm:h-36 sm:w-24 md:h-40 md:w-28"
+        >
+          <video
+            src={receiverPreviewVideo.media_url}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+          />
+          <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 pb-2 pt-5 text-left text-[10px] font-medium uppercase tracking-[0.18em] text-white/85">
+            Preview
+          </span>
+        </button>
+      ) : null}
 
       <div
         ref={messagesViewportRef}
@@ -1761,6 +1815,54 @@ export function ChatClient({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isPreviewVideoOpen && receiverPreviewVideo?.media_url ? (
+        <div className="fixed inset-0 z-[95] flex h-[100dvh] w-screen items-center justify-center overflow-hidden bg-black/95 text-white backdrop-blur-xl">
+          <div className="relative flex h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-black">
+            <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)]">
+              <div className="flex min-w-0 items-center gap-3 rounded-full border border-white/10 bg-black/50 px-3 py-2 backdrop-blur">
+                <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-950">
+                  {receiverAvatarUrl ? (
+                    <Image
+                      src={receiverAvatarUrl}
+                      alt={receiverName}
+                      width={36}
+                      height={36}
+                      sizes="36px"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
+                      {receiverName.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black">{receiverName}</p>
+                  <p className="text-[11px] text-emerald-100/75">Profile preview</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close profile preview video"
+                onClick={() => setIsPreviewVideoOpen(false)}
+                className="min-h-11 rounded-full border border-white/15 bg-black/55 px-4 py-2.5 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/10"
+              >
+                Close
+              </button>
+            </div>
+            <video
+              src={receiverPreviewVideo.media_url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className="h-full w-full object-contain"
+            />
           </div>
         </div>
       ) : null}
