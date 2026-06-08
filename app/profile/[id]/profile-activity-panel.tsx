@@ -45,7 +45,7 @@ export function ProfileActivityPanel({
         href={href}
       />
       <div className="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-neutral-950 shadow-2xl md:h-auto md:max-h-[min(760px,calc(100dvh_-_2rem))] md:max-w-xl md:rounded-2xl md:border md:border-emerald-300/20">
-        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-900 bg-neutral-950/95 px-4 pb-3 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur md:pt-3">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-900 bg-neutral-950/95 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+24px)] backdrop-blur md:pt-3">
           <p className="text-sm font-black text-neutral-100">{title}</p>
           <Link
             href={href}
