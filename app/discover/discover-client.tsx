@@ -47,6 +47,50 @@ type DiscoverClientProps = {
 
 const sortOptions = ["compatible", "newest", "nearby", "trending", "most followed", "most active"];
 
+function RankingSparkIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4 text-emerald-200"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M12 3.5 14.1 9l5.4 2.1-5.4 2.1L12 18.5l-2.1-5.3-5.4-2.1L9.9 9 12 3.5Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M18.5 4.5v3m-1.5-1.5h3M5.5 16.5v3M4 18h3"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function FilterIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-4 w-4"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M4 7h10m4 0h2M4 17h4m4 0h8"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
+      />
+      <circle cx="16" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="10" cy="17" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 export function DiscoverClient({
   profiles,
   recentlyActive,
@@ -125,8 +169,9 @@ export function DiscoverClient({
     <>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-neutral-300">
-            ✨ Ranked for you
+          <p className="inline-flex items-center gap-2 text-sm font-medium text-neutral-300">
+            <RankingSparkIcon />
+            <span>Ranked for you</span>
           </p>
           <p className="mt-1 text-xs text-emerald-200/70">
             Swipe or double tap.
@@ -134,10 +179,12 @@ export function DiscoverClient({
         </div>
         <button
           type="button"
+          aria-label="Open discover filters"
           onClick={() => setIsFiltersOpen(true)}
-          className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-5 py-2.5 text-sm font-medium text-emerald-50"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3.5 py-2.5 text-sm font-medium text-emerald-50 transition-colors hover:bg-emerald-300/15 sm:px-5"
         >
-          Filters
+          <FilterIcon />
+          <span className="hidden sm:inline">Filter</span>
         </button>
       </div>
       <label className="mt-4 block">

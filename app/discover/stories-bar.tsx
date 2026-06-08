@@ -72,11 +72,71 @@ const emptyEngagement: StoryEngagement = {
 };
 
 const STORY_REACTIONS = [
-  { icon: "💚", label: "Heart", type: "heart" },
-  { icon: "🔥", label: "Fire", type: "fire" },
-  { icon: "👀", label: "Eyes", type: "eyes" },
-  { icon: "💎", label: "Emerald", type: "emerald" },
+  { label: "Heart", type: "heart" },
+  { label: "Fire", type: "fire" },
+  { label: "Eyes", type: "eyes" },
+  { label: "Emerald", type: "emerald" },
 ];
+
+function StoryReactionIcon({ type }: { type: string }) {
+  if (type === "heart") {
+    return (
+      <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+        <path
+          d="M12 19.5s-7-4.1-7-9.2A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.3c0 5.1-7 9.2-7 9.2Z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+      </svg>
+    );
+  }
+
+  if (type === "fire") {
+    return (
+      <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+        <path
+          d="M12 21c-3.1 0-5.5-2.2-5.5-5.4 0-2.8 2-4.5 3.5-6.1.9-1 1.7-2.1 1.7-4.1 2.7 1.4 5.8 4.7 5.8 9.6 0 3.5-2.3 6-5.5 6Z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M12.1 18.2c-1.2 0-2.1-.8-2.1-2 0-1 .7-1.6 1.2-2.2.4-.4.7-.8.7-1.5 1.1.6 2.2 1.8 2.2 3.5 0 1.3-.8 2.2-2 2.2Z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.5"
+        />
+      </svg>
+    );
+  }
+
+  if (type === "eyes") {
+    return (
+      <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+        <path
+          d="M3.5 12s3.1-5 8.5-5 8.5 5 8.5 5-3.1 5-8.5 5-8.5-5-8.5-5Z"
+          stroke="currentColor"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        />
+        <circle cx="12" cy="12" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m12 3.8 7 7.1-7 9.3-7-9.3 7-7.1Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <path d="M5 10.9h14M9.2 4.7 12 10.9l2.8-6.2" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
 
 const backgroundClasses: Record<string, string> = {
   emerald: "bg-[radial-gradient(circle_at_top,_rgba(52,211,153,0.45),_#020617_62%)]",
@@ -860,13 +920,13 @@ export function StoriesBar({
     const sent = await sendStoryDm(
       activeStory.user_id,
       "story_reaction",
-      `Story reaction: ${reaction?.icon ?? reactionType}`,
+      `Story reaction: ${reaction?.label ?? reactionType}`,
       { reactionType },
     );
 
     await supabase.from("notifications").insert({
       actor_id: currentUserId,
-      body: `Reacted to your story with ${reaction?.icon ?? reactionType}.`,
+      body: `Reacted to your story with ${reaction?.label ?? reactionType}.`,
       metadata: { reaction_type: reactionType, story_id: activeStory.id },
       title: "Story reaction",
       type: "story_reaction",
@@ -1322,13 +1382,13 @@ export function StoriesBar({
                         type="button"
                         aria-label={reaction.label}
                         onClick={() => void reactToStory(reaction.type)}
-                        className={`grid h-10 w-10 flex-1 place-items-center rounded-full border text-lg transition-all duration-300 hover:border-emerald-200/50 hover:bg-emerald-300/10 sm:h-12 sm:w-12 sm:text-xl ${
+                        className={`grid h-10 w-10 flex-1 place-items-center rounded-full border text-emerald-100 transition-all duration-300 hover:border-emerald-200/50 hover:bg-emerald-300/10 sm:h-12 sm:w-12 ${
                           selectedReaction === reaction.type
                             ? "scale-110 border-emerald-200/60 bg-emerald-300/15 shadow-[0_0_28px_rgba(16,185,129,0.18)]"
                             : "border-white/10 bg-white/[0.06]"
                         }`}
                       >
-                        {reaction.icon}
+                        <StoryReactionIcon type={reaction.type} />
                       </button>
                     ))}
                   </div>
