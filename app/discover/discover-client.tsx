@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { memo, useCallback, useMemo, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import {
   getProfileHref,
@@ -165,6 +165,31 @@ export function DiscoverClient({
     });
   }, []);
 
+  useEffect(() => {
+    if (!isFiltersOpen) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+    const appShell = document.querySelector<HTMLElement>(".matchr-app-shell");
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = body.style.overflow;
+    const previousShellOverflow = appShell?.style.overflow;
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    if (appShell) {
+      appShell.style.overflow = "hidden";
+    }
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      body.style.overflow = previousBodyOverflow;
+      if (appShell) {
+        appShell.style.overflow = previousShellOverflow ?? "";
+      }
+    };
+  }, [isFiltersOpen]);
+
   return (
     <>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
@@ -232,72 +257,84 @@ export function DiscoverClient({
       )}
 
       {isFiltersOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
-          <div className="max-h-[84vh] w-full overflow-y-auto rounded-3xl border border-neutral-800 bg-black p-5">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-[100] isolate flex h-[100dvh] w-screen overflow-hidden bg-black/75 backdrop-blur-sm md:items-center md:justify-center md:p-6">
+          <button
+            type="button"
+            aria-label="Close filters"
+            className="absolute inset-0 z-0 hidden md:block"
+            onClick={() => setIsFiltersOpen(false)}
+          />
+          <div className="relative z-10 flex h-[100dvh] w-full flex-col overflow-hidden bg-black shadow-2xl md:h-auto md:max-h-[min(760px,calc(100dvh_-_2rem))] md:max-w-xl md:rounded-3xl md:border md:border-neutral-800">
+            <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-900 bg-black/95 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+24px)] backdrop-blur md:pt-5">
               <h2 className="text-xl font-black">Discover filters</h2>
-              <button onClick={() => setIsFiltersOpen(false)} className="text-sm text-neutral-400">
+              <button
+                type="button"
+                onClick={() => setIsFiltersOpen(false)}
+                className="min-h-11 rounded-full border border-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-600 hover:text-white"
+              >
                 Close
               </button>
             </div>
-            <div className="mt-5 grid gap-4">
-              <label className="text-sm text-neutral-300">
-                Sort
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-[max(env(safe-area-inset-bottom),1rem)]">
+              <div className="grid gap-4">
+                <label className="text-sm text-neutral-300">
+                  Sort
+                  <select
+                    value={sortBy}
+                    onChange={(event) => setSortBy(event.target.value)}
+                    className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
+                  >
+                    {sortOptions.map((option) => (
+                      <option key={option}>{option}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    type="number"
+                    value={filters.minAge}
+                    onChange={(event) => setFilters((current) => ({ ...current, minAge: Number(event.target.value) }))}
+                    className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
+                  />
+                  <input
+                    type="number"
+                    value={filters.maxAge}
+                    onChange={(event) => setFilters((current) => ({ ...current, maxAge: Number(event.target.value) }))}
+                    className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
+                  />
+                </div>
                 <select
-                  value={sortBy}
-                  onChange={(event) => setSortBy(event.target.value)}
-                  className="mt-2 w-full rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
+                  value={filters.relationshipIntent}
+                  onChange={(event) => setFilters((current) => ({ ...current, relationshipIntent: event.target.value }))}
+                  className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
                 >
-                  {sortOptions.map((option) => (
-                    <option key={option}>{option}</option>
+                  <option value="">Any relationship intent</option>
+                  {[...new Set(profiles.map((profile) => profile.relationship_intent))].map((intent) => (
+                    <option key={intent}>{intent}</option>
                   ))}
                 </select>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  value={filters.minAge}
-                  onChange={(event) => setFilters((current) => ({ ...current, minAge: Number(event.target.value) }))}
-                  className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
-                />
-                <input
-                  type="number"
-                  value={filters.maxAge}
-                  onChange={(event) => setFilters((current) => ({ ...current, maxAge: Number(event.target.value) }))}
-                  className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
-                />
-              </div>
-              <select
-                value={filters.relationshipIntent}
-                onChange={(event) => setFilters((current) => ({ ...current, relationshipIntent: event.target.value }))}
-                className="rounded-2xl border border-neutral-800 bg-black px-4 py-3 text-white"
-              >
-                <option value="">Any relationship intent</option>
-                {[...new Set(profiles.map((profile) => profile.relationship_intent))].map((intent) => (
-                  <option key={intent}>{intent}</option>
+                {[
+                  ["onlineNow", "Online now"],
+                  ["hasStories", "Has stories"],
+                  ["hasMoments", "Has moments"],
+                  ["verifiedOnly", "Verified only"],
+                  ["acceptingDating", "Accepting dating"],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center justify-between rounded-2xl border border-neutral-800 px-4 py-3 text-sm text-neutral-200">
+                    {label}
+                    <input
+                      type="checkbox"
+                      checked={Boolean(filters[key as keyof typeof filters])}
+                      onChange={(event) =>
+                        setFilters((current) => ({
+                          ...current,
+                          [key]: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
                 ))}
-              </select>
-              {[
-                ["onlineNow", "Online now"],
-                ["hasStories", "Has stories"],
-                ["hasMoments", "Has moments"],
-                ["verifiedOnly", "Verified only"],
-                ["acceptingDating", "Accepting dating"],
-              ].map(([key, label]) => (
-                <label key={key} className="flex items-center justify-between rounded-2xl border border-neutral-800 px-4 py-3 text-sm text-neutral-200">
-                  {label}
-                  <input
-                    type="checkbox"
-                    checked={Boolean(filters[key as keyof typeof filters])}
-                    onChange={(event) =>
-                      setFilters((current) => ({
-                        ...current,
-                        [key]: event.target.checked,
-                      }))
-                    }
-                  />
-                </label>
-              ))}
+              </div>
             </div>
           </div>
         </div>
