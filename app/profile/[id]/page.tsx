@@ -54,13 +54,13 @@ function ProfilePanel({
   title: string;
 }) {
   return (
-    <div className="fixed inset-0 z-50 isolate flex items-end justify-center overflow-hidden bg-black/70 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:items-center sm:px-6">
+    <div className="fixed inset-0 z-[80] isolate flex items-end justify-center overflow-hidden bg-black/70 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-sm sm:items-center sm:px-6">
       <Link
         aria-label="Close panel"
         className="absolute inset-0 z-0"
         href={href}
       />
-      <div className="relative z-10 flex max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-300/20 bg-neutral-950 shadow-2xl sm:max-h-[min(760px,calc(100dvh-2rem))]">
+      <div className="relative z-10 flex max-h-[calc(100dvh_-_1.5rem_-_env(safe-area-inset-top)_-_env(safe-area-inset-bottom))] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-emerald-300/20 bg-neutral-950 shadow-2xl sm:max-h-[min(760px,calc(100dvh_-_2rem))]">
         <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-neutral-900 bg-neutral-950/95 px-4 py-3 backdrop-blur">
           <p className="text-sm font-black text-neutral-100">{title}</p>
           <Link
@@ -70,7 +70,7 @@ function ProfilePanel({
             Close
           </Link>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
           {children}
         </div>
       </div>
@@ -573,6 +573,47 @@ export default async function ProfilePage({
               </div>
             </div>
 
+            <div className="mt-3 overflow-hidden rounded-xl border border-neutral-900 bg-white/[0.03]">
+              {profile.id === user.id ? (
+                <Link
+                  href={panelHref("visitors")}
+                  className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+                >
+                  <span className="text-neutral-200">Visitors</span>
+                  <span className="text-neutral-500">
+                    {viewsResult.count ?? 0} &gt;
+                  </span>
+                </Link>
+              ) : null}
+              <Link
+                href={panelHref("followers")}
+                className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+              >
+                <span className="text-neutral-200">Followers</span>
+                <span className="text-neutral-500">
+                  {followersResult.count ?? 0} &gt;
+                </span>
+              </Link>
+              <Link
+                href={panelHref("following")}
+                className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+              >
+                <span className="text-neutral-200">Following</span>
+                <span className="text-neutral-500">
+                  {followingResult.count ?? 0} &gt;
+                </span>
+              </Link>
+              <Link
+                href={panelHref("moments")}
+                className="flex items-center justify-between gap-3 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+              >
+                <span className="text-neutral-200">Moments</span>
+                <span className="text-neutral-500">
+                  {profileMomentsResult.data?.length ?? 0} &gt;
+                </span>
+              </Link>
+            </div>
+
             <div className="mt-4 flex flex-wrap gap-2">
               {profileBadges.map((badge) => (
                 <span
@@ -763,187 +804,141 @@ export default async function ProfilePage({
               </div>
             ) : null}
 
-            <div className="mt-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-                Activity
-              </p>
-              <div className="mt-2 overflow-hidden rounded-xl border border-neutral-900 bg-white/[0.03]">
-                {profile.id === user.id ? (
-                  <Link
-                    href={panelHref("visitors")}
-                    className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
+          </div>
+        </div>
+        {activePanel === "visitors" && profile.id === user.id ? (
+          <ProfilePanel href={profileHref} title="Visitors">
+            {recentVisitors.length > 0 ? (
+              <div className="grid gap-2">
+                {recentVisitors.map((visitor) => (
+                  <div
+                    key={`${visitor?.id}-${visitor?.viewed_at}`}
+                    className="flex items-center gap-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-3"
                   >
-                    <span className="text-neutral-200">Visitors</span>
-                    <span className="text-neutral-500">
-                      {viewsResult.count ?? 0} &gt;
-                    </span>
-                  </Link>
-                ) : null}
-                <Link
-                  href={panelHref("followers")}
-                  className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
-                >
-                  <span className="text-neutral-200">Followers</span>
-                  <span className="text-neutral-500">
-                    {followersResult.count ?? 0} &gt;
-                  </span>
-                </Link>
-                <Link
-                  href={panelHref("following")}
-                  className="flex items-center justify-between gap-3 border-b border-neutral-900 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
-                >
-                  <span className="text-neutral-200">Following</span>
-                  <span className="text-neutral-500">
-                    {followingResult.count ?? 0} &gt;
-                  </span>
-                </Link>
-                <Link
-                  href={panelHref("moments")}
-                  className="flex items-center justify-between gap-3 px-3 py-3 text-sm transition-colors hover:bg-white/[0.04]"
-                >
-                  <span className="text-neutral-200">Moments</span>
-                  <span className="text-neutral-500">
-                    {profileMomentsResult.data?.length ?? 0} &gt;
-                  </span>
-                </Link>
-              </div>
-            </div>
-
-            {activePanel === "visitors" && profile.id === user.id ? (
-              <ProfilePanel href={profileHref} title="Visitors">
-                {recentVisitors.length > 0 ? (
-                  <div className="grid gap-2">
-                    {recentVisitors.map((visitor) => (
-                      <div
-                        key={`${visitor?.id}-${visitor?.viewed_at}`}
-                        className="flex items-center gap-3 rounded-lg border border-neutral-900 bg-white/[0.03] p-3"
-                      >
-                        <Link
-                          href={visitor ? getProfileHref(visitor) : "#"}
-                          className="flex min-w-0 flex-1 items-center gap-3"
-                        >
-                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-neutral-950">
-                            {visitor?.avatar_url ? (
-                              <Image
-                                src={visitor.avatar_url}
-                                alt={visitor.display_name}
-                                width={44}
-                                height={44}
-                                sizes="44px"
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
-                                {initialFor(visitor?.display_name)}
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-neutral-100">
-                              {visitor?.display_name ?? "Someone"}
-                              {visitor?.age ? `, ${visitor.age}` : ""}
-                            </p>
-                            <p className="truncate text-xs text-neutral-500">
-                              {visitor?.location}
-                            </p>
-                          </div>
-                        </Link>
-                        {visitor?.id !== user.id ? (
-                          <FollowButton
-                            compact
-                            initialFollowing={currentUserFollowingIds.has(
-                              visitor?.id ?? "",
-                            )}
-                            profileUserId={visitor?.id ?? ""}
-                          />
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-500">No visitors yet</p>
-                )}
-              </ProfilePanel>
-            ) : null}
-
-            {activePanel === "followers" ? (
-              <ProfilePanel href={profileHref} title="Followers">
-                {followers.length > 0 ? (
-                  <div className="grid gap-2">
-                    {followers.map((follower) => (
-                      <Link
-                        key={follower?.id}
-                        href={follower ? getProfileHref(follower) : "#"}
-                        className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 text-sm text-neutral-200 transition-colors hover:border-neutral-700"
-                      >
-                        {follower?.display_name}
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-500">Followers 0</p>
-                )}
-              </ProfilePanel>
-            ) : null}
-
-            {activePanel === "following" ? (
-              <ProfilePanel href={profileHref} title="Following">
-                {following.length > 0 ? (
-                  <div className="grid gap-2">
-                    {following.map((followedProfile) => (
-                      <Link
-                        key={followedProfile?.id}
-                        href={followedProfile ? getProfileHref(followedProfile) : "#"}
-                        className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 text-sm text-neutral-200 transition-colors hover:border-neutral-700"
-                      >
-                        {followedProfile?.display_name}
-                      </Link>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-500">Following 0</p>
-                )}
-              </ProfilePanel>
-            ) : null}
-
-            {activePanel === "moments" ? (
-              <ProfilePanel href={profileHref} title="Moments">
-                {profileMomentsResult.data?.length ? (
-                  <div className="grid grid-cols-3 gap-2">
-                    {profileMomentsResult.data.map((moment) => (
-                      <Link
-                        key={moment.id}
-                        href="/moments"
-                        className="aspect-square overflow-hidden rounded-lg bg-neutral-950"
-                      >
-                        {moment.media_type === "video" ? (
-                          <video
-                            src={moment.media_url}
-                            muted
-                            playsInline
-                            preload="metadata"
+                    <Link
+                      href={visitor ? getProfileHref(visitor) : "#"}
+                      className="flex min-w-0 flex-1 items-center gap-3"
+                    >
+                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-neutral-950">
+                        {visitor?.avatar_url ? (
+                          <Image
+                            src={visitor.avatar_url}
+                            alt={visitor.display_name}
+                            width={44}
+                            height={44}
+                            sizes="44px"
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <Image
-                            src={moment.media_url}
-                            alt=""
-                            width={220}
-                            height={220}
-                            sizes="(min-width: 640px) 160px, 33vw"
-                            className="h-full w-full object-cover"
-                          />
+                          <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
+                            {initialFor(visitor?.display_name)}
+                          </div>
                         )}
-                      </Link>
-                    ))}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-neutral-100">
+                          {visitor?.display_name ?? "Someone"}
+                          {visitor?.age ? `, ${visitor.age}` : ""}
+                        </p>
+                        <p className="truncate text-xs text-neutral-500">
+                          {visitor?.location}
+                        </p>
+                      </div>
+                    </Link>
+                    {visitor?.id !== user.id ? (
+                      <FollowButton
+                        compact
+                        initialFollowing={currentUserFollowingIds.has(
+                          visitor?.id ?? "",
+                        )}
+                        profileUserId={visitor?.id ?? ""}
+                      />
+                    ) : null}
                   </div>
-                ) : (
-                  <p className="text-sm text-neutral-500">No moments yet</p>
-                )}
-              </ProfilePanel>
-            ) : null}
-          </div>
-        </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500">No visitors yet</p>
+            )}
+          </ProfilePanel>
+        ) : null}
+
+        {activePanel === "followers" ? (
+          <ProfilePanel href={profileHref} title="Followers">
+            {followers.length > 0 ? (
+              <div className="grid gap-2">
+                {followers.map((follower) => (
+                  <Link
+                    key={follower?.id}
+                    href={follower ? getProfileHref(follower) : "#"}
+                    className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 text-sm text-neutral-200 transition-colors hover:border-neutral-700"
+                  >
+                    {follower?.display_name}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500">Followers 0</p>
+            )}
+          </ProfilePanel>
+        ) : null}
+
+        {activePanel === "following" ? (
+          <ProfilePanel href={profileHref} title="Following">
+            {following.length > 0 ? (
+              <div className="grid gap-2">
+                {following.map((followedProfile) => (
+                  <Link
+                    key={followedProfile?.id}
+                    href={followedProfile ? getProfileHref(followedProfile) : "#"}
+                    className="rounded-lg border border-neutral-900 bg-white/[0.03] p-3 text-sm text-neutral-200 transition-colors hover:border-neutral-700"
+                  >
+                    {followedProfile?.display_name}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500">Following 0</p>
+            )}
+          </ProfilePanel>
+        ) : null}
+
+        {activePanel === "moments" ? (
+          <ProfilePanel href={profileHref} title="Moments">
+            {profileMomentsResult.data?.length ? (
+              <div className="grid grid-cols-3 gap-2">
+                {profileMomentsResult.data.map((moment) => (
+                  <Link
+                    key={moment.id}
+                    href="/moments"
+                    className="aspect-square overflow-hidden rounded-lg bg-neutral-950"
+                  >
+                    {moment.media_type === "video" ? (
+                      <video
+                        src={moment.media_url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Image
+                        src={moment.media_url}
+                        alt=""
+                        width={220}
+                        height={220}
+                        sizes="(min-width: 640px) 160px, 33vw"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-500">No moments yet</p>
+            )}
+          </ProfilePanel>
+        ) : null}
     </AppShell>
   );
 }
