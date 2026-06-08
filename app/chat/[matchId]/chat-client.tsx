@@ -1822,7 +1822,7 @@ export function ChatClient({
       {isPreviewVideoOpen && receiverPreviewVideo?.media_url ? (
         <div className="fixed inset-0 z-[95] flex h-[100dvh] w-screen items-center justify-center overflow-hidden bg-black/95 text-white backdrop-blur-xl">
           <div className="relative flex h-[100dvh] w-full max-w-2xl flex-col overflow-hidden bg-black">
-            <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+1rem)]">
+            <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+24px)] md:pt-4">
               <div className="flex min-w-0 items-center gap-3 rounded-full border border-white/10 bg-black/50 px-3 py-2 backdrop-blur">
                 <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-950">
                   {receiverAvatarUrl ? (
