@@ -31,6 +31,12 @@ export type DiscoverProfile = {
   location: string;
   momentCount: number;
   pronouns: string | null;
+  previewVideo: {
+    duration_seconds: number | null;
+    media_url: string;
+    storage_path: string;
+    user_id: string;
+  } | null;
   public_id: string | null;
   relationship_intent: string;
   sexual_orientation: string | null;
@@ -91,6 +97,29 @@ function FilterIcon() {
   );
 }
 
+function PlayPreviewIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M9.25 7.75v8.5L16.5 12l-7.25-4.25Z"
+        fill="currentColor"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="9"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
 export function DiscoverClient({
   profiles,
   recentlyActive,
@@ -100,6 +129,7 @@ export function DiscoverClient({
   const [isPending, startTransition] = useTransition();
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [previewProfile, setPreviewProfile] = useState<DiscoverProfile | null>(null);
   const [sortBy, setSortBy] = useState("compatible");
   const [searchText, setSearchText] = useState("");
   const { isUserOnline } = useGlobalPresence();
@@ -166,7 +196,7 @@ export function DiscoverClient({
   }, []);
 
   useEffect(() => {
-    if (!isFiltersOpen) return;
+    if (!isFiltersOpen && !previewProfile) return;
 
     const html = document.documentElement;
     const body = document.body;
@@ -188,7 +218,7 @@ export function DiscoverClient({
         appShell.style.overflow = previousShellOverflow ?? "";
       }
     };
-  }, [isFiltersOpen]);
+  }, [isFiltersOpen, previewProfile]);
 
   return (
     <>
@@ -228,8 +258,16 @@ export function DiscoverClient({
         </p>
       ) : null}
 
-      <ProfileRail title="Active now" profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive} />
-      <ProfileRail title="Trending" profiles={trending} />
+      <ProfileRail
+        onPreview={setPreviewProfile}
+        profiles={liveRecentlyActive.length ? liveRecentlyActive : recentlyActive}
+        title="Active now"
+      />
+      <ProfileRail
+        onPreview={setPreviewProfile}
+        profiles={trending}
+        title="Trending"
+      />
 
       {visibleProfiles.length > 0 ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8 md:gap-5 lg:grid-cols-3">
@@ -239,6 +277,7 @@ export function DiscoverClient({
               disabled={isPending}
               onLike={() => act(profile.id, "like")}
               onPass={() => act(profile.id, "pass")}
+              onPreview={() => setPreviewProfile(profile)}
               priority={index === 0}
               profile={profile}
             />
@@ -339,11 +378,75 @@ export function DiscoverClient({
           </div>
         </div>
       ) : null}
+
+      {previewProfile?.previewVideo?.media_url ? (
+        <div className="fixed inset-0 z-[120] flex h-[100dvh] w-screen flex-col overflow-hidden bg-black">
+          <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/75 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+24px)] backdrop-blur md:px-6 md:pt-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/10 bg-neutral-950">
+                {previewProfile.avatar_url ? (
+                  <Image
+                    src={previewProfile.avatar_url}
+                    alt={previewProfile.display_name}
+                    width={44}
+                    height={44}
+                    sizes="44px"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-500">
+                    {previewProfile.display_name.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">
+                  {previewProfile.display_name}
+                </p>
+                <p className="text-xs text-neutral-400">Profile preview</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Close profile preview video"
+              onClick={() => setPreviewProfile(null)}
+              className="min-h-11 shrink-0 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15"
+            >
+              Close
+            </button>
+          </div>
+          <button
+            type="button"
+            aria-label="Close profile preview video"
+            className="absolute inset-0 z-0"
+            onClick={() => setPreviewProfile(null)}
+          />
+          <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center p-4 pb-[calc(env(safe-area-inset-bottom)+24px)] md:p-8">
+            <video
+              src={previewProfile.previewVideo.media_url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls={false}
+              className="max-h-full w-full max-w-md rounded-3xl border border-white/10 object-contain shadow-2xl md:max-w-lg"
+            />
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
 
-const ProfileRail = memo(function ProfileRail({ profiles, title }: { profiles: DiscoverProfile[]; title: string }) {
+const ProfileRail = memo(function ProfileRail({
+  onPreview,
+  profiles,
+  title,
+}: {
+  onPreview: (profile: DiscoverProfile) => void;
+  profiles: DiscoverProfile[];
+  title: string;
+}) {
   const { isUserOnline } = useGlobalPresence();
 
   if (!profiles.length) return null;
@@ -355,31 +458,42 @@ const ProfileRail = memo(function ProfileRail({ profiles, title }: { profiles: D
       </h2>
       <div className="mt-3 flex gap-3 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
         {profiles.map((profile) => (
-          <Link
+          <div
             key={`${title}-${profile.id}`}
-            href={getProfileHref(profile)}
-            className="w-36 shrink-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3"
+            className="relative w-36 shrink-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3"
           >
-            <div className={`relative aspect-square overflow-hidden rounded-xl bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
-              {profile.avatar_url ? (
-                <Image
-                  src={profile.avatar_url}
-                  alt={profile.display_name}
-                  width={144}
-                  height={144}
-                  loading="lazy"
-                  quality={68}
-                  sizes="144px"
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
-              {profile.isOnline || isUserOnline(profile.id) ? (
-                <span className="absolute right-2 top-2 h-3 w-3 rounded-full border-2 border-black bg-emerald-300 shadow-[0_0_14px_rgba(74,222,128,0.45)]" />
-              ) : null}
-            </div>
-            <p className="mt-2 truncate text-sm font-black">{profile.display_name}</p>
-            <p className="text-xs text-neutral-500">{profile.compatibility}% compatible</p>
-          </Link>
+            <Link href={getProfileHref(profile)}>
+              <div className={`relative aspect-square overflow-hidden rounded-xl bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
+                {profile.avatar_url ? (
+                  <Image
+                    src={profile.avatar_url}
+                    alt={profile.display_name}
+                    width={144}
+                    height={144}
+                    loading="lazy"
+                    quality={68}
+                    sizes="144px"
+                    className="h-full w-full object-cover"
+                  />
+                ) : null}
+                {profile.isOnline || isUserOnline(profile.id) ? (
+                  <span className="absolute right-2 top-2 h-3 w-3 rounded-full border-2 border-black bg-emerald-300 shadow-[0_0_14px_rgba(74,222,128,0.45)]" />
+                ) : null}
+              </div>
+              <p className="mt-2 truncate text-sm font-black">{profile.display_name}</p>
+              <p className="text-xs text-neutral-500">{profile.compatibility}% compatible</p>
+            </Link>
+            {profile.previewVideo ? (
+              <button
+                type="button"
+                aria-label={`Open ${profile.display_name}'s profile preview video`}
+                onClick={() => onPreview(profile)}
+                className="absolute bottom-14 right-5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/65 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/80"
+              >
+                <PlayPreviewIcon className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
         ))}
       </div>
     </section>
@@ -390,12 +504,14 @@ const SwipeCard = memo(function SwipeCard({
   disabled,
   onLike,
   onPass,
+  onPreview,
   priority = false,
   profile,
 }: {
   disabled: boolean;
   onLike: () => void;
   onPass: () => void;
+  onPreview: () => void;
   priority?: boolean;
   profile: DiscoverProfile;
 }) {
@@ -439,6 +555,20 @@ const SwipeCard = memo(function SwipeCard({
           {profile.verified ? <span className="rounded-full border border-white/20 bg-black/45 px-3 py-1 text-xs text-white">Verified</span> : null}
           {profile.hasPremium ? <span className="rounded-full border border-[#D4AF37]/45 bg-black/45 px-3 py-1 text-xs font-black text-[#D4AF37]">✦ Premium</span> : null}
         </div>
+        {profile.previewVideo ? (
+          <button
+            type="button"
+            aria-label={`Open ${profile.display_name}'s profile preview video`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPreview();
+            }}
+            className="absolute bottom-4 right-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-white/20 bg-black/65 px-4 py-2 text-sm font-black text-white shadow-xl backdrop-blur transition-colors hover:bg-black/80"
+          >
+            <PlayPreviewIcon />
+            Preview
+          </button>
+        ) : null}
       </div>
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">

@@ -397,6 +397,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     profileViewsResult,
     premiumResult,
     activeBoostsResult,
+    previewVideosResult,
   ] = await timeAsync("[Perf] Discover profile enrichment", () =>
     Promise.all([
       visibleProfileIds.length
@@ -439,6 +440,14 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
             .select("user_id, status, expires_at")
             .eq("status", "active")
             .gt("expires_at", new Date().toISOString())
+            .in("user_id", visibleProfileIds)
+        : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase
+            .from("profile_media")
+            .select("user_id, media_url, storage_path, duration_seconds")
+            .eq("media_type", "preview_video")
+            .eq("active", true)
             .in("user_id", visibleProfileIds)
         : Promise.resolve({ data: [] }),
     ]),
@@ -491,6 +500,17 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   );
   const boostedUserIds = new Set(
     activeBoostsResult.data?.map((boost) => boost.user_id) ?? [],
+  );
+  const previewVideoByUserId = new Map(
+    previewVideosResult.data?.map((previewVideo) => [
+      previewVideo.user_id,
+      {
+        duration_seconds: previewVideo.duration_seconds ?? null,
+        media_url: previewVideo.media_url,
+        storage_path: previewVideo.storage_path,
+        user_id: previewVideo.user_id,
+      },
+    ]) ?? [],
   );
   const profileViewCounts = countBy(profileViewsResult.data, "viewed_user_id");
   const latestViewerViewByUser = new Map<string, string>();
@@ -550,6 +570,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       hasStories,
       id: profile.id,
       public_id: profile.public_id ?? null,
+      previewVideo: previewVideoByUserId.get(profile.id) ?? null,
       interests: profile.interests ?? [],
       isOnline,
       location: profile.location || "Private",
