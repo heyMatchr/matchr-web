@@ -156,6 +156,7 @@ export default async function ProfilePage({
     walletResult,
     premiumResult,
     giftsReceivedResult,
+    activePreviewVideoResult,
     viewedSettingsResult,
   ] = await timeAsync("[Perf] Profile detail query group", () =>
     Promise.all([
@@ -237,6 +238,15 @@ export default async function ProfilePage({
         .select("id", { count: "exact", head: true })
         .eq("receiver_id", profile.id),
       supabase
+        .from("profile_media")
+        .select("id, media_url, duration_seconds")
+        .eq("user_id", profile.id)
+        .eq("media_type", "preview_video")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
         .from("user_settings")
         .select("private_profile, hide_followers_count, hide_following_count, allow_profile_views")
         .eq("user_id", profile.id)
@@ -251,6 +261,7 @@ export default async function ProfilePage({
     redirect("/discover");
   }
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
+  const activePreviewVideo = activePreviewVideoResult.data;
 
   const recentViewerIds =
     recentViewsResult.data?.map((view) => view.viewer_id) ?? [];
@@ -389,7 +400,24 @@ export default async function ProfilePage({
               hasActiveStories ? "ring-2 ring-emerald-300/70" : ""
             }`}
           >
-            {profile.avatar_url ? (
+            {activePreviewVideo?.media_url ? (
+              <div className="relative h-full min-h-[340px] w-full md:min-h-[420px]">
+                <video
+                  src={activePreviewVideo.media_url}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-cover"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent p-4">
+                  <span className="inline-flex rounded-full border border-white/15 bg-black/45 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur">
+                    Preview
+                  </span>
+                </div>
+              </div>
+            ) : profile.avatar_url ? (
               <Image
                 src={profile.avatar_url}
                 alt={profile.display_name}

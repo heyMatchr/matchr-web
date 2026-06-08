@@ -13,13 +13,26 @@ export default async function EditProfilePage() {
     redirect("/login?next=/profile/edit");
   }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select(
-      "id, display_name, age, gender, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, interested_in, occupation, relationship_intent, location, interests, bio, avatar_url, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for, onboarding_completed",
-    )
-    .eq("id", user.id)
-    .maybeSingle();
+  const [profileResult, previewVideoResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select(
+        "id, display_name, age, gender, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, interested_in, occupation, relationship_intent, location, interests, bio, avatar_url, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for, onboarding_completed",
+      )
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("profile_media")
+      .select("id, media_url, duration_seconds")
+      .eq("user_id", user.id)
+      .eq("media_type", "preview_video")
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const { data: profile, error } = profileResult;
 
   if (error) {
     throw new Error(error.message);
@@ -60,7 +73,10 @@ export default async function EditProfilePage() {
         </div>
       </div>
 
-      <ProfileEditForm profile={profile} />
+      <ProfileEditForm
+        activePreviewVideo={previewVideoResult.data ?? null}
+        profile={profile}
+      />
     </AppShell>
   );
 }

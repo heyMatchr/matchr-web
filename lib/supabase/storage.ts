@@ -29,3 +29,15 @@ export const MEDIA_ALLOWED_TYPES = [
 ] as const;
 
 export const MEDIA_MAX_SIZE_BYTES = 50 * 1024 * 1024;
+
+export const PROFILE_MEDIA_BUCKET_NAME = "profile-media";
+
+export const PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+] as const;
+
+export const PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES = 20 * 1024 * 1024;
+
+export const PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS = 15;

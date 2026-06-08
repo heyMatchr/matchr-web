@@ -7,6 +7,10 @@ import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_BUCKET_NAME,
   AVATAR_MAX_SIZE_BYTES,
+  PROFILE_MEDIA_BUCKET_NAME,
+  PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES,
+  PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS,
+  PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
 import type { ProfileEditFormState } from "./types";
 
@@ -31,6 +35,20 @@ function getAvatarExtension(file: File) {
   }
 
   return file.type.split("/").pop() || "jpg";
+}
+
+function getPreviewVideoExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["mp4", "webm", "mov"].includes(extension)) {
+    return extension;
+  }
+
+  if (file.type === "video/quicktime") {
+    return "mov";
+  }
+
+  return file.type.split("/").pop() || "mp4";
 }
 
 export async function updateProfile(
@@ -64,6 +82,8 @@ export async function updateProfile(
   const showOrientationOnProfile =
     formData.get("show_orientation_on_profile") === "on";
   const avatar = formData.get("avatar");
+  const previewVideo = formData.get("preview_video");
+  const previewVideoDuration = Number(getFormString(formData, "preview_video_duration"));
   const age = Number(ageValue);
 
   if (
@@ -102,6 +122,10 @@ export async function updateProfile(
 
   let avatarUrl: string | null = null;
   let uploadedAvatarPath = "";
+  let savedPreviewVideoDuration: number | null = null;
+  let savedPreviewVideoMimeType = "";
+  let previewVideoUrl = "";
+  let uploadedPreviewVideoPath = "";
 
   if (avatar instanceof File && avatar.size > 0) {
     if (!AVATAR_ALLOWED_TYPES.includes(avatar.type as (typeof AVATAR_ALLOWED_TYPES)[number])) {
@@ -143,6 +167,84 @@ export async function updateProfile(
     avatarUrl = publicUrl;
   }
 
+  if (previewVideo instanceof File && previewVideo.size > 0) {
+    if (
+      !PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES.includes(
+        previewVideo.type as (typeof PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES)[number],
+      )
+    ) {
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
+      }
+
+      return { message: "Upload an MP4, WebM, or MOV preview video." };
+    }
+
+    if (previewVideo.size > PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES) {
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
+      }
+
+      return { message: "Keep preview videos under 20 MB." };
+    }
+
+    if (
+      !Number.isFinite(previewVideoDuration) ||
+      previewVideoDuration <= 0 ||
+      previewVideoDuration > PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS
+    ) {
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
+      }
+
+      return { message: "Keep preview videos at 15 seconds or less." };
+    }
+
+    uploadedPreviewVideoPath = `${user.id}/preview-${Date.now()}.${getPreviewVideoExtension(
+      previewVideo,
+    )}`;
+
+    const { error: previewUploadError } = await supabase.storage
+      .from(PROFILE_MEDIA_BUCKET_NAME)
+      .upload(uploadedPreviewVideoPath, previewVideo, {
+        cacheControl: "3600",
+        contentType: previewVideo.type,
+      });
+
+    if (previewUploadError) {
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
+      }
+
+      return {
+        message:
+          previewUploadError.message ||
+          "Preview video upload failed. Check the profile-media bucket setup.",
+      };
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage
+      .from(PROFILE_MEDIA_BUCKET_NAME)
+      .getPublicUrl(uploadedPreviewVideoPath);
+
+    if (!publicUrl) {
+      await supabase.storage
+        .from(PROFILE_MEDIA_BUCKET_NAME)
+        .remove([uploadedPreviewVideoPath]);
+      if (uploadedAvatarPath) {
+        await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
+      }
+
+      return { message: "Preview video uploaded, but no public URL was generated." };
+    }
+
+    previewVideoUrl = publicUrl;
+    savedPreviewVideoDuration = previewVideoDuration;
+    savedPreviewVideoMimeType = previewVideo.type;
+  }
+
   const updates = {
     display_name: displayName,
     age,
@@ -182,8 +284,50 @@ export async function updateProfile(
     if (uploadedAvatarPath) {
       await supabase.storage.from(AVATAR_BUCKET_NAME).remove([uploadedAvatarPath]);
     }
+    if (uploadedPreviewVideoPath) {
+      await supabase.storage
+        .from(PROFILE_MEDIA_BUCKET_NAME)
+        .remove([uploadedPreviewVideoPath]);
+    }
 
     return { message: error.message };
+  }
+
+  if (uploadedPreviewVideoPath && previewVideoUrl) {
+    const { error: deactivateError } = await supabase
+      .from("profile_media")
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq("user_id", user.id)
+      .eq("media_type", "preview_video")
+      .eq("active", true);
+
+    if (deactivateError) {
+      await supabase.storage
+        .from(PROFILE_MEDIA_BUCKET_NAME)
+        .remove([uploadedPreviewVideoPath]);
+
+      return { message: deactivateError.message };
+    }
+
+    const { error: profileMediaError } = await supabase
+      .from("profile_media")
+      .insert({
+        active: true,
+        duration_seconds: savedPreviewVideoDuration,
+        media_type: "preview_video",
+        media_url: previewVideoUrl,
+        mime_type: savedPreviewVideoMimeType,
+        storage_path: uploadedPreviewVideoPath,
+        user_id: user.id,
+      });
+
+    if (profileMediaError) {
+      await supabase.storage
+        .from(PROFILE_MEDIA_BUCKET_NAME)
+        .remove([uploadedPreviewVideoPath]);
+
+      return { message: profileMediaError.message };
+    }
   }
 
   revalidatePath("/profile");

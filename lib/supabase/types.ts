@@ -52,6 +52,20 @@ export type ProfileRow = {
   updated_at: string;
 };
 
+export type ProfileMediaRow = {
+  id: string;
+  user_id: string;
+  media_type: string;
+  storage_path: string;
+  media_url: string;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  mime_type: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ActionLimitRow = {
   id: string;
   user_id: string;
@@ -1437,6 +1451,41 @@ export type Database = {
             columns: ["id"];
             isOneToOne: true;
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      profile_media: {
+        Row: ProfileMediaRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          media_type?: string;
+          storage_path: string;
+          media_url: string;
+          thumbnail_url?: string | null;
+          duration_seconds?: number | null;
+          mime_type?: string | null;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          media_type?: string;
+          storage_path?: string;
+          media_url?: string;
+          thumbnail_url?: string | null;
+          duration_seconds?: number | null;
+          mime_type?: string | null;
+          active?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profile_media_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
         ];

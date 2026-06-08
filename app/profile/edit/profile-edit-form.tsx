@@ -11,6 +11,9 @@ import type { ProfileRow } from "@/lib/supabase/types";
 import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_MAX_SIZE_BYTES,
+  PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES,
+  PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS,
+  PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES,
 } from "@/lib/supabase/storage";
 import { updateProfile } from "./actions";
 import type { ProfileEditFormState } from "./types";
@@ -45,7 +48,14 @@ type EditableProfile = Pick<
   | "weight"
 >;
 
+type ActiveProfilePreviewVideo = {
+  duration_seconds: number | null;
+  id: string;
+  media_url: string;
+};
+
 type ProfileEditFormProps = {
+  activePreviewVideo?: ActiveProfilePreviewVideo | null;
   profile: EditableProfile;
 };
 
@@ -53,9 +63,17 @@ const initialState: ProfileEditFormState = {
   message: "",
 };
 
-export function ProfileEditForm({ profile }: ProfileEditFormProps) {
+export function ProfileEditForm({
+  activePreviewVideo,
+  profile,
+}: ProfileEditFormProps) {
   const [avatarError, setAvatarError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(profile.avatar_url ?? "");
+  const [previewVideoDuration, setPreviewVideoDuration] = useState("");
+  const [previewVideoError, setPreviewVideoError] = useState("");
+  const [previewVideoUrl, setPreviewVideoUrl] = useState(
+    activePreviewVideo?.media_url ?? "",
+  );
   const [state, formAction, pending] = useActionState(
     updateProfile,
     initialState,
@@ -66,8 +84,11 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
       if (avatarPreview && avatarPreview.startsWith("blob:")) {
         URL.revokeObjectURL(avatarPreview);
       }
+      if (previewVideoUrl && previewVideoUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewVideoUrl);
+      }
     };
-  }, [avatarPreview]);
+  }, [avatarPreview, previewVideoUrl]);
 
   function handleAvatarChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -98,6 +119,66 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
     }
 
     setAvatarPreview(URL.createObjectURL(file));
+  }
+
+  function handlePreviewVideoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (previewVideoUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(previewVideoUrl);
+    }
+
+    setPreviewVideoDuration("");
+    setPreviewVideoError("");
+
+    if (!file) {
+      setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      return;
+    }
+
+    if (
+      !PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES.includes(
+        file.type as (typeof PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES)[number],
+      )
+    ) {
+      event.target.value = "";
+      setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoError("Upload an MP4, WebM, or MOV preview video.");
+      return;
+    }
+
+    if (file.size > PROFILE_PREVIEW_VIDEO_MAX_SIZE_BYTES) {
+      event.target.value = "";
+      setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoError("Keep preview videos under 20 MB.");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const duration = video.duration;
+      setPreviewVideoDuration(String(duration));
+
+      if (duration > PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS) {
+        event.target.value = "";
+        URL.revokeObjectURL(objectUrl);
+        setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+        setPreviewVideoDuration("");
+        setPreviewVideoError("Keep preview videos at 15 seconds or less.");
+        return;
+      }
+
+      setPreviewVideoUrl(objectUrl);
+    };
+    video.onerror = () => {
+      event.target.value = "";
+      URL.revokeObjectURL(objectUrl);
+      setPreviewVideoUrl(activePreviewVideo?.media_url ?? "");
+      setPreviewVideoError("Could not read this video. Try another file.");
+    };
+    video.src = objectUrl;
   }
 
   const inputClass =
@@ -148,6 +229,58 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
           role={avatarError ? "alert" : undefined}
         >
           {avatarError}
+        </p>
+      </div>
+
+      <div className="sm:col-span-2">
+        <label
+          htmlFor="preview_video"
+          className="flex min-h-44 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-emerald-300/20 bg-emerald-300/10 px-6 py-7 text-center transition-colors hover:border-emerald-300/40 md:min-h-52"
+        >
+          {previewVideoUrl ? (
+            <video
+              src={previewVideoUrl}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              className="h-36 w-full max-w-xs rounded-2xl object-cover shadow-[0_0_35px_rgba(74,222,128,0.12)]"
+            />
+          ) : (
+            <>
+              <p className="text-sm font-medium text-white">Preview video</p>
+              <p className="mt-2 text-sm leading-6 text-neutral-300">
+                Upload a 10-15s teaser
+              </p>
+              <p className="mt-1 text-xs text-emerald-100/70">
+                Shown on your profile
+              </p>
+            </>
+          )}
+          <span className="mt-4 rounded-full border border-emerald-300/25 px-4 py-2 text-xs text-emerald-100">
+            {previewVideoUrl ? "Replace preview" : "Add preview"}
+          </span>
+        </label>
+        <input
+          id="preview_video"
+          name="preview_video"
+          type="file"
+          accept="video/mp4,video/webm,video/quicktime"
+          disabled={pending}
+          onChange={handlePreviewVideoChange}
+          className="sr-only"
+        />
+        <input
+          name="preview_video_duration"
+          type="hidden"
+          value={previewVideoDuration}
+        />
+        <p
+          aria-live="polite"
+          className="mt-3 min-h-5 text-sm text-red-300"
+          role={previewVideoError ? "alert" : undefined}
+        >
+          {previewVideoError}
         </p>
       </div>
 
@@ -519,7 +652,7 @@ export function ProfileEditForm({ profile }: ProfileEditFormProps) {
 
       <button
         type="submit"
-        disabled={pending || Boolean(avatarError)}
+        disabled={pending || Boolean(avatarError) || Boolean(previewVideoError)}
         className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition-all duration-300 hover:scale-[1.02] hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-neutral-300 sm:col-span-2"
       >
         {pending ? "Saving profile..." : "Save profile"}
