@@ -553,6 +553,12 @@ export default async function ProfilePage({
               )}
             </div>
 
+            <ProfileGallerySection
+              avatarUrl={profile.avatar_url}
+              displayName={profile.display_name}
+              photos={galleryPhotosResult.data ?? []}
+            />
+
             <div className="mt-5 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
               <Link
                 href={panelHref("followers")}
@@ -714,12 +720,6 @@ export default async function ProfilePage({
                 <p className="mt-1.5 leading-6 text-neutral-200">{profile.bio}</p>
               </div>
             ) : null}
-
-            <ProfileGallerySection
-              avatarUrl={profile.avatar_url}
-              displayName={profile.display_name}
-              photos={galleryPhotosResult.data ?? []}
-            />
 
             {intentChips.length ? (
               <div className="mt-5">

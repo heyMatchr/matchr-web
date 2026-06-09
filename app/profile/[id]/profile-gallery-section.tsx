@@ -59,7 +59,6 @@ export function ProfileGallerySection({
       ...galleryItems,
     ];
   }, [avatarUrl, displayName, photos]);
-  const galleryStartIndex = viewerItems.length - photos.length;
   const activeItem =
     activeIndex === null ? null : viewerItems[activeIndex] ?? null;
   const canGoPrevious = activeIndex !== null && activeIndex > 0;
@@ -121,13 +120,6 @@ export function ProfileGallerySection({
     });
   }, []);
 
-  const openGalleryItem = useCallback(
-    (galleryIndex: number) => {
-      setActiveIndex(galleryIndex + galleryStartIndex);
-    },
-    [galleryStartIndex],
-  );
-
   useEffect(() => {
     if (!activeItem) return;
 
@@ -159,7 +151,7 @@ export function ProfileGallerySection({
     [activeIndex, viewerItems],
   );
 
-  if (!photos.length) {
+  if (!viewerItems.length) {
     return null;
   }
 
@@ -302,23 +294,27 @@ export function ProfileGallerySection({
       <div className="mt-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-            Gallery
+            Media
           </p>
-          <p className="text-xs text-neutral-500">{photos.length}/8</p>
+          <p className="text-xs text-neutral-500">{viewerItems.length}</p>
         </div>
-        <div className="mt-2 grid grid-cols-4 gap-2">
-          {photos.map((photo, index) => (
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {viewerItems.map((item, index) => (
             <button
-              key={photo.id}
+              key={item.id}
               type="button"
-              aria-label={`Open ${displayName}'s gallery item ${index + 1}`}
-              onClick={() => openGalleryItem(index)}
-              className="relative aspect-square overflow-hidden rounded-xl border border-neutral-900 bg-neutral-950 transition-colors hover:border-neutral-700"
+              aria-label={`Open ${displayName}'s media item ${index + 1}`}
+              onClick={() => setActiveIndex(index)}
+              className={`relative h-24 w-20 shrink-0 overflow-hidden rounded-2xl border bg-neutral-950 transition-colors hover:border-neutral-700 sm:h-28 sm:w-24 ${
+                item.id === "profile-avatar"
+                  ? "border-emerald-300/40"
+                  : "border-neutral-900"
+              }`}
             >
-              {photo.media_type === "gallery_video" ? (
+              {item.media_type === "gallery_video" ? (
                 <>
                   <video
-                    src={photo.media_url}
+                    src={item.media_url}
                     muted
                     playsInline
                     preload="metadata"
@@ -330,13 +326,18 @@ export function ProfileGallerySection({
                 </>
               ) : (
                 <Image
-                  src={photo.media_url}
-                  alt={`${displayName} profile photo ${index + 1}`}
+                  src={item.media_url}
+                  alt={item.label}
                   fill
-                  sizes="(min-width: 768px) 120px, 25vw"
+                  sizes="(min-width: 768px) 96px, 80px"
                   className="object-cover"
                 />
               )}
+              {item.id === "profile-avatar" ? (
+                <span className="absolute inset-x-1.5 bottom-1.5 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-black text-white">
+                  Profile
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
