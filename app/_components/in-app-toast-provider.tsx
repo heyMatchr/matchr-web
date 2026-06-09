@@ -92,6 +92,7 @@ function notificationShouldToast(notification: NotificationRow) {
     notification.type === "story_gift" ||
     notification.type === "missed_call" ||
     notification.type === "profile_view" ||
+    notification.type === "mutual_attraction" ||
     notification.type === "new_match"
   );
 }

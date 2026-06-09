@@ -15,6 +15,9 @@ type ConversationProfile = {
   display_name: string;
   age: number;
   avatar_url: string | null;
+  has_premium: boolean;
+  preview_video_url: string | null;
+  verified: boolean | null;
 };
 
 type ConversationMessage = Pick<
@@ -79,6 +82,34 @@ function sortConversations(conversations: Conversation[]) {
     const bTime = new Date(b.latestMessage?.created_at ?? b.created_at).getTime();
     return bTime - aTime;
   });
+}
+
+function messageTypeChip(message: ConversationMessage | null) {
+  if (!message) {
+    return null;
+  }
+
+  if (message.message_type === "gift") {
+    return "Gift";
+  }
+
+  if (message.message_type === "call_event") {
+    return "Call";
+  }
+
+  if (message.message_type === "private_media" || message.media_type === "private_media") {
+    return "Private";
+  }
+
+  if (message.media_type === "video" || message.message_type === "video") {
+    return "Video";
+  }
+
+  if (message.media_type === "image" || message.message_type === "image") {
+    return "Photo";
+  }
+
+  return null;
 }
 
 export function MessagesClient({
@@ -218,7 +249,7 @@ export function MessagesClient({
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, display_name, age, avatar_url")
+        .select("id, display_name, age, avatar_url, verified")
         .eq("id", matchedUserId)
         .maybeSingle();
 
@@ -231,6 +262,35 @@ export function MessagesClient({
         return;
       }
 
+      const [premiumResult, mediaResult] = await Promise.all([
+        supabase
+          .from("premium_subscriptions")
+          .select("id, status, expires_at")
+          .eq("user_id", matchedUserId)
+          .eq("status", "active")
+          .order("expires_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("profile_media")
+          .select("media_url, media_type, sort_order, created_at")
+          .in("media_type", ["preview_video", "gallery_photo"])
+          .eq("active", true)
+          .eq("user_id", matchedUserId)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false }),
+      ]);
+      const previewVideoUrl =
+        mediaResult.data?.find((media) => media.media_type === "preview_video")
+          ?.media_url ?? null;
+      const firstGalleryPhotoUrl =
+        mediaResult.data?.find((media) => media.media_type === "gallery_photo")
+          ?.media_url ?? null;
+      const hasPremium =
+        Boolean(premiumResult.data) &&
+        (!premiumResult.data?.expires_at ||
+          new Date(premiumResult.data.expires_at) > new Date());
+
       setConversations((current) => {
         if (current.some((conversation) => conversation.id === nextMatch.id)) {
           return current;
@@ -240,7 +300,12 @@ export function MessagesClient({
           {
             ...nextMatch,
             latestMessage: null,
-            profile,
+            profile: {
+              ...profile,
+              avatar_url: profile.avatar_url ?? firstGalleryPhotoUrl,
+              has_premium: hasPremium,
+              preview_video_url: previewVideoUrl,
+            },
             unreadCount: 0,
           },
           ...current,
@@ -367,6 +432,9 @@ export function MessagesClient({
                 {isUserOnline(conversation.profile.id) ? (
                   <span className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-black bg-emerald-300 shadow-[0_0_14px_rgba(74,222,128,0.45)]" />
                 ) : null}
+                {conversation.profile.preview_video_url ? (
+                  <span className="absolute left-1 top-1 h-2.5 w-2.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.35)]" />
+                ) : null}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -376,13 +444,35 @@ export function MessagesClient({
                       {conversation.profile.display_name},{" "}
                       {conversation.profile.age}
                     </h2>
-                    <p className="mt-1 text-xs text-neutral-500">
-                      {isUserOnline(conversation.profile.id) ? (
-                        <span className="text-emerald-200">Online now</span>
-                      ) : (
-                        "Last seen recently"
-                      )}
-                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {conversation.unreadCount > 0 ? (
+                        <span className="rounded-full bg-emerald-300 px-2 py-0.5 text-[10px] font-black text-black">
+                          New
+                        </span>
+                      ) : null}
+                      {conversation.latestMessage ? (
+                        <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400">
+                          {conversation.latestMessage.sender_id === currentUserId
+                            ? "Waiting"
+                            : "Your turn"}
+                        </span>
+                      ) : null}
+                      {messageTypeChip(conversation.latestMessage) ? (
+                        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-100">
+                          {messageTypeChip(conversation.latestMessage)}
+                        </span>
+                      ) : null}
+                      {conversation.profile.has_premium ? (
+                        <span className="rounded-full border border-[#D4AF37]/35 px-2 py-0.5 text-[10px] font-black text-[#D4AF37]">
+                          Premium
+                        </span>
+                      ) : null}
+                      {conversation.profile.preview_video_url ? (
+                        <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[10px] text-neutral-300">
+                          Preview
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-xs text-neutral-500">
@@ -417,13 +507,20 @@ export function MessagesClient({
       ) : (
         <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">
           <p className="text-xl font-black text-white">No conversations yet</p>
-          <p className="mt-3 text-[15px] leading-6 text-neutral-300">
-            Say hi first when someone catches your eye. A small, specific opener
-            beats waiting for the perfect moment.
-          </p>
-          <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
-            Try: “Your profile has good trouble written all over it.”
-          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/matches"
+              className="rounded-full bg-white px-4 py-2 text-sm font-black text-black"
+            >
+              Matches
+            </Link>
+            <Link
+              href="/discover"
+              className="rounded-full border border-emerald-300/25 px-4 py-2 text-sm text-emerald-100"
+            >
+              Discover
+            </Link>
+          </div>
         </div>
       )}
     </>

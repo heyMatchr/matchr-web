@@ -34,6 +34,8 @@ function formatTime(timestamp: string) {
 }
 
 function toneForType(type: string) {
+  const isMatchType = type.includes("match") || type === "mutual_attraction";
+
   if (type.includes("gift")) {
     return "border-amber-300/35 bg-amber-300/10";
   }
@@ -42,7 +44,7 @@ function toneForType(type: string) {
     return "border-sky-300/25 bg-sky-300/10";
   }
 
-  if (type.includes("match")) {
+  if (isMatchType) {
     return "border-emerald-300/30 bg-emerald-300/10";
   }
 
@@ -64,7 +66,7 @@ function toneForType(type: string) {
 function typeLabel(type: string) {
   if (type.includes("gift")) return "Gift";
   if (type.includes("message") || type.includes("private_media")) return "Message";
-  if (type.includes("match")) return "Match";
+  if (type.includes("match") || type === "mutual_attraction") return "Match";
   if (type.includes("story")) return "Story";
   if (type.includes("view")) return "View";
   if (type.includes("follow")) return "Follow";
@@ -75,7 +77,7 @@ function typeLabel(type: string) {
 function priorityLabel(type: string) {
   if (type.includes("gift")) return "Top";
   if (type.includes("message") || type.includes("private_media")) return "Hot";
-  if (type.includes("match")) return "New";
+  if (type.includes("match") || type === "mutual_attraction") return "New";
   if (type.includes("story")) return "Live";
   if (type.includes("view")) return "Seen";
   if (type.includes("follow")) return "Social";

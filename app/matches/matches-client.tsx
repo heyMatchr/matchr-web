@@ -12,7 +12,12 @@ type MatchProfile = {
   age: number;
   bio: string;
   avatar_url: string | null;
+  card_media_url: string | null;
+  has_active_boost: boolean;
+  has_premium: boolean;
   location: string;
+  preview_video_url: string | null;
+  verified: boolean | null;
 };
 
 export type MatchCard = {
@@ -73,7 +78,7 @@ export function MatchesClient({
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, display_name, age, bio, avatar_url, location")
+        .select("id, display_name, age, bio, avatar_url, location, verified")
         .eq("id", matchedUserId)
         .maybeSingle();
 
@@ -86,6 +91,47 @@ export function MatchesClient({
         return;
       }
 
+      const [
+        premiumResult,
+        activeBoostResult,
+        mediaResult,
+      ] = await Promise.all([
+        supabase
+          .from("premium_subscriptions")
+          .select("id, status, expires_at")
+          .eq("user_id", matchedUserId)
+          .eq("status", "active")
+          .order("expires_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("profile_boosts")
+          .select("id")
+          .eq("user_id", matchedUserId)
+          .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("profile_media")
+          .select("media_url, media_type, sort_order, created_at")
+          .in("media_type", ["preview_video", "gallery_photo"])
+          .eq("active", true)
+          .eq("user_id", matchedUserId)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false }),
+      ]);
+      const previewVideoUrl =
+        mediaResult.data?.find((media) => media.media_type === "preview_video")
+          ?.media_url ?? null;
+      const firstGalleryPhotoUrl =
+        mediaResult.data?.find((media) => media.media_type === "gallery_photo")
+          ?.media_url ?? null;
+      const hasPremium =
+        Boolean(premiumResult.data) &&
+        (!premiumResult.data?.expires_at ||
+          new Date(premiumResult.data.expires_at) > new Date());
+
       setMatches((current) => {
         if (current.some((match) => match.id === nextMatch.id)) {
           return current;
@@ -94,7 +140,13 @@ export function MatchesClient({
         return [
           {
             ...nextMatch,
-            profile,
+            profile: {
+              ...profile,
+              card_media_url: profile.avatar_url ?? firstGalleryPhotoUrl,
+              has_active_boost: Boolean(activeBoostResult.data),
+              has_premium: hasPremium,
+              preview_video_url: previewVideoUrl,
+            },
           },
           ...current,
         ];
@@ -139,7 +191,7 @@ export function MatchesClient({
     <>
       {showMatchedBanner ? (
         <div className="mt-5 rounded-lg border border-emerald-300/30 bg-emerald-300/10 p-4 text-sm text-emerald-100 md:mt-8">
-          It&apos;s a match 🎉 You can start a conversation now.
+          New match. Start a conversation.
         </div>
       ) : null}
 
@@ -158,10 +210,10 @@ export function MatchesClient({
               className="overflow-hidden rounded-lg border border-neutral-800 bg-black/50 transition-all duration-300 hover:-translate-y-0.5 hover:border-neutral-600 hover:shadow-[0_0_35px_rgba(74,222,128,0.08)]"
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-neutral-950">
-                {match.profile.avatar_url ? (
+                {match.profile.card_media_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={match.profile.avatar_url}
+                    src={match.profile.card_media_url}
                     alt={match.profile.display_name}
                     className="h-full w-full object-cover"
                   />
@@ -175,14 +227,43 @@ export function MatchesClient({
                     Online
                   </span>
                 ) : null}
+                <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+                  {match.profile.preview_video_url ? (
+                    <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1 text-xs font-black text-white backdrop-blur">
+                      Preview
+                    </span>
+                  ) : null}
+                  {match.profile.verified ? (
+                    <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1 text-xs text-white backdrop-blur">
+                      Verified
+                    </span>
+                  ) : null}
+                  {match.profile.has_premium ? (
+                    <span className="rounded-full border border-[#D4AF37]/45 bg-black/55 px-3 py-1 text-xs font-black text-[#D4AF37] backdrop-blur">
+                      Premium
+                    </span>
+                  ) : null}
+                  {match.profile.has_active_boost ? (
+                    <span className="rounded-full border border-emerald-300/35 bg-black/55 px-3 py-1 text-xs font-black text-emerald-100 backdrop-blur">
+                      Boosted
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="p-5">
-                <h2 className="text-2xl font-black tracking-tight">
-                  {match.profile.display_name}, {match.profile.age}
-                </h2>
-                <p className="mt-1 text-sm text-neutral-400">
-                  {match.profile.location}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-2xl font-black tracking-tight">
+                      {match.profile.display_name}, {match.profile.age}
+                    </h2>
+                    <p className="mt-1 text-sm text-neutral-400">
+                      {match.profile.location}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-black">
+                    Chat
+                  </span>
+                </div>
                 <p className="mt-4 line-clamp-3 text-sm leading-6 text-neutral-300">
                   {match.profile.bio}
                 </p>
@@ -200,13 +281,20 @@ export function MatchesClient({
       ) : (
         <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">
           <p className="text-xl font-black text-white">No matches yet</p>
-          <p className="mt-3 text-[15px] leading-6 text-neutral-300">
-            Like someone in Discover to start a connection. Completed profiles
-            tend to get noticed faster, so give yours a little more signal.
-          </p>
-          <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
-            Soft nudge: add one detail someone can tease you about.
-          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/discover"
+              className="rounded-full bg-white px-4 py-2 text-sm font-black text-black"
+            >
+              Discover
+            </Link>
+            <Link
+              href="/profile/edit"
+              className="rounded-full border border-emerald-300/25 px-4 py-2 text-sm text-emerald-100"
+            >
+              Improve profile
+            </Link>
+          </div>
         </div>
       )}
     </>

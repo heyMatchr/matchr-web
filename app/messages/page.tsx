@@ -70,7 +70,7 @@ export default async function MessagesPage() {
       matchedUserIds.length
         ? supabase
             .from("profiles")
-            .select("id, display_name, age, avatar_url")
+            .select("id, display_name, age, avatar_url, verified")
             .in("id", matchedUserIds)
         : Promise.resolve({ data: [], error: null }),
       matchIds.length
@@ -104,9 +104,65 @@ export default async function MessagesPage() {
     throw new Error(unreadMessagesResult.error.message);
   }
 
+  const [
+    premiumResult,
+    profileMediaResult,
+  ] = matchedUserIds.length
+    ? await timeAsync("[Perf] Messages profile enrichment", () =>
+        Promise.all([
+          supabase
+            .from("premium_subscriptions")
+            .select("user_id, status, expires_at")
+            .eq("status", "active")
+            .in("user_id", matchedUserIds),
+          supabase
+            .from("profile_media")
+            .select("user_id, media_url, media_type, sort_order, created_at")
+            .in("media_type", ["preview_video", "gallery_photo"])
+            .eq("active", true)
+            .in("user_id", matchedUserIds)
+            .order("sort_order", { ascending: true })
+            .order("created_at", { ascending: false }),
+        ]),
+      )
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
+
+  if (premiumResult.error) {
+    throw new Error(premiumResult.error.message);
+  }
+
+  if (profileMediaResult.error) {
+    throw new Error(profileMediaResult.error.message);
+  }
+
   const profilesByUserId = new Map(
     profilesResult.data.map((profile) => [profile.id, profile]),
   );
+  const premiumUserIds = new Set(
+    premiumResult.data
+      ?.filter((subscription) => {
+        if (subscription.status !== "active") {
+          return false;
+        }
+
+        return !subscription.expires_at || new Date(subscription.expires_at) > new Date();
+      })
+      .map((subscription) => subscription.user_id) ?? [],
+  );
+  const previewVideoByUserId = new Map<string, string>();
+  const firstGalleryPhotoByUserId = new Map<string, string>();
+  profileMediaResult.data?.forEach((media) => {
+    if (media.media_type === "preview_video" && !previewVideoByUserId.has(media.user_id)) {
+      previewVideoByUserId.set(media.user_id, media.media_url);
+    }
+
+    if (media.media_type === "gallery_photo" && !firstGalleryPhotoByUserId.has(media.user_id)) {
+      firstGalleryPhotoByUserId.set(media.user_id, media.media_url);
+    }
+  });
   const latestMessageByMatchId = new Map<string, Pick<
     MessageRow,
     | "content"
@@ -164,31 +220,35 @@ export default async function MessagesPage() {
       latestMessageByMatchId.set(result.data.match_id, result.data);
     }
   });
-  const conversations: Conversation[] = matches
-    .map((match) => {
-      const matchedUserId =
-        match.user_one_id === user.id ? match.user_two_id : match.user_one_id;
+  const conversations: Conversation[] = [];
 
-      if (blockedUserIds.has(matchedUserId)) {
-        return null;
-      }
+  for (const match of matches) {
+    const matchedUserId =
+      match.user_one_id === user.id ? match.user_two_id : match.user_one_id;
 
-      const profile = profilesByUserId.get(matchedUserId);
+    if (blockedUserIds.has(matchedUserId)) {
+      continue;
+    }
 
-      if (!profile) {
-        return null;
-      }
+    const profile = profilesByUserId.get(matchedUserId);
 
-      return {
-        ...match,
-        latestMessage: latestMessageByMatchId.get(match.id) ?? null,
-        profile,
-        unreadCount: unreadCountByMatchId.get(match.id) ?? 0,
-      };
-    })
-    .filter((conversation): conversation is Conversation =>
-      Boolean(conversation),
-    );
+    if (!profile) {
+      continue;
+    }
+
+    conversations.push({
+      ...match,
+      latestMessage: latestMessageByMatchId.get(match.id) ?? null,
+      profile: {
+        ...profile,
+        avatar_url:
+          profile.avatar_url ?? firstGalleryPhotoByUserId.get(profile.id) ?? null,
+        has_premium: premiumUserIds.has(profile.id),
+        preview_video_url: previewVideoByUserId.get(profile.id) ?? null,
+      },
+      unreadCount: unreadCountByMatchId.get(match.id) ?? 0,
+    });
+  }
 
   finishPerfTimer("[Perf] Messages queries", perfStartedAt);
 

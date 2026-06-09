@@ -64,7 +64,7 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
   const { data: profiles, error: profilesError } = matchedUserIds.length
     ? await supabase
         .from("profiles")
-        .select("id, display_name, age, bio, avatar_url, location")
+        .select("id, display_name, age, bio, avatar_url, location, verified")
         .in("id", matchedUserIds)
     : { data: [], error: null };
 
@@ -72,30 +72,106 @@ export default async function MatchesPage({ searchParams }: MatchesPageProps) {
     throw new Error(profilesError.message);
   }
 
+  const [
+    premiumResult,
+    activeBoostsResult,
+    profileMediaResult,
+  ] = matchedUserIds.length
+    ? await Promise.all([
+        supabase
+          .from("premium_subscriptions")
+          .select("user_id, status, expires_at")
+          .eq("status", "active")
+          .in("user_id", matchedUserIds),
+        supabase
+          .from("profile_boosts")
+          .select("user_id, status, expires_at")
+          .eq("status", "active")
+          .gt("expires_at", new Date().toISOString())
+          .in("user_id", matchedUserIds),
+        supabase
+          .from("profile_media")
+          .select("user_id, media_url, media_type, sort_order, created_at")
+          .in("media_type", ["preview_video", "gallery_photo", "gallery_video"])
+          .eq("active", true)
+          .in("user_id", matchedUserIds)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false }),
+      ])
+    : [
+        { data: [], error: null },
+        { data: [], error: null },
+        { data: [], error: null },
+      ];
+
+  if (premiumResult.error) {
+    throw new Error(premiumResult.error.message);
+  }
+
+  if (activeBoostsResult.error) {
+    throw new Error(activeBoostsResult.error.message);
+  }
+
+  if (profileMediaResult.error) {
+    throw new Error(profileMediaResult.error.message);
+  }
+
   const profilesByUserId = new Map(
     profiles?.map((profile) => [profile.id, profile]) ?? [],
   );
-  const matchCards: MatchCard[] = matches
-    .map((match) => {
-      const matchedUserId =
-        match.user_one_id === user.id ? match.user_two_id : match.user_one_id;
+  const premiumUserIds = new Set(
+    premiumResult.data
+      ?.filter((subscription) => {
+        if (subscription.status !== "active") {
+          return false;
+        }
 
-      if (blockedUserIds.has(matchedUserId)) {
-        return null;
-      }
+        return !subscription.expires_at || new Date(subscription.expires_at) > new Date();
+      })
+      .map((subscription) => subscription.user_id) ?? [],
+  );
+  const boostedUserIds = new Set(
+    activeBoostsResult.data?.map((boost) => boost.user_id) ?? [],
+  );
+  const previewVideoByUserId = new Map<string, string>();
+  const firstGalleryPhotoByUserId = new Map<string, string>();
+  profileMediaResult.data?.forEach((media) => {
+    if (media.media_type === "preview_video" && !previewVideoByUserId.has(media.user_id)) {
+      previewVideoByUserId.set(media.user_id, media.media_url);
+    }
 
-      const profile = profilesByUserId.get(matchedUserId);
+    if (media.media_type === "gallery_photo" && !firstGalleryPhotoByUserId.has(media.user_id)) {
+      firstGalleryPhotoByUserId.set(media.user_id, media.media_url);
+    }
+  });
+  const matchCards: MatchCard[] = [];
 
-      if (!profile) {
-        return null;
-      }
+  for (const match of matches ?? []) {
+    const matchedUserId =
+      match.user_one_id === user.id ? match.user_two_id : match.user_one_id;
 
-      return {
-        ...match,
-        profile,
-      };
-    })
-    .filter((match): match is MatchCard => Boolean(match));
+    if (blockedUserIds.has(matchedUserId)) {
+      continue;
+    }
+
+    const profile = profilesByUserId.get(matchedUserId);
+
+    if (!profile) {
+      continue;
+    }
+
+    matchCards.push({
+      ...match,
+      profile: {
+        ...profile,
+        card_media_url:
+          profile.avatar_url ?? firstGalleryPhotoByUserId.get(profile.id) ?? null,
+        has_active_boost: boostedUserIds.has(profile.id),
+        has_premium: premiumUserIds.has(profile.id),
+        preview_video_url: previewVideoByUserId.get(profile.id) ?? null,
+      },
+    });
+  }
 
   return (
     <AppShell
