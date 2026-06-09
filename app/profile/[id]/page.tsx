@@ -716,6 +716,7 @@ export default async function ProfilePage({
             ) : null}
 
             <ProfileGallerySection
+              avatarUrl={profile.avatar_url}
               displayName={profile.display_name}
               photos={galleryPhotosResult.data ?? []}
             />
