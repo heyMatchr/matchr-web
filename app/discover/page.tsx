@@ -529,6 +529,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     const followerCount = followerCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
     const hasActiveBoost = boostedUserIds.has(profile.id);
+    const previewVideo = previewVideoByUserId.get(profile.id) ?? null;
     const isOnline = Boolean(profile.is_online);
     const engagementCount = engagementByUser.get(profile.id) ?? 0;
     const giftCount = giftCounts.get(profile.id) ?? 0;
@@ -548,6 +549,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
         hasActiveBoost,
         hasIncomingLike: incomingLikeIds.has(profile.id),
         hasPremium: premiumUserIds.has(profile.id),
+        hasPreviewVideo: Boolean(previewVideo),
         hasStories,
         momentCount,
         profileViewCount: profileViewCounts.get(profile.id) ?? 0,
@@ -570,7 +572,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       hasStories,
       id: profile.id,
       public_id: profile.public_id ?? null,
-      previewVideo: previewVideoByUserId.get(profile.id) ?? null,
+      previewVideo,
       interests: profile.interests ?? [],
       isOnline,
       location: profile.location || "Private",

@@ -62,7 +62,7 @@ export default async function ProfilePage({
   const profileQuery = supabase
     .from("profiles")
     .select(
-      "id, public_id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
+      "id, public_id, display_name, age, location, bio, avatar_url, occupation, interests, relationship_intent, gender_identity, pronouns, sexual_orientation, show_gender_on_profile, show_orientation_on_profile, verified, phone_verified, identity_verified, moderation_score, under_review, shadow_restricted, trusted_user, height, weight, body_type, relationship_status, country, country_flag, accepting_dating, open_to_long_distance, drinking, smoking, looking_for",
     )
     .eq("onboarding_completed", true);
   const profileResult = await timeAsync(
@@ -211,13 +211,14 @@ export default async function ProfilePage({
         .maybeSingle(),
       supabase
         .from("stories")
-        .select("id")
+        .select("id, created_at")
         .eq("user_id", profile.id)
         .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
         .limit(1),
       supabase
         .from("moments")
-        .select("id, media_url, media_type")
+        .select("id, media_url, media_type, created_at")
         .eq("user_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(6),
@@ -319,12 +320,24 @@ export default async function ProfilePage({
   const profileCompletion = getProfileCompletion({
     avatar_url: profile.avatar_url,
     bio: profile.bio,
+    engagementCount:
+      (followersResult.count ?? 0) + (giftsReceivedResult.count ?? 0),
+    hasPreviewVideo: Boolean(activePreviewVideo?.media_url),
+    identity_verified: profile.identity_verified,
     interests: profile.interests,
+    latestMomentAt: profileMomentsResult.data?.[0]?.created_at ?? null,
+    latestStoryAt: activeStoriesResult.data?.[0]?.created_at ?? null,
     location: profile.location,
     momentsPosted: Boolean(profileMomentsResult.data?.length),
+    phone_verified: profile.phone_verified,
     pronouns: profile.pronouns,
+    relationship_intent: profile.relationship_intent,
+    shadow_restricted: profile.shadow_restricted,
     sexual_orientation: profile.sexual_orientation,
     storyPosted: hasActiveStories,
+    trusted_user: profile.trusted_user,
+    under_review: profile.under_review,
+    verified: profile.verified,
   });
   const completion = profileCompletion.score;
   const activePremium = (premiumResult.data ?? []).find((subscription) =>
@@ -340,11 +353,11 @@ export default async function ProfilePage({
   );
   const completionChecklist = [
     ["Photo", completedKeys.has("photo")],
+    ["Preview", completedKeys.has("preview_video")],
     ["Bio", completedKeys.has("bio")],
     ["Interests", completedKeys.has("interests")],
     ["Story", completedKeys.has("story")],
     ["Moments", completedKeys.has("moment")],
-    ["Location", completedKeys.has("location")],
   ] as const;
   const intentChips = toChipList(profile.relationship_intent);
   const normalizedIntentChips = new Set(

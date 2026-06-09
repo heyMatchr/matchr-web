@@ -1,5 +1,6 @@
 import { profileMatchesIdentityPreferences } from "@/lib/identity";
 import { canAppearInDiscover } from "@/lib/moderation";
+import { calculateProfileQualityScore } from "@/lib/profile-quality";
 
 type DiscoverViewer = {
   id: string;
@@ -42,6 +43,7 @@ type CandidateRankingSignals = {
   hasActiveBoost: boolean;
   hasIncomingLike: boolean;
   hasPremium: boolean;
+  hasPreviewVideo: boolean;
   hasStories: boolean;
   momentCount: number;
   profileViewCount: number;
@@ -106,22 +108,7 @@ export function canUserAppearInDiscover({
 }
 
 export function calculateProfileQuality(candidate: DiscoverCandidate) {
-  const bioLength = candidate.bio?.trim().length ?? 0;
-  const interestCount = candidate.interests?.length ?? 0;
-
-  return clamp(
-    (candidate.avatar_url ? 22 : 0) +
-      (bioLength >= 80 ? 20 : bioLength >= 24 ? 12 : bioLength > 0 ? 6 : 0) +
-      Math.min(18, interestCount * 3) +
-      (candidate.relationship_intent ? 8 : 0) +
-      (candidate.accepting_dating ? 4 : 0) +
-      (candidate.gender_identity ? 5 : 0) +
-      (candidate.verified ? 8 : 0) +
-      (candidate.phone_verified ? 5 : 0) +
-      (candidate.identity_verified ? 6 : 0),
-    0,
-    100,
-  );
+  return calculateProfileQualityScore(candidate);
 }
 
 export function calculateActivityScore(
@@ -180,7 +167,13 @@ export function scoreProfileForUser({
   signals: CandidateRankingSignals;
   viewer: DiscoverViewer;
 }) {
-  const quality = calculateProfileQuality(candidate);
+  const quality = calculateProfileQualityScore({
+    ...candidate,
+    engagementCount: signals.engagementCount + signals.giftCount,
+    hasActiveStory: signals.hasStories,
+    hasPreviewVideo: signals.hasPreviewVideo,
+    momentCount: signals.momentCount,
+  });
   const activity = calculateActivityScore(candidate, signals);
   const engagement =
     Math.min(18, signals.followerCount * 1.5) +
@@ -202,7 +195,7 @@ export function scoreProfileForUser({
 
   return Math.round(
     42 +
-      quality * 0.42 +
+      quality * 0.35 +
       activity +
       engagement +
       positiveAffinity +
