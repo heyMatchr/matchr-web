@@ -454,8 +454,8 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       visibleProfileIds.length
         ? supabase
             .from("profile_media")
-            .select("user_id, media_url, sort_order, created_at")
-            .eq("media_type", "gallery_photo")
+            .select("user_id, media_url, media_type, sort_order, created_at")
+            .in("media_type", ["gallery_photo", "gallery_video"])
             .eq("active", true)
             .in("user_id", visibleProfileIds)
             .order("sort_order", { ascending: true })
@@ -535,7 +535,10 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   const galleryPhotoCounts = countBy(galleryPhotosResult.data, "user_id");
   const firstGalleryPhotoByUserId = new Map<string, string>();
   galleryPhotosResult.data?.forEach((photo) => {
-    if (!firstGalleryPhotoByUserId.has(photo.user_id)) {
+    if (
+      photo.media_type === "gallery_photo" &&
+      !firstGalleryPhotoByUserId.has(photo.user_id)
+    ) {
       firstGalleryPhotoByUserId.set(photo.user_id, photo.media_url);
     }
   });

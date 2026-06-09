@@ -251,9 +251,9 @@ export default async function ProfilePage({
         .maybeSingle(),
       supabase
         .from("profile_media")
-        .select("id, media_url, sort_order, created_at")
+        .select("id, media_url, media_type, duration_seconds, sort_order, created_at")
         .eq("user_id", profile.id)
-        .eq("media_type", "gallery_photo")
+        .in("media_type", ["gallery_photo", "gallery_video"])
         .eq("active", true)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false })

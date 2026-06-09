@@ -35,9 +35,9 @@ export default async function EditProfilePage() {
       .maybeSingle(),
     supabase
       .from("profile_media")
-      .select("id, media_url, storage_path, sort_order, created_at")
+      .select("id, media_url, media_type, mime_type, duration_seconds, storage_path, sort_order, created_at")
       .eq("user_id", user.id)
-      .eq("media_type", "gallery_photo")
+      .in("media_type", ["gallery_photo", "gallery_video"])
       .eq("active", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false })

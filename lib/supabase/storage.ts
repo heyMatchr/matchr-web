@@ -38,7 +38,15 @@ export const PROFILE_GALLERY_PHOTO_ALLOWED_TYPES = [
   "image/webp",
 ] as const;
 
+export const PROFILE_GALLERY_VIDEO_ALLOWED_TYPES = [
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+] as const;
+
 export const PROFILE_GALLERY_PHOTO_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+export const PROFILE_GALLERY_VIDEO_MAX_SIZE_BYTES = 20 * 1024 * 1024;
+export const PROFILE_GALLERY_VIDEO_MAX_DURATION_SECONDS = 15;
 
 export const PROFILE_GALLERY_PHOTO_MAX_COUNT = 8;
 

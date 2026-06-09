@@ -15,6 +15,9 @@ import {
   PROFILE_GALLERY_PHOTO_ALLOWED_TYPES,
   PROFILE_GALLERY_PHOTO_MAX_COUNT,
   PROFILE_GALLERY_PHOTO_MAX_SIZE_BYTES,
+  PROFILE_GALLERY_VIDEO_ALLOWED_TYPES,
+  PROFILE_GALLERY_VIDEO_MAX_DURATION_SECONDS,
+  PROFILE_GALLERY_VIDEO_MAX_SIZE_BYTES,
   PROFILE_MEDIA_BUCKET_NAME,
   PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES,
   PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS,
@@ -68,8 +71,11 @@ type ActiveProfilePreviewVideo = {
 
 type GalleryPhoto = {
   created_at: string;
+  duration_seconds: number | null;
   id: string;
   media_url: string;
+  media_type: string;
+  mime_type: string | null;
   sort_order: number;
   storage_path: string;
 };
@@ -104,11 +110,46 @@ function getPreviewVideoExtension(file: File) {
 function getGalleryPhotoExtension(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
-  if (extension && ["jpg", "jpeg", "png", "webp"].includes(extension)) {
+  if (extension && ["jpg", "jpeg", "png", "webp", "mp4", "webm", "mov"].includes(extension)) {
     return extension;
   }
 
+  if (file.type === "video/quicktime") {
+    return "mov";
+  }
+
   return file.type.split("/").pop() || "jpg";
+}
+
+function isGalleryImage(file: File) {
+  return PROFILE_GALLERY_PHOTO_ALLOWED_TYPES.includes(
+    file.type as (typeof PROFILE_GALLERY_PHOTO_ALLOWED_TYPES)[number],
+  );
+}
+
+function isGalleryVideo(file: File) {
+  return PROFILE_GALLERY_VIDEO_ALLOWED_TYPES.includes(
+    file.type as (typeof PROFILE_GALLERY_VIDEO_ALLOWED_TYPES)[number],
+  );
+}
+
+function getMediaDuration(file: File) {
+  return new Promise<number>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      const duration = video.duration;
+      URL.revokeObjectURL(objectUrl);
+      resolve(duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Could not read this video. Try another file."));
+    };
+    video.src = objectUrl;
+  });
 }
 
 export function ProfileEditForm({
@@ -207,16 +248,23 @@ export function ProfileEditForm({
 
     const remainingSlots = PROFILE_GALLERY_PHOTO_MAX_COUNT - galleryPhotoList.length;
     const selectedFiles = files.slice(0, remainingSlots);
-    const invalidFile = selectedFiles.find(
-      (file) =>
-        !PROFILE_GALLERY_PHOTO_ALLOWED_TYPES.includes(
-          file.type as (typeof PROFILE_GALLERY_PHOTO_ALLOWED_TYPES)[number],
-        ) || file.size > PROFILE_GALLERY_PHOTO_MAX_SIZE_BYTES,
-    );
+    const invalidFile = selectedFiles.find((file) => {
+      if (isGalleryImage(file)) {
+        return file.size > PROFILE_GALLERY_PHOTO_MAX_SIZE_BYTES;
+      }
+
+      if (isGalleryVideo(file)) {
+        return file.size > PROFILE_GALLERY_VIDEO_MAX_SIZE_BYTES;
+      }
+
+      return true;
+    });
 
     if (invalidFile) {
       event.target.value = "";
-      setGalleryActionMessage("Upload JPG, PNG, or WebP photos under 5 MB.");
+      setGalleryActionMessage(
+        "Upload JPG, PNG, WebP, MP4, WebM, or MOV items within the size limit.",
+      );
       setGalleryActionStatus("error");
       return;
     }
@@ -227,6 +275,32 @@ export function ProfileEditForm({
       const addedPhotos: GalleryPhoto[] = [];
 
       for (const file of selectedFiles) {
+        const isVideo = isGalleryVideo(file);
+        let durationSeconds: number | null = null;
+
+        if (isVideo) {
+          try {
+            durationSeconds = await getMediaDuration(file);
+          } catch (error) {
+            setGalleryActionMessage(
+              error instanceof Error
+                ? error.message
+                : "Could not read this video. Try another file.",
+            );
+            setGalleryActionStatus("error");
+            continue;
+          }
+
+          if (
+            durationSeconds <= 0 ||
+            durationSeconds > PROFILE_GALLERY_VIDEO_MAX_DURATION_SECONDS
+          ) {
+            setGalleryActionMessage("Keep gallery videos at 15 seconds or less.");
+            setGalleryActionStatus("error");
+            continue;
+          }
+        }
+
         const storagePath = `${userId}/gallery/photo-${Date.now()}-${Math.random()
           .toString(36)
           .slice(2)}.${getGalleryPhotoExtension(file)}`;
@@ -255,6 +329,7 @@ export function ProfileEditForm({
         }
 
         const result = await addGalleryPhoto({
+          durationSeconds,
           mediaUrl: publicUrl,
           mimeType: file.type,
           storagePath,
@@ -556,9 +631,9 @@ export function ProfileEditForm({
       <div className="sm:col-span-2 rounded-3xl border border-neutral-800 bg-black/35 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-black text-white">Photos</p>
+            <p className="text-sm font-black text-white">Gallery</p>
             <p className="mt-1 text-xs text-neutral-500">
-              {galleryPhotoList.length}/{PROFILE_GALLERY_PHOTO_MAX_COUNT} photos
+              {galleryPhotoList.length}/{PROFILE_GALLERY_PHOTO_MAX_COUNT} media
             </p>
           </div>
           <label
@@ -570,12 +645,12 @@ export function ProfileEditForm({
                 : "border-emerald-300/30 text-emerald-100 hover:bg-emerald-300/10"
             }`}
           >
-            {galleryUploading ? "Uploading..." : "Add photo"}
+            {galleryUploading ? "Uploading..." : "Add photo/video"}
           </label>
           <input
             id="gallery_photos"
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime"
             multiple
             disabled={
               pending ||
@@ -588,17 +663,37 @@ export function ProfileEditForm({
         </div>
 
         <div className="mt-4 grid grid-cols-4 gap-2">
-          {galleryPhotoList.map((photo, index) => (
+          {galleryPhotoList.map((photo, index) => {
+            const isVideo = photo.media_type === "gallery_video";
+
+            return (
             <div
               key={photo.id}
               className="group relative aspect-square overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={photo.media_url}
-                alt={`Profile photo ${index + 1}`}
-                className="h-full w-full object-cover"
-              />
+              {isVideo ? (
+                <video
+                  src={photo.media_url}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.media_url}
+                    alt={`Gallery item ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </>
+              )}
+              {isVideo ? (
+                <span className="absolute right-2 top-2 rounded-full border border-white/15 bg-black/60 px-2 py-1 text-[10px] font-black text-white">
+                  Video
+                </span>
+              ) : null}
               <div className="absolute inset-x-1 bottom-1 flex flex-wrap justify-center gap-1 rounded-xl bg-black/70 p-1 opacity-100 backdrop-blur sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
                 <button
                   type="button"
@@ -609,14 +704,16 @@ export function ProfileEditForm({
                 >
                   ←
                 </button>
-                <button
-                  type="button"
-                  disabled={galleryBusyId === photo.id}
-                  onClick={() => void handleSetGalleryAvatar(photo)}
-                  className="min-h-8 rounded-full border border-white/10 px-2 text-[11px] text-white disabled:opacity-35"
-                >
-                  Avatar
-                </button>
+                {!isVideo ? (
+                  <button
+                    type="button"
+                    disabled={galleryBusyId === photo.id}
+                    onClick={() => void handleSetGalleryAvatar(photo)}
+                    className="min-h-8 rounded-full border border-white/10 px-2 text-[11px] text-white disabled:opacity-35"
+                  >
+                    Avatar
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   aria-label="Move photo later"
@@ -639,7 +736,8 @@ export function ProfileEditForm({
                 </button>
               </div>
             </div>
-          ))}
+          );
+          })}
           {Array.from({
             length: PROFILE_GALLERY_PHOTO_MAX_COUNT - galleryPhotoList.length,
           }).map((_, index) => (
