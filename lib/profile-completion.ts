@@ -8,6 +8,7 @@ type ProfileCompletionInput = {
   avatar_url?: string | null;
   bio?: string | null;
   engagementCount?: number | null;
+  galleryPhotoCount?: number | null;
   hasPreviewVideo?: boolean | null;
   identity_verified?: boolean | null;
   interests?: string[] | null;

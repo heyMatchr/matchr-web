@@ -12,6 +12,9 @@ import type { ProfileRow } from "@/lib/supabase/types";
 import {
   AVATAR_ALLOWED_TYPES,
   AVATAR_MAX_SIZE_BYTES,
+  PROFILE_GALLERY_PHOTO_ALLOWED_TYPES,
+  PROFILE_GALLERY_PHOTO_MAX_COUNT,
+  PROFILE_GALLERY_PHOTO_MAX_SIZE_BYTES,
   PROFILE_MEDIA_BUCKET_NAME,
   PROFILE_PREVIEW_VIDEO_ALLOWED_TYPES,
   PROFILE_PREVIEW_VIDEO_MAX_DURATION_SECONDS,
@@ -19,6 +22,12 @@ import {
 } from "@/lib/supabase/storage";
 import type { Database } from "@/lib/supabase/types";
 import { updateProfile } from "./actions";
+import {
+  addGalleryPhoto,
+  removeGalleryPhoto,
+  setGalleryPhotoAsAvatar,
+  updateGalleryPhotoOrder,
+} from "./gallery-actions";
 import type { ProfileEditFormState } from "./types";
 
 type EditableProfile = Pick<
@@ -57,9 +66,18 @@ type ActiveProfilePreviewVideo = {
   media_url: string;
 };
 
+type GalleryPhoto = {
+  created_at: string;
+  id: string;
+  media_url: string;
+  sort_order: number;
+  storage_path: string;
+};
+
 type ProfileEditFormProps = {
   activePreviewVideo?: ActiveProfilePreviewVideo | null;
   anonKey: string;
+  galleryPhotos: GalleryPhoto[];
   profile: EditableProfile;
   supabaseUrl: string;
   userId: string;
@@ -83,15 +101,31 @@ function getPreviewVideoExtension(file: File) {
   return file.type.split("/").pop() || "mp4";
 }
 
+function getGalleryPhotoExtension(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (extension && ["jpg", "jpeg", "png", "webp"].includes(extension)) {
+    return extension;
+  }
+
+  return file.type.split("/").pop() || "jpg";
+}
+
 export function ProfileEditForm({
   activePreviewVideo,
   anonKey,
+  galleryPhotos,
   profile,
   supabaseUrl,
   userId,
 }: ProfileEditFormProps) {
   const [avatarError, setAvatarError] = useState("");
   const [avatarPreview, setAvatarPreview] = useState(profile.avatar_url ?? "");
+  const [galleryActionMessage, setGalleryActionMessage] = useState("");
+  const [galleryActionStatus, setGalleryActionStatus] = useState<"error" | "success" | "">("");
+  const [galleryBusyId, setGalleryBusyId] = useState("");
+  const [galleryPhotoList, setGalleryPhotoList] = useState(galleryPhotos);
+  const [galleryUploading, setGalleryUploading] = useState(false);
   const [previewVideoDuration, setPreviewVideoDuration] = useState("");
   const [previewVideoError, setPreviewVideoError] = useState("");
   const [previewVideoMimeType, setPreviewVideoMimeType] = useState("");
@@ -153,6 +187,179 @@ export function ProfileEditForm({
     }
 
     setAvatarPreview(URL.createObjectURL(file));
+  }
+
+  async function handleGalleryPhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    setGalleryActionMessage("");
+    setGalleryActionStatus("");
+
+    if (!files.length) {
+      return;
+    }
+
+    if (galleryPhotoList.length >= PROFILE_GALLERY_PHOTO_MAX_COUNT) {
+      event.target.value = "";
+      setGalleryActionMessage("You can keep up to 8 profile photos.");
+      setGalleryActionStatus("error");
+      return;
+    }
+
+    const remainingSlots = PROFILE_GALLERY_PHOTO_MAX_COUNT - galleryPhotoList.length;
+    const selectedFiles = files.slice(0, remainingSlots);
+    const invalidFile = selectedFiles.find(
+      (file) =>
+        !PROFILE_GALLERY_PHOTO_ALLOWED_TYPES.includes(
+          file.type as (typeof PROFILE_GALLERY_PHOTO_ALLOWED_TYPES)[number],
+        ) || file.size > PROFILE_GALLERY_PHOTO_MAX_SIZE_BYTES,
+    );
+
+    if (invalidFile) {
+      event.target.value = "";
+      setGalleryActionMessage("Upload JPG, PNG, or WebP photos under 5 MB.");
+      setGalleryActionStatus("error");
+      return;
+    }
+
+    setGalleryUploading(true);
+
+    try {
+      const addedPhotos: GalleryPhoto[] = [];
+
+      for (const file of selectedFiles) {
+        const storagePath = `${userId}/gallery/photo-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${getGalleryPhotoExtension(file)}`;
+        const { error: uploadError } = await supabase.storage
+          .from(PROFILE_MEDIA_BUCKET_NAME)
+          .upload(storagePath, file, {
+            cacheControl: "3600",
+            contentType: file.type,
+          });
+
+        if (uploadError) {
+          setGalleryActionMessage(uploadError.message || "Photo upload failed.");
+          setGalleryActionStatus("error");
+          continue;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from(PROFILE_MEDIA_BUCKET_NAME).getPublicUrl(storagePath);
+
+        if (!publicUrl) {
+          await supabase.storage.from(PROFILE_MEDIA_BUCKET_NAME).remove([storagePath]);
+          setGalleryActionMessage("Photo uploaded, but no public URL was generated.");
+          setGalleryActionStatus("error");
+          continue;
+        }
+
+        const result = await addGalleryPhoto({
+          mediaUrl: publicUrl,
+          mimeType: file.type,
+          storagePath,
+        });
+
+        if (result.success && result.photo) {
+          addedPhotos.push(result.photo);
+          continue;
+        }
+
+        setGalleryActionMessage(result.message || "Photo could not be saved.");
+        setGalleryActionStatus("error");
+      }
+
+      if (addedPhotos.length) {
+        setGalleryPhotoList((current) =>
+          [...current, ...addedPhotos]
+            .slice(0, PROFILE_GALLERY_PHOTO_MAX_COUNT)
+            .sort((a, b) => a.sort_order - b.sort_order),
+        );
+        setGalleryActionMessage(
+          addedPhotos.length === 1 ? "Photo added" : "Photos added",
+        );
+        setGalleryActionStatus("success");
+      }
+    } finally {
+      setGalleryUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleRemoveGalleryPhoto(photo: GalleryPhoto) {
+    setGalleryBusyId(photo.id);
+    setGalleryActionMessage("");
+    setGalleryActionStatus("");
+
+    try {
+      const result = await removeGalleryPhoto(photo.id);
+
+      if (!result.success) {
+        setGalleryActionMessage(result.message);
+        setGalleryActionStatus("error");
+        return;
+      }
+
+      setGalleryPhotoList((current) =>
+        current.filter((currentPhoto) => currentPhoto.id !== photo.id),
+      );
+      setGalleryActionMessage(result.message);
+      setGalleryActionStatus("success");
+    } finally {
+      setGalleryBusyId("");
+    }
+  }
+
+  async function handleSetGalleryAvatar(photo: GalleryPhoto) {
+    setGalleryBusyId(photo.id);
+    setGalleryActionMessage("");
+    setGalleryActionStatus("");
+
+    try {
+      const result = await setGalleryPhotoAsAvatar(photo.id);
+
+      if (!result.success) {
+        setGalleryActionMessage(result.message);
+        setGalleryActionStatus("error");
+        return;
+      }
+
+      setAvatarPreview(photo.media_url);
+      setGalleryActionMessage(result.message);
+      setGalleryActionStatus("success");
+    } finally {
+      setGalleryBusyId("");
+    }
+  }
+
+  async function moveGalleryPhoto(photoId: string, direction: -1 | 1) {
+    const currentIndex = galleryPhotoList.findIndex((photo) => photo.id === photoId);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= galleryPhotoList.length) {
+      return;
+    }
+
+    const nextPhotos = [...galleryPhotoList];
+    const [photo] = nextPhotos.splice(currentIndex, 1);
+    nextPhotos.splice(nextIndex, 0, photo);
+    const orderedPhotos = nextPhotos.map((nextPhoto, index) => ({
+      ...nextPhoto,
+      sort_order: index,
+    }));
+
+    setGalleryPhotoList(orderedPhotos);
+    setGalleryActionMessage("");
+    setGalleryActionStatus("");
+
+    const result = await updateGalleryPhotoOrder(
+      orderedPhotos.map((nextPhoto) => nextPhoto.id),
+    );
+
+    if (!result.success) {
+      setGalleryActionMessage(result.message);
+      setGalleryActionStatus("error");
+    }
   }
 
   async function handlePreviewVideoChange(event: ChangeEvent<HTMLInputElement>) {
@@ -343,6 +550,117 @@ export function ProfileEditForm({
           role={avatarError ? "alert" : undefined}
         >
           {avatarError}
+        </p>
+      </div>
+
+      <div className="sm:col-span-2 rounded-3xl border border-neutral-800 bg-black/35 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-black text-white">Photos</p>
+            <p className="mt-1 text-xs text-neutral-500">
+              {galleryPhotoList.length}/{PROFILE_GALLERY_PHOTO_MAX_COUNT} photos
+            </p>
+          </div>
+          <label
+            htmlFor="gallery_photos"
+            className={`inline-flex min-h-11 cursor-pointer items-center justify-center rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+              galleryPhotoList.length >= PROFILE_GALLERY_PHOTO_MAX_COUNT ||
+              galleryUploading
+                ? "pointer-events-none border-neutral-800 text-neutral-500"
+                : "border-emerald-300/30 text-emerald-100 hover:bg-emerald-300/10"
+            }`}
+          >
+            {galleryUploading ? "Uploading..." : "Add photo"}
+          </label>
+          <input
+            id="gallery_photos"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={
+              pending ||
+              galleryUploading ||
+              galleryPhotoList.length >= PROFILE_GALLERY_PHOTO_MAX_COUNT
+            }
+            onChange={handleGalleryPhotoChange}
+            className="sr-only"
+          />
+        </div>
+
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {galleryPhotoList.map((photo, index) => (
+            <div
+              key={photo.id}
+              className="group relative aspect-square overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-950"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photo.media_url}
+                alt={`Profile photo ${index + 1}`}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-x-1 bottom-1 flex flex-wrap justify-center gap-1 rounded-xl bg-black/70 p-1 opacity-100 backdrop-blur sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100">
+                <button
+                  type="button"
+                  aria-label="Move photo earlier"
+                  disabled={galleryBusyId === photo.id || index === 0}
+                  onClick={() => void moveGalleryPhoto(photo.id, -1)}
+                  className="min-h-8 min-w-8 rounded-full border border-white/10 px-2 text-xs text-white disabled:opacity-35"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  disabled={galleryBusyId === photo.id}
+                  onClick={() => void handleSetGalleryAvatar(photo)}
+                  className="min-h-8 rounded-full border border-white/10 px-2 text-[11px] text-white disabled:opacity-35"
+                >
+                  Avatar
+                </button>
+                <button
+                  type="button"
+                  aria-label="Move photo later"
+                  disabled={
+                    galleryBusyId === photo.id ||
+                    index === galleryPhotoList.length - 1
+                  }
+                  onClick={() => void moveGalleryPhoto(photo.id, 1)}
+                  className="min-h-8 min-w-8 rounded-full border border-white/10 px-2 text-xs text-white disabled:opacity-35"
+                >
+                  →
+                </button>
+                <button
+                  type="button"
+                  disabled={galleryBusyId === photo.id}
+                  onClick={() => void handleRemoveGalleryPhoto(photo)}
+                  className="min-h-8 rounded-full border border-red-300/25 px-2 text-[11px] text-red-100 disabled:opacity-35"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ))}
+          {Array.from({
+            length: PROFILE_GALLERY_PHOTO_MAX_COUNT - galleryPhotoList.length,
+          }).map((_, index) => (
+            <label
+              key={`empty-gallery-slot-${index}`}
+              htmlFor="gallery_photos"
+              className="grid aspect-square cursor-pointer place-items-center rounded-2xl border border-dashed border-neutral-800 bg-white/[0.02] text-xs text-neutral-600 transition-colors hover:border-neutral-700 hover:text-neutral-400"
+            >
+              Add
+            </label>
+          ))}
+        </div>
+
+        <p
+          aria-live="polite"
+          className={`mt-3 min-h-5 text-sm ${
+            galleryActionStatus === "success" ? "text-emerald-200" : "text-red-300"
+          }`}
+          role={galleryActionMessage ? "alert" : undefined}
+        >
+          {galleryActionMessage}
         </p>
       </div>
 
@@ -798,13 +1116,16 @@ export function ProfileEditForm({
         type="submit"
         disabled={
           pending ||
+          galleryUploading ||
           previewVideoUploading ||
           Boolean(avatarError) ||
           Boolean(previewVideoError)
         }
         className="rounded-full bg-white px-8 py-4 text-base font-medium text-black transition-all duration-300 hover:scale-[1.02] hover:bg-neutral-200 hover:shadow-[0_0_35px_rgba(255,255,255,0.12)] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-neutral-300 sm:col-span-2"
       >
-        {previewVideoUploading
+        {galleryUploading
+          ? "Uploading photos..."
+          : previewVideoUploading
           ? "Uploading preview..."
           : pending
             ? "Saving profile..."

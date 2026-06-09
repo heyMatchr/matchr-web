@@ -17,6 +17,7 @@ import { ProfileOnlineStatus } from "./profile-online-status";
 import { CopyPublicIdButton } from "./copy-public-id-button";
 import { ProfileLikeButton } from "./profile-like-button";
 import { ProfileActivityPanel } from "./profile-activity-panel";
+import { ProfileGallerySection } from "./profile-gallery-section";
 
 type ProfilePageProps = {
   params: Promise<{
@@ -157,6 +158,7 @@ export default async function ProfilePage({
     premiumResult,
     giftsReceivedResult,
     activePreviewVideoResult,
+    galleryPhotosResult,
     viewedSettingsResult,
   ] = await timeAsync("[Perf] Profile detail query group", () =>
     Promise.all([
@@ -248,6 +250,15 @@ export default async function ProfilePage({
         .limit(1)
         .maybeSingle(),
       supabase
+        .from("profile_media")
+        .select("id, media_url, sort_order, created_at")
+        .eq("user_id", profile.id)
+        .eq("media_type", "gallery_photo")
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false })
+        .limit(8),
+      supabase
         .from("user_settings")
         .select("private_profile, hide_followers_count, hide_following_count, allow_profile_views")
         .eq("user_id", profile.id)
@@ -322,6 +333,7 @@ export default async function ProfilePage({
     bio: profile.bio,
     engagementCount:
       (followersResult.count ?? 0) + (giftsReceivedResult.count ?? 0),
+    galleryPhotoCount: galleryPhotosResult.data?.length ?? 0,
     hasPreviewVideo: Boolean(activePreviewVideo?.media_url),
     identity_verified: profile.identity_verified,
     interests: profile.interests,
@@ -354,10 +366,10 @@ export default async function ProfilePage({
   const completionChecklist = [
     ["Photo", completedKeys.has("photo")],
     ["Preview", completedKeys.has("preview_video")],
+    ["Gallery", completedKeys.has("gallery")],
     ["Bio", completedKeys.has("bio")],
     ["Interests", completedKeys.has("interests")],
     ["Story", completedKeys.has("story")],
-    ["Moments", completedKeys.has("moment")],
   ] as const;
   const intentChips = toChipList(profile.relationship_intent);
   const normalizedIntentChips = new Set(
@@ -702,6 +714,11 @@ export default async function ProfilePage({
                 <p className="mt-1.5 leading-6 text-neutral-200">{profile.bio}</p>
               </div>
             ) : null}
+
+            <ProfileGallerySection
+              displayName={profile.display_name}
+              photos={galleryPhotosResult.data ?? []}
+            />
 
             {intentChips.length ? (
               <div className="mt-5">

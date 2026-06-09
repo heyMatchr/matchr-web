@@ -39,6 +39,7 @@ type CandidateVisibilitySettings = {
 type CandidateRankingSignals = {
   engagementCount: number;
   followerCount: number;
+  galleryPhotoCount: number;
   giftCount: number;
   hasActiveBoost: boolean;
   hasIncomingLike: boolean;
@@ -170,6 +171,7 @@ export function scoreProfileForUser({
   const quality = calculateProfileQualityScore({
     ...candidate,
     engagementCount: signals.engagementCount + signals.giftCount,
+    galleryPhotoCount: signals.galleryPhotoCount,
     hasActiveStory: signals.hasStories,
     hasPreviewVideo: signals.hasPreviewVideo,
     momentCount: signals.momentCount,

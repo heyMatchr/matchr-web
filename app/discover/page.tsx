@@ -398,6 +398,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     premiumResult,
     activeBoostsResult,
     previewVideosResult,
+    galleryPhotosResult,
   ] = await timeAsync("[Perf] Discover profile enrichment", () =>
     Promise.all([
       visibleProfileIds.length
@@ -450,6 +451,16 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
             .eq("active", true)
             .in("user_id", visibleProfileIds)
         : Promise.resolve({ data: [] }),
+      visibleProfileIds.length
+        ? supabase
+            .from("profile_media")
+            .select("user_id, media_url, sort_order, created_at")
+            .eq("media_type", "gallery_photo")
+            .eq("active", true)
+            .in("user_id", visibleProfileIds)
+            .order("sort_order", { ascending: true })
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] }),
     ]),
   );
   const visibleMomentIds = momentsResult.data?.map((moment) => moment.id) ?? [];
@@ -474,9 +485,18 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   const settingsByUser = new Map(
     settingsResult.data?.map((setting) => [setting.user_id, setting]) ?? [],
   );
-  const countBy = (rows: Record<string, string>[] | null | undefined, key: string) => {
+  const countBy = (
+    rows: Array<Record<string, unknown>> | null | undefined,
+    key: string,
+  ) => {
     const counts = new Map<string, number>();
-    rows?.forEach((row) => counts.set(row[key], (counts.get(row[key]) ?? 0) + 1));
+    rows?.forEach((row) => {
+      const value = row[key];
+
+      if (typeof value === "string") {
+        counts.set(value, (counts.get(value) ?? 0) + 1);
+      }
+    });
     return counts;
   };
   const followerCounts = countBy(followersResult.data, "following_id");
@@ -512,6 +532,13 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       },
     ]) ?? [],
   );
+  const galleryPhotoCounts = countBy(galleryPhotosResult.data, "user_id");
+  const firstGalleryPhotoByUserId = new Map<string, string>();
+  galleryPhotosResult.data?.forEach((photo) => {
+    if (!firstGalleryPhotoByUserId.has(photo.user_id)) {
+      firstGalleryPhotoByUserId.set(photo.user_id, photo.media_url);
+    }
+  });
   const profileViewCounts = countBy(profileViewsResult.data, "viewed_user_id");
   const latestViewerViewByUser = new Map<string, string>();
   profileViewsResult.data?.forEach((view) => {
@@ -527,6 +554,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   const allDiscoverProfiles: DiscoverProfile[] = visibleProfiles.map((profile) => {
     const momentCount = momentCounts.get(profile.id) ?? 0;
     const followerCount = followerCounts.get(profile.id) ?? 0;
+    const galleryPhotoCount = galleryPhotoCounts.get(profile.id) ?? 0;
     const hasStories = activeStoryUserIds.has(profile.id);
     const hasActiveBoost = boostedUserIds.has(profile.id);
     const previewVideo = previewVideoByUserId.get(profile.id) ?? null;
@@ -545,6 +573,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       signals: {
         engagementCount,
         followerCount,
+        galleryPhotoCount,
         giftCount,
         hasActiveBoost,
         hasIncomingLike: incomingLikeIds.has(profile.id),
@@ -561,7 +590,8 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     return {
       accepting_dating: Boolean(profile.accepting_dating),
       age: profile.age ?? 18,
-      avatar_url: profile.avatar_url ?? null,
+      avatar_url:
+        profile.avatar_url ?? firstGalleryPhotoByUserId.get(profile.id) ?? null,
       bio: profile.bio ?? "",
       compatibility,
       country: profile.country ?? null,

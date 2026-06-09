@@ -61,6 +61,8 @@ export type ProfileMediaRow = {
   thumbnail_url: string | null;
   duration_seconds: number | null;
   mime_type: string | null;
+  sort_order: number;
+  caption: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -1466,6 +1468,8 @@ export type Database = {
           thumbnail_url?: string | null;
           duration_seconds?: number | null;
           mime_type?: string | null;
+          sort_order?: number;
+          caption?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -1477,6 +1481,8 @@ export type Database = {
           thumbnail_url?: string | null;
           duration_seconds?: number | null;
           mime_type?: string | null;
+          sort_order?: number;
+          caption?: string | null;
           active?: boolean;
           updated_at?: string;
         };

@@ -16,7 +16,7 @@ export default async function EditProfilePage() {
     redirect("/login?next=/profile/edit");
   }
 
-  const [profileResult, previewVideoResult] = await Promise.all([
+  const [profileResult, previewVideoResult, galleryPhotosResult] = await Promise.all([
     supabase
       .from("profiles")
       .select(
@@ -33,6 +33,15 @@ export default async function EditProfilePage() {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("profile_media")
+      .select("id, media_url, storage_path, sort_order, created_at")
+      .eq("user_id", user.id)
+      .eq("media_type", "gallery_photo")
+      .eq("active", true)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(8),
   ]);
 
   const { data: profile, error } = profileResult;
@@ -79,6 +88,7 @@ export default async function EditProfilePage() {
       <ProfileEditForm
         activePreviewVideo={previewVideoResult.data ?? null}
         anonKey={anonKey}
+        galleryPhotos={galleryPhotosResult.data ?? []}
         profile={profile}
         supabaseUrl={supabaseUrl}
         userId={user.id}

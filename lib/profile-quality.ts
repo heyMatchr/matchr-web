@@ -2,6 +2,7 @@ export type ProfileQualityInput = {
   avatar_url?: string | null;
   bio?: string | null;
   engagementCount?: number | null;
+  galleryPhotoCount?: number | null;
   hasActiveStory?: boolean | null;
   hasPreviewVideo?: boolean | null;
   identity_verified?: boolean | null;
@@ -96,6 +97,7 @@ function safetyScore(input: ProfileQualityInput) {
 
 export function getProfileQualitySignals(input: ProfileQualityInput) {
   const bioLength = input.bio?.trim().length ?? 0;
+  const galleryPhotoCount = Math.max(0, input.galleryPhotoCount ?? 0);
   const interestCount = input.interests?.filter((interest) => hasText(interest))
     .length ?? 0;
   const engagementCount = Math.max(0, input.engagementCount ?? 0);
@@ -104,17 +106,18 @@ export function getProfileQualitySignals(input: ProfileQualityInput) {
   const verificationPoints = verificationScore(input);
   const safetyPoints = safetyScore(input);
   const bioScore = bioLength >= 80 ? 12 : bioLength >= 24 ? 8 : bioLength > 0 ? 4 : 0;
+  const galleryScore = galleryPhotoCount >= 3 ? 8 : galleryPhotoCount > 0 ? 4 : 0;
   const interestScore = Math.min(10, interestCount * 4);
-  const engagementScore = Math.min(6, engagementCount * 2);
+  const engagementScore = Math.min(4, engagementCount * 2);
 
   const signals: ProfileQualitySignal[] = [
     {
       complete: hasText(input.avatar_url),
       key: "photo",
       label: "Profile photo",
-      points: 12,
+      points: 10,
       prompt: "Add a clear photo.",
-      score: hasText(input.avatar_url) ? 12 : 0,
+      score: hasText(input.avatar_url) ? 10 : 0,
     },
     {
       complete: Boolean(input.hasPreviewVideo),
@@ -123,6 +126,14 @@ export function getProfileQualitySignals(input: ProfileQualityInput) {
       points: 14,
       prompt: "Add preview video.",
       score: input.hasPreviewVideo ? 14 : 0,
+    },
+    {
+      complete: galleryPhotoCount >= 3,
+      key: "gallery",
+      label: "Photo gallery",
+      points: 8,
+      prompt: "Add 3 profile photos.",
+      score: galleryScore,
     },
     {
       complete: bioLength >= 24,
@@ -181,10 +192,10 @@ export function getProfileQualitySignals(input: ProfileQualityInput) {
       score: momentComplete ? 8 : 0,
     },
     {
-      complete: engagementScore >= 6,
+      complete: engagementScore >= 4,
       key: "engagement",
       label: "Engagement",
-      points: 6,
+      points: 4,
       prompt: "Keep getting reactions.",
       score: engagementScore,
     },
@@ -192,9 +203,9 @@ export function getProfileQualitySignals(input: ProfileQualityInput) {
       complete: safetyPoints >= 4,
       key: "safety",
       label: "Trusted",
-      points: 4,
+      points: 2,
       prompt: "Keep your profile in good standing.",
-      score: safetyPoints,
+      score: safetyPoints ? 2 : 0,
     },
   ];
 
