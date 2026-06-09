@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { memo, useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import {
   getProfileHref,
@@ -526,6 +526,7 @@ const SwipeCard = memo(function SwipeCard({
   const [failedMediaUrls, setFailedMediaUrls] = useState<Set<string>>(
     () => new Set(),
   );
+  const mediaTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { isUserOnline } = useGlobalPresence();
   const profileIsOnline = profile.isOnline || isUserOnline(profile.id);
   const activeMedia = profile.mediaItems[activeMediaIndex] ?? null;
@@ -548,6 +549,48 @@ const SwipeCard = memo(function SwipeCard({
       return nextUrls;
     });
   }, []);
+  const handleMediaTap = useCallback(
+    (clientX: number, bounds: DOMRect) => {
+      if (!activeMedia) return;
+
+      if (mediaTapTimerRef.current) {
+        clearTimeout(mediaTapTimerRef.current);
+        mediaTapTimerRef.current = null;
+        onLike();
+        return;
+      }
+
+      mediaTapTimerRef.current = setTimeout(() => {
+        mediaTapTimerRef.current = null;
+
+        if (profile.mediaItems.length < 2) return;
+
+        const tappedLeft = clientX < bounds.left + bounds.width / 2;
+
+        if (tappedLeft) {
+          goPreviousMedia();
+        } else {
+          goNextMedia();
+        }
+      }, 220);
+    },
+    [
+      activeMedia,
+      goNextMedia,
+      goPreviousMedia,
+      onLike,
+      profile.mediaItems.length,
+    ],
+  );
+
+  useEffect(
+    () => () => {
+      if (mediaTapTimerRef.current) {
+        clearTimeout(mediaTapTimerRef.current);
+      }
+    },
+    [],
+  );
 
   return (
     <article
@@ -568,16 +611,10 @@ const SwipeCard = memo(function SwipeCard({
           className="absolute inset-0"
           onClick={(event) => {
             event.stopPropagation();
-            if (!activeMedia || profile.mediaItems.length < 2) return;
-
-            const bounds = event.currentTarget.getBoundingClientRect();
-            const tappedLeft = event.clientX < bounds.left + bounds.width / 2;
-
-            if (tappedLeft) {
-              goPreviousMedia();
-            } else {
-              goNextMedia();
-            }
+            handleMediaTap(
+              event.clientX,
+              event.currentTarget.getBoundingClientRect(),
+            );
           }}
           onDoubleClick={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
@@ -636,7 +673,46 @@ const SwipeCard = memo(function SwipeCard({
             ))}
           </div>
         ) : null}
-        <div className="absolute left-3 top-3 flex gap-2">
+        {showMediaProgress ? (
+          <>
+            {activeMediaIndex > 0 ? (
+              <div className="pointer-events-none absolute left-3 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/75 backdrop-blur sm:flex">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </div>
+            ) : null}
+            {activeMediaIndex < profile.mediaItems.length - 1 ? (
+              <div className="pointer-events-none absolute right-3 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/75 backdrop-blur sm:flex">
+                <svg
+                  aria-hidden="true"
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                >
+                  <path d="m9 18 6-6-6-6" />
+                </svg>
+              </div>
+            ) : null}
+            <span className="absolute right-3 top-7 z-10 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[11px] font-black text-white/85 backdrop-blur">
+              {activeMediaIndex + 1}/{profile.mediaItems.length}
+            </span>
+          </>
+        ) : null}
+        <div className={`absolute left-3 flex flex-wrap gap-2 ${showMediaProgress ? "top-7" : "top-3"}`}>
           {profileIsOnline ? <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black">Online</span> : null}
           {profile.hasActiveBoost ? <span className="rounded-full border border-emerald-300/35 bg-black/45 px-3 py-1 text-xs font-black text-emerald-100">↟ Boosted</span> : null}
           {profile.verified ? <span className="rounded-full border border-white/20 bg-black/45 px-3 py-1 text-xs text-white">Verified</span> : null}
@@ -647,7 +723,7 @@ const SwipeCard = memo(function SwipeCard({
             Video
           </span>
         ) : null}
-        {profile.previewVideo ? (
+        {profile.previewVideo && activeMedia?.type !== "preview_video" ? (
           <button
             type="button"
             aria-label={`Open ${profile.display_name}'s profile preview video`}
