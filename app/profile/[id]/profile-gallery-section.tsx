@@ -1,8 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 type ProfileGalleryItem = {
   duration_seconds: number | null;
@@ -11,27 +9,56 @@ type ProfileGalleryItem = {
   media_url: string;
 };
 
-type GalleryViewerItem = ProfileGalleryItem & {
+type ProfilePreviewVideo = {
+  duration_seconds: number | null;
+  id: string;
+  media_url: string;
+};
+
+type ProfileMediaItem = ProfileGalleryItem & {
   label: string;
 };
 
 type ProfileGallerySectionProps = {
+  activePremium?: boolean;
+  age?: number | null;
   avatarUrl?: string | null;
+  country?: string | null;
+  countryFlag?: string | null;
   displayName: string;
+  hasActiveStories?: boolean;
+  location?: string | null;
+  occupation?: string | null;
   photos: ProfileGalleryItem[];
+  previewVideo?: ProfilePreviewVideo | null;
+  verified?: boolean | null;
 };
 
+function initialFor(name: string) {
+  return name.trim().charAt(0).toUpperCase() || "M";
+}
+
 export function ProfileGallerySection({
+  activePremium = false,
+  age,
   avatarUrl,
+  country,
+  countryFlag,
   displayName,
+  hasActiveStories = false,
+  location,
+  occupation,
   photos,
+  previewVideo,
+  verified = false,
 }: ProfileGallerySectionProps) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [pointerStart, setPointerStart] = useState<number | null>(null);
+  const swipeHandledRef = useRef(false);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const viewerItems = useMemo<GalleryViewerItem[]>(() => {
+  const mediaItems = useMemo<ProfileMediaItem[]>(() => {
     const galleryItems = photos.map((photo, index) => ({
       ...photo,
       label:
@@ -39,78 +66,53 @@ export function ProfileGallerySection({
           ? `${displayName} gallery video ${index + 1}`
           : `${displayName} gallery photo ${index + 1}`,
     }));
-    const normalizedAvatarUrl = avatarUrl?.trim();
-    const avatarAlreadyInGallery =
-      normalizedAvatarUrl &&
-      galleryItems.some((item) => item.media_url === normalizedAvatarUrl);
+    const items: ProfileMediaItem[] = [];
 
-    if (!normalizedAvatarUrl || avatarAlreadyInGallery) {
-      return galleryItems;
+    if (previewVideo?.media_url) {
+      items.push({
+        duration_seconds: previewVideo.duration_seconds,
+        id: `preview-${previewVideo.id}`,
+        label: `${displayName} preview video`,
+        media_type: "preview_video",
+        media_url: previewVideo.media_url,
+      });
     }
 
-    return [
-      {
+    const normalizedAvatarUrl = avatarUrl?.trim();
+    const avatarAlreadyIncluded =
+      normalizedAvatarUrl &&
+      [...items, ...galleryItems].some(
+        (item) => item.media_url === normalizedAvatarUrl,
+      );
+
+    if (normalizedAvatarUrl && !avatarAlreadyIncluded) {
+      items.push({
         duration_seconds: null,
         id: "profile-avatar",
         label: `${displayName} profile photo`,
         media_type: "gallery_photo",
         media_url: normalizedAvatarUrl,
-      },
-      ...galleryItems,
-    ];
-  }, [avatarUrl, displayName, photos]);
-  const activeItem =
-    activeIndex === null ? null : viewerItems[activeIndex] ?? null;
-  const canGoPrevious = activeIndex !== null && activeIndex > 0;
-  const canGoNext =
-    activeIndex !== null && activeIndex < viewerItems.length - 1;
+      });
+    }
+
+    return [...items, ...galleryItems];
+  }, [avatarUrl, displayName, photos, previewVideo]);
+  const activeItem = mediaItems[activeIndex] ?? null;
+  const canGoPrevious = activeIndex > 0;
+  const canGoNext = activeIndex < mediaItems.length - 1;
   const activeMediaFailed = activeItem
     ? failedMediaIds.has(activeItem.id)
     : false;
 
-  useEffect(() => {
-    if (!activeItem) return;
-
-    const html = document.documentElement;
-    const body = document.body;
-    const appShell = document.querySelector<HTMLElement>(".matchr-app-shell");
-    const previousHtmlOverflow = html.style.overflow;
-    const previousBodyOverflow = body.style.overflow;
-    const previousShellOverflow = appShell?.style.overflow;
-
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    if (appShell) {
-      appShell.style.overflow = "hidden";
-    }
-
-    return () => {
-      html.style.overflow = previousHtmlOverflow;
-      body.style.overflow = previousBodyOverflow;
-      if (appShell) {
-        appShell.style.overflow = previousShellOverflow ?? "";
-      }
-    };
-  }, [activeItem]);
-
-  const closeViewer = useCallback(() => {
-    setActiveIndex(null);
-    setPointerStart(null);
-  }, []);
-
   const goPrevious = useCallback(() => {
-    setActiveIndex((currentIndex) =>
-      currentIndex === null ? currentIndex : Math.max(0, currentIndex - 1),
-    );
+    setActiveIndex((currentIndex) => Math.max(0, currentIndex - 1));
   }, []);
 
   const goNext = useCallback(() => {
     setActiveIndex((currentIndex) =>
-      currentIndex === null
-        ? currentIndex
-        : Math.min(viewerItems.length - 1, currentIndex + 1),
+      Math.min(mediaItems.length - 1, currentIndex + 1),
     );
-  }, [viewerItems.length]);
+  }, [mediaItems.length]);
 
   const markMediaFailed = useCallback((id: string) => {
     setFailedMediaIds((currentIds) => {
@@ -120,232 +122,177 @@ export function ProfileGallerySection({
     });
   }, []);
 
-  useEffect(() => {
-    if (!activeItem) return;
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeViewer();
-      }
-
-      if (event.key === "ArrowLeft") {
-        goPrevious();
-      }
-
-      if (event.key === "ArrowRight") {
-        goNext();
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeItem, closeViewer, goNext, goPrevious]);
-
-  const progressItems = useMemo(
-    () =>
-      viewerItems.map((item, index) => ({
-        active: activeIndex !== null && index <= activeIndex,
-        id: item.id,
-      })),
-    [activeIndex, viewerItems],
-  );
-
-  if (!viewerItems.length) {
-    return null;
-  }
-
-  const viewerOverlay =
-    activeItem && activeIndex !== null ? (
-      <div className="fixed inset-0 z-[999] flex h-[100dvh] w-screen flex-col overflow-hidden bg-black">
-        <div
-          className="relative z-40 flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/80 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+24px)] backdrop-blur md:px-6 md:pt-4"
-          onClick={(event) => event.stopPropagation()}
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerUp={(event) => event.stopPropagation()}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="mb-3 flex gap-1.5">
-              {progressItems.map((item) => (
-                <span
-                  key={item.id}
-                  className={`h-1 flex-1 rounded-full ${
-                    item.active ? "bg-white" : "bg-white/20"
-                  }`}
-                />
-              ))}
-            </div>
-            <p className="truncate text-sm font-black text-white">
-              {displayName}
-            </p>
-            <p className="text-xs text-neutral-400">
-              {activeIndex + 1}/{viewerItems.length}
-            </p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close profile gallery"
-            onClick={closeViewer}
-            className="min-h-11 min-w-11 shrink-0 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/15"
-          >
-            Close
-          </button>
-        </div>
-        <div
-          className="relative z-10 min-h-0 flex-1 select-none"
-          onClick={(event) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            const tappedLeft = event.clientX < bounds.left + bounds.width / 2;
-
-            if (tappedLeft) {
-              goPrevious();
-            } else {
-              goNext();
-            }
-          }}
-          onPointerDown={(event) => setPointerStart(event.clientX)}
-          onPointerUp={(event) => {
-            if (pointerStart === null) return;
-
-            const delta = event.clientX - pointerStart;
-            setPointerStart(null);
-
-            if (delta > 48) {
-              goPrevious();
-            }
-
-            if (delta < -48) {
-              goNext();
-            }
-          }}
-        >
-          {canGoPrevious ? (
-            <div className="pointer-events-none absolute left-4 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white backdrop-blur">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </div>
-          ) : null}
-          {canGoNext ? (
-            <div className="pointer-events-none absolute right-4 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/40 text-white backdrop-blur">
-              <svg
-                aria-hidden="true"
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              >
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </div>
-          ) : null}
-          <div className="relative z-10 flex h-full items-center justify-center p-4 pb-[calc(env(safe-area-inset-bottom)+24px)] md:p-8">
-            {activeMediaFailed ? (
-              <div className="flex min-h-48 w-full max-w-sm flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
-                <p className="text-sm font-semibold text-white">
-                  Media unavailable
-                </p>
-                <p className="mt-1 text-xs text-neutral-400">
-                  Try another item or close the viewer.
-                </p>
-              </div>
-            ) : activeItem.media_type === "gallery_video" ? (
-              <video
-                key={activeItem.id}
-                src={activeItem.media_url}
-                autoPlay
-                muted
-                loop
-                playsInline
-                controls={false}
-                onError={() => markMediaFailed(activeItem.id)}
-                className="max-h-full w-full max-w-3xl rounded-3xl border border-white/10 object-contain shadow-2xl"
-              />
-            ) : (
-              // Fullscreen gallery media uses the browser image element so a
-              // remote optimizer issue cannot trap the modal in a broken state.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={activeItem.media_url}
-                alt={activeItem.label}
-                onError={() => markMediaFailed(activeItem.id)}
-                className="max-h-full w-full max-w-3xl rounded-3xl border border-white/10 bg-neutral-950 object-contain shadow-2xl"
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    ) : null;
+  const profileLocation = [
+    countryFlag ? countryFlag : null,
+    location,
+    country,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const displayTitle = age ? `${displayName}, ${age}` : displayName;
+  const progressItems = mediaItems.length ? mediaItems : [{ id: "empty" }];
 
   return (
-    <>
-      <div className="mt-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
-            Media
-          </p>
-          <p className="text-xs text-neutral-500">{viewerItems.length}</p>
+    <section
+      className={`relative mt-6 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-950 md:mt-10 ${
+        hasActiveStories ? "ring-2 ring-emerald-300/70" : ""
+      }`}
+    >
+      <div
+        className="relative h-[calc(100dvh-140px)] min-h-[520px] max-h-[780px] select-none md:h-[min(780px,calc(100dvh-120px))]"
+        onClick={(event) => {
+          if (!mediaItems.length) return;
+
+          if (swipeHandledRef.current) {
+            swipeHandledRef.current = false;
+            return;
+          }
+
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const tappedLeft = event.clientX < bounds.left + bounds.width / 2;
+
+          if (tappedLeft) {
+            goPrevious();
+          } else {
+            goNext();
+          }
+        }}
+        onPointerDown={(event) => {
+          swipeHandledRef.current = false;
+          setPointerStart(event.clientX);
+        }}
+        onPointerUp={(event) => {
+          if (pointerStart === null || !mediaItems.length) return;
+
+          const delta = event.clientX - pointerStart;
+          setPointerStart(null);
+
+          if (delta > 48) {
+            swipeHandledRef.current = true;
+            goPrevious();
+          }
+
+          if (delta < -48) {
+            swipeHandledRef.current = true;
+            goNext();
+          }
+        }}
+      >
+        {activeItem && !activeMediaFailed ? (
+          activeItem.media_type === "preview_video" ||
+          activeItem.media_type === "gallery_video" ? (
+            <video
+              key={activeItem.id}
+              src={activeItem.media_url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls={false}
+              onError={() => markMediaFailed(activeItem.id)}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            // Main profile media uses the browser image element so Supabase
+            // media can render without involving the Next image optimizer.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={activeItem.media_url}
+              alt={activeItem.label}
+              onError={() => markMediaFailed(activeItem.id)}
+              className="h-full w-full object-cover"
+            />
+          )
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-neutral-950 text-7xl font-black text-neutral-700">
+            {activeMediaFailed ? "Media unavailable" : initialFor(displayName)}
+          </div>
+        )}
+
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/45" />
+
+        <div className="absolute inset-x-0 top-0 z-20 px-4 pt-4 sm:px-6">
+          <div className="flex gap-1.5">
+            {progressItems.map((item, index) => (
+              <span
+                key={item.id}
+                className={`h-1 flex-1 rounded-full ${
+                  index <= activeIndex ? "bg-white" : "bg-white/25"
+                }`}
+              />
+            ))}
+          </div>
         </div>
-        <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {viewerItems.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-label={`Open ${displayName}'s media item ${index + 1}`}
-              onClick={() => setActiveIndex(index)}
-              className={`relative h-24 w-20 shrink-0 overflow-hidden rounded-2xl border bg-neutral-950 transition-colors hover:border-neutral-700 sm:h-28 sm:w-24 ${
-                item.id === "profile-avatar"
-                  ? "border-emerald-300/40"
-                  : "border-neutral-900"
-              }`}
+
+        {canGoPrevious ? (
+          <div className="pointer-events-none absolute left-4 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white backdrop-blur sm:flex">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
             >
-              {item.media_type === "gallery_video" ? (
-                <>
-                  <video
-                    src={item.media_url}
-                    muted
-                    playsInline
-                    preload="metadata"
-                    className="h-full w-full object-cover"
-                  />
-                  <span className="absolute right-1.5 top-1.5 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-black text-white">
-                    Video
-                  </span>
-                </>
-              ) : (
-                <Image
-                  src={item.media_url}
-                  alt={item.label}
-                  fill
-                  sizes="(min-width: 768px) 96px, 80px"
-                  className="object-cover"
-                />
-              )}
-              {item.id === "profile-avatar" ? (
-                <span className="absolute inset-x-1.5 bottom-1.5 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[10px] font-black text-white">
-                  Profile
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </div>
+        ) : null}
+        {canGoNext ? (
+          <div className="pointer-events-none absolute right-4 top-1/2 z-20 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white backdrop-blur sm:flex">
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </div>
+        ) : null}
+
+        <div className="absolute inset-x-0 bottom-0 z-20 p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] sm:p-7">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-2">
+              {verified ? (
+                <span className="rounded-full border border-emerald-300/40 bg-black/35 px-3 py-1 text-xs text-emerald-100 backdrop-blur">
+                  Verified
                 </span>
               ) : null}
-            </button>
-          ))}
+              {activePremium ? (
+                <span className="rounded-full border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1 text-xs font-black text-[#D4AF37] backdrop-blur">
+                  Premium
+                </span>
+              ) : null}
+              {activeItem?.media_type === "preview_video" ? (
+                <span className="rounded-full border border-white/15 bg-black/35 px-3 py-1 text-xs text-white/90 backdrop-blur">
+                  Preview
+                </span>
+              ) : null}
+              {activeItem?.media_type === "gallery_video" ? (
+                <span className="rounded-full border border-white/15 bg-black/35 px-3 py-1 text-xs text-white/90 backdrop-blur">
+                  Video
+                </span>
+              ) : null}
+            </div>
+            <h2 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
+              {displayTitle}
+            </h2>
+            {profileLocation || occupation ? (
+              <div className="mt-2 space-y-1 text-sm text-white/75 sm:text-base">
+                {profileLocation ? <p>{profileLocation}</p> : null}
+                {occupation ? <p>{occupation}</p> : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
-
-      {viewerOverlay && typeof document !== "undefined"
-        ? createPortal(viewerOverlay, document.body)
-        : null}
-    </>
+    </section>
   );
 }

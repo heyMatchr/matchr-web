@@ -419,74 +419,26 @@ export default async function ProfilePage({
       profileId={currentProfile.public_id ?? currentProfile.id}
       title="Profile"
     >
-        <div className="mt-6 grid overflow-hidden rounded-lg border border-neutral-800 bg-black/50 md:mt-10 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)]">
-          <div
-            className={`min-h-[340px] bg-neutral-950 md:min-h-[420px] ${
-              hasActiveStories ? "ring-2 ring-emerald-300/70" : ""
-            }`}
-          >
-            {activePreviewVideo?.media_url ? (
-              <div className="relative h-full min-h-[340px] w-full md:min-h-[420px]">
-                <video
-                  src={activePreviewVideo.media_url}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="metadata"
-                  className="h-full w-full object-cover"
-                />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent p-4">
-                  <span className="inline-flex rounded-full border border-white/15 bg-black/45 px-3 py-1 text-xs font-medium text-white/90 backdrop-blur">
-                    Preview
-                  </span>
-                </div>
-              </div>
-            ) : profile.avatar_url ? (
-              <Image
-                src={profile.avatar_url}
-                alt={profile.display_name}
-                width={900}
-                height={1200}
-                priority
-                sizes="(min-width: 768px) 45vw, 100vw"
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full min-h-[340px] w-full items-center justify-center text-7xl font-black text-neutral-700 md:min-h-[420px]">
-                {initialFor(profile.display_name)}
-              </div>
-            )}
-          </div>
-          <div className="p-6 sm:p-8">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-4xl font-black tracking-tight">
-                    {profile.display_name}, {profile.age}
-                  </h2>
-                  {profile.verified ? (
-                    <span className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs text-emerald-200">
-                      Verified
-                    </span>
-                  ) : null}
-                  {activePremium ? (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1 text-xs font-black text-[#D4AF37]">
-                      <span aria-hidden="true">✦</span>
-                      Premium
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-3 text-neutral-400">
-                  {profile.country_flag ? `${profile.country_flag} ` : ""}
-                  {profile.location}
-                  {profile.country ? `, ${profile.country}` : ""}
-                </p>
-                <p className="mt-1 text-neutral-400">{profile.occupation}</p>
-                {profile.public_id ? (
-                  <CopyPublicIdButton publicId={profile.public_id} />
-                ) : null}
-              </div>
+        <ProfileGallerySection
+          activePremium={Boolean(activePremium)}
+          age={profile.age}
+          avatarUrl={profile.avatar_url}
+          country={profile.country}
+          countryFlag={profile.country_flag}
+          displayName={profile.display_name}
+          hasActiveStories={hasActiveStories}
+          location={profile.location}
+          occupation={profile.occupation}
+          photos={galleryPhotosResult.data ?? []}
+          previewVideo={activePreviewVideo ?? null}
+          verified={profile.verified}
+        />
+
+        <div className="mt-4 rounded-lg border border-neutral-800 bg-black/50 p-4 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {profile.public_id ? (
+                <CopyPublicIdButton publicId={profile.public_id} />
+              ) : null}
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               {profile.id === user.id ? (
@@ -552,12 +504,6 @@ export default async function ProfilePage({
                 </>
               )}
             </div>
-
-            <ProfileGallerySection
-              avatarUrl={profile.avatar_url}
-              displayName={profile.display_name}
-              photos={galleryPhotosResult.data ?? []}
-            />
 
             <div className="mt-5 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
               <Link
@@ -830,7 +776,6 @@ export default async function ProfilePage({
             ) : null}
 
           </div>
-        </div>
         {activePanel === "visitors" && profile.id === user.id ? (
           <ProfileActivityPanel href={profileHref} title="Visitors">
             {recentVisitors.length > 0 ? (
