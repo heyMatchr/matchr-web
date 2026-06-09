@@ -534,6 +534,15 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   );
   const galleryPhotoCounts = countBy(galleryPhotosResult.data, "user_id");
   const firstGalleryPhotoByUserId = new Map<string, string>();
+  const galleryMediaByUserId = new Map<
+    string,
+    Array<{
+      isVideo: boolean;
+      label: string;
+      type: "gallery_photo" | "gallery_video";
+      url: string;
+    }>
+  >();
   galleryPhotosResult.data?.forEach((photo) => {
     if (
       photo.media_type === "gallery_photo" &&
@@ -541,6 +550,20 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     ) {
       firstGalleryPhotoByUserId.set(photo.user_id, photo.media_url);
     }
+
+    const mediaType =
+      photo.media_type === "gallery_video" ? "gallery_video" : "gallery_photo";
+    const userMedia = galleryMediaByUserId.get(photo.user_id) ?? [];
+    userMedia.push({
+      isVideo: mediaType === "gallery_video",
+      label:
+        mediaType === "gallery_video"
+          ? "Gallery video"
+          : "Gallery photo",
+      type: mediaType,
+      url: photo.media_url,
+    });
+    galleryMediaByUserId.set(photo.user_id, userMedia);
   });
   const profileViewCounts = countBy(profileViewsResult.data, "viewed_user_id");
   const latestViewerViewByUser = new Map<string, string>();
@@ -561,6 +584,33 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     const hasStories = activeStoryUserIds.has(profile.id);
     const hasActiveBoost = boostedUserIds.has(profile.id);
     const previewVideo = previewVideoByUserId.get(profile.id) ?? null;
+    const galleryMedia = galleryMediaByUserId.get(profile.id) ?? [];
+    const avatarUrl = profile.avatar_url ?? null;
+    const avatarAlreadyInGallery =
+      avatarUrl && galleryMedia.some((item) => item.url === avatarUrl);
+    const mediaItems: DiscoverProfile["mediaItems"] = [
+      ...(previewVideo
+        ? [
+            {
+              isVideo: true,
+              label: "Preview video",
+              type: "preview_video" as const,
+              url: previewVideo.media_url,
+            },
+          ]
+        : []),
+      ...(avatarUrl && !avatarAlreadyInGallery
+        ? [
+            {
+              isVideo: false,
+              label: "Profile photo",
+              type: "avatar" as const,
+              url: avatarUrl,
+            },
+          ]
+        : []),
+      ...galleryMedia,
+    ];
     const isOnline = Boolean(profile.is_online);
     const engagementCount = engagementByUser.get(profile.id) ?? 0;
     const giftCount = giftCounts.get(profile.id) ?? 0;
@@ -609,6 +659,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       interests: profile.interests ?? [],
       isOnline,
       location: profile.location || "Private",
+      mediaItems,
       momentCount,
       pronouns: profile.pronouns ?? null,
       relationship_intent: profile.relationship_intent || "Exploration",

@@ -29,6 +29,12 @@ export type DiscoverProfile = {
   interests: string[];
   isOnline: boolean;
   location: string;
+  mediaItems: Array<{
+    isVideo: boolean;
+    label: string;
+    type: "preview_video" | "avatar" | "gallery_photo" | "gallery_video";
+    url: string;
+  }>;
   momentCount: number;
   pronouns: string | null;
   previewVideo: {
@@ -516,8 +522,32 @@ const SwipeCard = memo(function SwipeCard({
   profile: DiscoverProfile;
 }) {
   const [dragStart, setDragStart] = useState<number | null>(null);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const [failedMediaUrls, setFailedMediaUrls] = useState<Set<string>>(
+    () => new Set(),
+  );
   const { isUserOnline } = useGlobalPresence();
   const profileIsOnline = profile.isOnline || isUserOnline(profile.id);
+  const activeMedia = profile.mediaItems[activeMediaIndex] ?? null;
+  const activeMediaFailed = activeMedia
+    ? failedMediaUrls.has(activeMedia.url)
+    : false;
+  const showMediaProgress = profile.mediaItems.length > 1;
+  const goPreviousMedia = useCallback(() => {
+    setActiveMediaIndex((currentIndex) => Math.max(0, currentIndex - 1));
+  }, []);
+  const goNextMedia = useCallback(() => {
+    setActiveMediaIndex((currentIndex) =>
+      Math.min(profile.mediaItems.length - 1, currentIndex + 1),
+    );
+  }, [profile.mediaItems.length]);
+  const markMediaFailed = useCallback((url: string) => {
+    setFailedMediaUrls((currentUrls) => {
+      const nextUrls = new Set(currentUrls);
+      nextUrls.add(url);
+      return nextUrls;
+    });
+  }, []);
 
   return (
     <article
@@ -534,27 +564,89 @@ const SwipeCard = memo(function SwipeCard({
       style={{ contentVisibility: "auto", containIntrinsicSize: "520px" }}
     >
       <div className={`relative aspect-[4/5] overflow-hidden bg-neutral-950 ${profile.hasStories ? "ring-2 ring-emerald-300/70" : ""}`}>
-        {profile.avatar_url ? (
-          <Image
-            src={profile.avatar_url}
-            alt={profile.display_name}
-            fill
-            priority={priority}
-            quality={priority ? 78 : 68}
-            sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+        <div
+          className="absolute inset-0"
+          onClick={(event) => {
+            event.stopPropagation();
+            if (!activeMedia || profile.mediaItems.length < 2) return;
+
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const tappedLeft = event.clientX < bounds.left + bounds.width / 2;
+
+            if (tappedLeft) {
+              goPreviousMedia();
+            } else {
+              goNextMedia();
+            }
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+        >
+        {activeMedia && !activeMediaFailed ? (
+          activeMedia.isVideo && priority ? (
+            <video
+              key={activeMedia.url}
+              src={activeMedia.url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              controls={false}
+              onError={() => markMediaFailed(activeMedia.url)}
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : activeMedia.isVideo ? (
+            <div className="flex h-full w-full flex-col items-center justify-center bg-neutral-950 text-white">
+              <span className="inline-flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10">
+                <PlayPreviewIcon className="h-6 w-6" />
+              </span>
+              <span className="mt-3 text-xs font-black uppercase tracking-[0.2em] text-white/65">
+                Video
+              </span>
+            </div>
+          ) : (
+            <Image
+              src={activeMedia.url}
+              alt={activeMedia.label}
+              fill
+              priority={priority}
+              quality={priority ? 78 : 68}
+              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              onError={() => markMediaFailed(activeMedia.url)}
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          )
         ) : (
           <div className="grid h-full place-items-center text-6xl font-black text-neutral-700">
             {profile.display_name.charAt(0)}
           </div>
         )}
+        </div>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/30" />
+        {showMediaProgress ? (
+          <div className="absolute inset-x-3 top-3 z-10 flex gap-1.5">
+            {profile.mediaItems.map((mediaItem, index) => (
+              <span
+                key={`${mediaItem.type}-${mediaItem.url}`}
+                className={`h-1 flex-1 rounded-full ${
+                  index <= activeMediaIndex ? "bg-white" : "bg-white/25"
+                }`}
+              />
+            ))}
+          </div>
+        ) : null}
         <div className="absolute left-3 top-3 flex gap-2">
           {profileIsOnline ? <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black">Online</span> : null}
           {profile.hasActiveBoost ? <span className="rounded-full border border-emerald-300/35 bg-black/45 px-3 py-1 text-xs font-black text-emerald-100">↟ Boosted</span> : null}
           {profile.verified ? <span className="rounded-full border border-white/20 bg-black/45 px-3 py-1 text-xs text-white">Verified</span> : null}
           {profile.hasPremium ? <span className="rounded-full border border-[#D4AF37]/45 bg-black/45 px-3 py-1 text-xs font-black text-[#D4AF37]">✦ Premium</span> : null}
         </div>
+        {activeMedia?.isVideo ? (
+          <span className="absolute bottom-4 left-4 rounded-full border border-white/20 bg-black/65 px-3 py-1 text-xs font-black text-white backdrop-blur">
+            Video
+          </span>
+        ) : null}
         {profile.previewVideo ? (
           <button
             type="button"
@@ -563,6 +655,8 @@ const SwipeCard = memo(function SwipeCard({
               event.stopPropagation();
               onPreview();
             }}
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
             className="absolute bottom-4 right-4 inline-flex min-h-11 items-center gap-2 rounded-full border border-white/20 bg-black/65 px-4 py-2 text-sm font-black text-white shadow-xl backdrop-blur transition-colors hover:bg-black/80"
           >
             <PlayPreviewIcon />
