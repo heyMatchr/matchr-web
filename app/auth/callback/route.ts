@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       return getLoginRedirect(
         request,
-        "We could not confirm your email. Try logging in.",
+        "We could not confirm that email. Try again.",
       );
     }
 
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       return getLoginRedirect(
         request,
-        "We could not confirm your email. Try logging in.",
+        "We could not confirm that email. Try again.",
       );
     }
 

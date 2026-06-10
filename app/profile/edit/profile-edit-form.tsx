@@ -645,7 +645,7 @@ export function ProfileEditForm({
                 : "border-emerald-300/30 text-emerald-100 hover:bg-emerald-300/10"
             }`}
           >
-            {galleryUploading ? "Uploading..." : "Add photo/video"}
+            {galleryUploading ? "Uploading..." : "Add media"}
           </label>
           <input
             id="gallery_photos"
@@ -780,10 +780,10 @@ export function ProfileEditForm({
             <>
               <p className="text-sm font-medium text-white">Preview video</p>
               <p className="mt-2 text-sm leading-6 text-neutral-300">
-                Upload a 10-15s teaser
+                Add a 10s preview
               </p>
               <p className="mt-1 text-xs text-emerald-100/70">
-                Shown on your profile
+                Appears on profile
               </p>
             </>
           )}
@@ -977,10 +977,10 @@ export function ProfileEditForm({
         className={inputClass}
         defaultValue={profile.relationship_intent}
       >
-        <option>Long-term relationship</option>
-        <option>Intentional dating</option>
-        <option>Something casual</option>
-        <option>Open to exploring</option>
+        <option>Long-term</option>
+        <option>Intentional</option>
+        <option>Casual</option>
+        <option>Exploring</option>
       </select>
 
       <label className="sr-only" htmlFor="location">

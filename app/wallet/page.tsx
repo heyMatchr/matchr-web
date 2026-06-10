@@ -145,7 +145,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
-          <p className="mt-3 text-[15px] leading-6 text-neutral-300">Messages · Gifts · Premium</p>
+          <p className="mt-3 text-[15px] leading-6 text-neutral-300">Chat · Gifts · Access</p>
           {paymentState === "success" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
               {paymentSuccessMessage}
@@ -153,12 +153,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           ) : null}
           {paymentState === "processing" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/20 bg-black/25 px-4 py-3 text-sm leading-6 text-emerald-50">
-              Payment processing. Gold appears after Paystack approves it.
+              Processing. Your Gold will appear shortly.
             </p>
           ) : null}
           {["failed", "missing-reference"].includes(paymentState) ? (
             <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
-              Payment failed. Try again or choose another method.
+              Let&apos;s keep going. Try another method.
             </p>
           ) : null}
           {boostState === "success" ? (
@@ -168,12 +168,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           ) : null}
           {boostState === "insufficient" ? (
             <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
-              Need Gold to boost.
+              Top up Gold to boost.
             </p>
           ) : null}
           {boostState === "failed" ? (
             <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
-              Boost failed. Try again.
+              Boost could not start. Try again.
             </p>
           ) : null}
           <div className="mt-5 flex flex-wrap gap-2">
@@ -258,7 +258,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               >
                 <input type="hidden" name="package_id" value={pack.id} />
                 <p className="text-sm font-black text-emerald-50">
-                  Payment Method
+                  Pay With
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {availableProviders.length ? (
@@ -278,11 +278,11 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                       </label>
                     ))
                   ) : (
-                    <span className="text-sm text-neutral-400">No payment methods available.</span>
+                    <span className="text-sm text-neutral-400">No payment options right now.</span>
                   )}
                 </div>
                 <button disabled={!availableProviders.length} className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50">
-                  Continue to Payment
+                  Complete Purchase
                 </button>
               </form>
             </details>
@@ -346,7 +346,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             className="flex items-center justify-between gap-4"
           >
             <span>
-              <span className="block text-lg font-black">Payment Methods</span>
+              <span className="block text-lg font-black">Payment Options</span>
               <span className="mt-1 block text-sm text-neutral-400">
                 {availableProviders.length} available
               </span>
@@ -397,7 +397,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
         </section>
 
         {activePanel === "payment-methods" ? (
-          <WalletPanel title="Payment Methods">
+          <WalletPanel title="Payment Options">
             <p className="text-sm leading-6 text-neutral-400">
               Available here: {currentProfile.country ?? "your region"}.
             </p>

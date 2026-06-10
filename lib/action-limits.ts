@@ -3,7 +3,7 @@ import { applyModerationPenalty } from "@/lib/moderation";
 import type { Database } from "@/lib/supabase/types";
 
 export const ACTION_LIMIT_MESSAGE =
-  "Slow down a little. Try again shortly.";
+  "Pause for a moment. Try again shortly.";
 
 export type ActionType =
   | "call_start"

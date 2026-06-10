@@ -46,7 +46,7 @@ export function FollowButton({
         setMessage(
           error instanceof Error
             ? error.message
-            : "Slow down a little. Try again shortly.",
+            : "Pause for a moment. Try again shortly.",
         );
       }
     });

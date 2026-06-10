@@ -22,7 +22,7 @@ const introSlides = [
   },
   {
     body: "matchr supports attention, conversation, creator interaction, friendship, entertainment, and private discovery.",
-    title: "More than a dating app.",
+    title: "More than matching.",
   },
   {
     body: "Send gifts, receive attention, support creators, and build meaningful interactions inside a private space.",
@@ -72,7 +72,7 @@ const onboardingAvatarAllowedTypes = [
 ] as const;
 
 const invalidAvatarMessage =
-  "Please upload a JPG, PNG, or WebP image under the allowed size.";
+  "Use JPG, PNG, or WebP under 5 MB.";
 
 type OnboardingFormProps = {
   anonKey: string;
@@ -317,11 +317,10 @@ export function OnboardingForm({
           {step === introSlides.length ? (
             <section>
               <h2 className="text-3xl font-black tracking-tight text-white">
-                Choose how you want to enter.
+                Choose your space.
               </h2>
               <p className="mt-3 text-base leading-7 text-neutral-300">
-                This helps matchr shape your first experience. You control what
-                appears publicly later.
+                This tunes what you see first.
               </p>
               <div className="mt-6 grid gap-3">
                 {identityOptions.map((option) => (
@@ -361,10 +360,10 @@ export function OnboardingForm({
           {step === introSlides.length + 1 ? (
             <section>
               <h2 className="text-3xl font-black tracking-tight text-white">
-                What should people call you?
+                Choose your name.
               </h2>
               <p className="mt-3 text-base leading-7 text-neutral-300">
-                Use a display name. Not a full legal name, not a surname.
+                Use a display name.
               </p>
               <label className="mt-6 block">
                 <span className="sr-only">Display name</span>

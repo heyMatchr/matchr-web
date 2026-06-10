@@ -24,7 +24,7 @@ export default async function SignupPage() {
 
         <h1 className="text-4xl font-black tracking-tight">Create account</h1>
         <p className="mt-3 text-neutral-400">
-          Start your Matchr profile with email and password.
+          Enter Matchr.
         </p>
 
         <AuthForm

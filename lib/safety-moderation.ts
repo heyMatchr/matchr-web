@@ -112,7 +112,7 @@ export async function enforceTextSafety(
     await applyModerationPenalty(supabase, userId, "copy_paste_spam", 1);
     return {
       allowed: false,
-      message: "Slow down a little. Try a more personal message.",
+      message: "Pause for a moment. Send something personal.",
     };
   }
 

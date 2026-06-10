@@ -34,10 +34,10 @@ export const SEXUAL_ORIENTATION_OPTIONS = [
 ] as const;
 
 export const RELATIONSHIP_INTENT_OPTIONS = [
-  "Long-term relationship",
-  "Intentional dating",
-  "Something casual",
-  "Open to exploring",
+  "Long-term",
+  "Intentional",
+  "Casual",
+  "Exploring",
 ] as const;
 
 const HIDDEN_VALUE = "Prefer not to say";

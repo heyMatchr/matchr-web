@@ -287,7 +287,7 @@ export function PushNotificationSettings({
   const backgroundPushUnavailable = Boolean(support && !support.canInstallPush);
   const backgroundPushMessage =
     support?.reason === "push-unsupported"
-      ? "Background push is not supported on this device/browser."
+      ? "Background alerts are not available here."
       : support?.reason === "missing-vapid-key"
         ? "Background push is not configured yet."
         : support?.reason === "notifications-unsupported"

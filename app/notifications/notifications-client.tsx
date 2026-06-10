@@ -247,7 +247,7 @@ export function NotificationsClient({
         </div>
       ) : (
         <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-6 md:p-8">
-          <p className="text-lg font-black text-white">No notifications yet</p>
+          <p className="text-lg font-black text-white">Nothing new yet</p>
           <p className="mt-2 max-w-xl text-sm leading-6 text-neutral-400">
             Likes, matches, messages, profile views, and follows will collect
             here as your Matchr circle grows.

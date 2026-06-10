@@ -25,7 +25,7 @@ type ProfilePayload = ProfileUpdate & RequiredOnboardingProfilePayload;
 const GENERIC_SAVE_ERROR =
   "We couldn't save your profile. Try again in a moment.";
 const INVALID_IMAGE_MESSAGE =
-  "Please upload a JPG, PNG, or WebP image under the allowed size.";
+  "Use JPG, PNG, or WebP under 5 MB.";
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);

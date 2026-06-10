@@ -498,7 +498,7 @@ export function MessagesClient({
                         mediaType: conversation.latestMessage.media_type,
                         messageType: conversation.latestMessage.message_type,
                       })
-                    : "No messages yet."}
+                    : "No messages yet"}
                 </p>
               </div>
             </Link>
@@ -506,7 +506,7 @@ export function MessagesClient({
         </div>
       ) : (
         <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">
-          <p className="text-xl font-black text-white">No conversations yet</p>
+          <p className="text-xl font-black text-white">No chats yet</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href="/matches"

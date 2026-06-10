@@ -103,7 +103,7 @@ export async function initializePaystackTransaction(input: {
   const result = (await response.json()) as PaystackInitializeResponse;
 
   if (!response.ok || !result.status || !result.data?.authorization_url) {
-    throw new Error(result.message ?? "Paystack checkout could not be started.");
+    throw new Error(result.message ?? "Checkout could not start.");
   }
 
   return {

@@ -105,7 +105,7 @@ export default async function EarningsPage() {
       title="Creator Earnings"
     >
       <div className="mt-6 rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-5 text-sm leading-6 text-emerald-50">
-        Gifts earn Diamonds. Payouts are reviewed.
+        Gifts earn Diamonds.
       </div>
 
       <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -172,7 +172,7 @@ export default async function EarningsPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-neutral-400">No gifts yet.</p>
+              <p className="text-sm text-neutral-400">No gifts yet</p>
             )}
           </div>
         </section>
@@ -201,7 +201,7 @@ export default async function EarningsPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-neutral-400">No withdrawals.</p>
+              <p className="text-sm text-neutral-400">No withdrawals yet</p>
             )}
           </div>
         </section>

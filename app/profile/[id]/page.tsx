@@ -606,7 +606,7 @@ export default async function ProfilePage({
                   {walletResult.data?.gold_balance ?? 0} Gold
                 </span>
                 <span className="rounded-full bg-black/35 px-3 py-1.5 text-sm text-neutral-200">
-                  {activePremium ? "Premium Active" : "Premium Inactive"}
+                  {activePremium ? "Premium Active" : "Premium available"}
                 </span>
                 <Link
                   href="/wallet"
@@ -750,7 +750,7 @@ export default async function ProfilePage({
                   ))
                 ) : (
                   <span className="rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm text-neutral-400">
-                    No quick actions
+                    No actions yet
                   </span>
                 )}
               </div>

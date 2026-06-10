@@ -391,13 +391,10 @@ export function MomentsClient({
           <div className="rounded-3xl border border-neutral-800 bg-black/50 p-8">
             <p className="text-xl font-black text-white">No moments yet</p>
             <p className="mt-3 text-[15px] leading-6 text-neutral-300">
-              Post the first moment or follow more people to fill your feed.
-              Small slices of real life make better conversation starters than
-              polished silence.
+              Post a moment. Let someone react.
             </p>
             <p className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
-              Try a low-pressure moment: what you are listening to, eating, or
-              secretly judging today.
+              Share what has your attention.
             </p>
           </div>
         )}

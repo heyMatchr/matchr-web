@@ -1419,9 +1419,6 @@ export function StoriesBar({
                     </button>
                     {isGiftPickerOpen ? (
                       <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-2 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
-                        <p className="px-2 text-xs text-neutral-500">
-                          Coin wallet coming soon
-                        </p>
                         {giftCatalog.map((gift) => (
                           <button
                             key={gift.type}
