@@ -18,8 +18,18 @@ function formatCurrency(value: number) {
   })}`;
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleString([], {
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "Recent";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Recent";
+  }
+
+  return date.toLocaleString([], {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
@@ -27,7 +37,11 @@ function formatDate(value: string) {
   });
 }
 
-function formatGiftName(giftType: string) {
+function formatGiftName(giftType?: string | null) {
+  if (!giftType) {
+    return "Gift";
+  }
+
   return giftType
     .split("_")
     .filter(Boolean)
@@ -50,6 +64,15 @@ function giftCategoryFor(gift: unknown) {
   }
 
   return "classic";
+}
+
+function logEarningsQueryError(
+  label: string,
+  error: { message?: string } | null | undefined,
+) {
+  if (error) {
+    console.error(`[Earnings] ${label} query failed`, error.message ?? error);
+  }
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -135,27 +158,47 @@ export default async function EarningsPage() {
       .limit(1)
       .maybeSingle(),
   ]);
+  logEarningsQueryError("creator wallet", walletResult.error);
+  logEarningsQueryError("withdrawals", withdrawalsResult.error);
+  logEarningsQueryError("recent support", recentSupportResult.error);
+  logEarningsQueryError("weekly gifts", weeklyGiftsResult.error);
+  logEarningsQueryError("aggregate gifts", aggregateGiftsResult.error);
+  logEarningsQueryError("creator tier", creatorTierResult.error);
 
-  const wallet = walletResult.data ?? {
+  const withdrawalRows = withdrawalsResult.error
+    ? []
+    : (withdrawalsResult.data ?? []);
+  const recentSupportRows = recentSupportResult.error
+    ? []
+    : (recentSupportResult.data ?? []);
+  const weeklyGiftRows = weeklyGiftsResult.error
+    ? []
+    : (weeklyGiftsResult.data ?? []);
+  const aggregateGiftRows = aggregateGiftsResult.error
+    ? []
+    : (aggregateGiftsResult.data ?? []);
+  const creatorTier = creatorTierResult.error ? null : creatorTierResult.data;
+
+  const wallet = walletResult.error || !walletResult.data ? {
     diamonds_balance: 0,
     diamonds_lifetime: 0,
     diamonds_pending: 0,
     diamonds_withdrawn: 0,
-  };
+  } : walletResult.data;
   const diamondsPerUsd = Math.max(1, Number(diamondConversionRate ?? 100));
   const cashEstimate = wallet.diamonds_balance / diamondsPerUsd;
   const creatorPercentage = Math.max(
     0,
-    Math.min(100, Number(creatorTierResult.data?.creator_percentage ?? 50)),
+    Math.min(100, Number(creatorTier?.creator_percentage ?? 50)),
   );
   const giftByType = new Map(giftCatalog.map((gift) => [gift.type, gift]));
   const diamondsFromGold = (goldCost: number | null) =>
     Math.floor(Math.max(0, Number(goldCost ?? 0)) * (creatorPercentage / 100));
   const weeklyDiamonds =
-    weeklyGiftsResult.data?.reduce(
+    weeklyGiftRows.reduce(
       (total, gift) => total + diamondsFromGold(gift.gold_cost),
       0,
-    ) ?? 0;
+    );
   const creatorGoalDiamonds = 5000;
   const goalPercent = Math.min(
     100,
@@ -188,7 +231,7 @@ export default async function EarningsPage() {
   let totalGoldGenerated = 0;
   let totalDiamondsGenerated = 0;
 
-  aggregateGiftsResult.data?.forEach((gift) => {
+  aggregateGiftRows.forEach((gift) => {
     const giftGold = Math.max(0, Number(gift.gold_cost ?? 0));
     const giftDiamonds = diamondsFromGold(gift.gold_cost);
     const giftCategory = giftCategoryFor(giftByType.get(gift.gift_type));
@@ -239,8 +282,7 @@ export default async function EarningsPage() {
     .sort(([, left], [, right]) => right.count - left.count || right.gold - left.gold)
     .slice(0, 5)
     .map(([supporterId]) => supporterId);
-  const recentSupporterIds =
-    recentSupportResult.data?.map((gift) => gift.sender_id) ?? [];
+  const recentSupporterIds = recentSupportRows.map((gift) => gift.sender_id);
   const supporterLookupIds = [
     ...new Set([...topSupporterIds, ...recentSupporterIds]),
   ];
@@ -268,7 +310,7 @@ export default async function EarningsPage() {
       : [];
   });
   const recentSupport =
-    recentSupportResult.data?.map((gift) => {
+    recentSupportRows.map((gift) => {
       const catalogGift = giftByType.get(gift.gift_type);
       const supporter = supporterProfileById.get(gift.sender_id);
 
@@ -394,7 +436,7 @@ export default async function EarningsPage() {
                       {supporter.avatar_url ? (
                         <Image
                           src={supporter.avatar_url}
-                          alt={supporter.display_name}
+                          alt={supporter.display_name ?? "Supporter"}
                           width={44}
                           height={44}
                           sizes="44px"
@@ -408,7 +450,7 @@ export default async function EarningsPage() {
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-white">
-                        {supporter.display_name}
+                        {supporter.display_name ?? "Supporter"}
                       </span>
                       <span className="block text-xs text-neutral-500">
                         {supporter.giftCount} gifts
@@ -508,7 +550,7 @@ export default async function EarningsPage() {
                     {gift.sender?.avatar_url ? (
                       <Image
                         src={gift.sender.avatar_url}
-                        alt={gift.sender.display_name}
+                        alt={gift.sender.display_name ?? "Supporter"}
                         width={40}
                         height={40}
                         sizes="40px"
@@ -556,8 +598,8 @@ export default async function EarningsPage() {
           Min: {formatDiamonds(minimumWithdrawal ?? 5000)} · {diamondsPerUsd} = $1
         </p>
         <p className="mt-2 text-sm leading-6 text-neutral-500">
-          Tier: {creatorTierResult.data?.name ?? "Standard"} ·{" "}
-          {creatorTierResult.data?.creator_percentage ?? 50}%
+          Tier: {creatorTier?.name ?? "Standard"} ·{" "}
+          {creatorTier?.creator_percentage ?? 50}%
         </p>
         <form action={requestWithdrawal} className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
           <input
@@ -593,8 +635,8 @@ export default async function EarningsPage() {
         <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
           <h2 className="text-xl font-black">Withdrawals</h2>
           <div className="mt-5 space-y-3">
-            {withdrawalsResult.data?.length ? (
-              withdrawalsResult.data.map((request) => (
+            {withdrawalRows.length ? (
+              withdrawalRows.map((request) => (
                 <div
                   key={request.id}
                   className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm"
