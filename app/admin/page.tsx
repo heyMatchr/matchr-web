@@ -355,6 +355,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             Economy
           </Link>
           <Link
+            href="/admin/gifts"
+            className="rounded-full border border-amber-200/40 px-4 py-2 text-sm font-medium text-amber-50"
+          >
+            Gifts
+          </Link>
+          <Link
             href="/admin/payments"
             className="rounded-full border border-cyan-200/40 px-4 py-2 text-sm font-medium text-cyan-50"
           >

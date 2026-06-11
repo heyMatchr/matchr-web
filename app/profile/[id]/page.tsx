@@ -5,6 +5,7 @@ import { AppShell } from "@/app/_components/app-shell";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
+import { getGiftCatalog } from "@/lib/economy";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
@@ -39,6 +40,14 @@ function toChipList(value?: string | null) {
 
 function initialFor(name?: string | null) {
   return name?.trim().charAt(0).toUpperCase() || "M";
+}
+
+function formatGiftName(giftType: string) {
+  return giftType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function searchValue(value?: string | string[]) {
@@ -157,6 +166,8 @@ export default async function ProfilePage({
     walletResult,
     premiumResult,
     giftsReceivedResult,
+    recentGiftsResult,
+    supporterGiftsResult,
     activePreviewVideoResult,
     galleryPhotosResult,
     viewedSettingsResult,
@@ -241,6 +252,20 @@ export default async function ProfilePage({
         .select("id", { count: "exact", head: true })
         .eq("receiver_id", profile.id),
       supabase
+        .from("gift_transactions")
+        .select("id, gift_type, gold_cost, created_at")
+        .eq("receiver_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(6),
+      profile.id === user.id
+        ? supabase
+            .from("gift_transactions")
+            .select("sender_id, gold_cost, created_at")
+            .eq("receiver_id", profile.id)
+            .order("created_at", { ascending: false })
+            .limit(300)
+        : Promise.resolve({ data: [] }),
+      supabase
         .from("profile_media")
         .select("id, media_url, duration_seconds")
         .eq("user_id", profile.id)
@@ -274,6 +299,38 @@ export default async function ProfilePage({
   }
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
   const activePreviewVideo = activePreviewVideoResult.data;
+  const giftCatalog = await getGiftCatalog(supabase);
+  const giftsByType = new Map(giftCatalog.map((gift) => [gift.type, gift]));
+  const recentGifts =
+    recentGiftsResult.data?.map((gift) => {
+      const catalogGift = giftsByType.get(gift.gift_type);
+
+      return {
+        cost: gift.gold_cost ?? catalogGift?.coinPrice ?? null,
+        id: gift.id,
+        name: catalogGift?.name ?? formatGiftName(gift.gift_type),
+      };
+    }) ?? [];
+  const supporterRows = supporterGiftsResult.data ?? [];
+  const supporterStats = new Map<
+    string,
+    {
+      count: number;
+      gold: number;
+    }
+  >();
+
+  supporterRows.forEach((gift) => {
+    const existing = supporterStats.get(gift.sender_id) ?? { count: 0, gold: 0 };
+    supporterStats.set(gift.sender_id, {
+      count: existing.count + 1,
+      gold: existing.gold + (gift.gold_cost ?? 0),
+    });
+  });
+  const topSupporterIds = [...supporterStats.entries()]
+    .sort(([, left], [, right]) => right.count - left.count || right.gold - left.gold)
+    .slice(0, 3)
+    .map(([supporterId]) => supporterId);
 
   const recentViewerIds =
     recentViewsResult.data?.map((view) => view.viewer_id) ?? [];
@@ -282,7 +339,12 @@ export default async function ProfilePage({
   const followingIds =
     followingListResult.data?.map((follow) => follow.following_id) ?? [];
   const socialProfileIds = [
-    ...new Set([...recentViewerIds, ...followerIds, ...followingIds]),
+    ...new Set([
+      ...recentViewerIds,
+      ...followerIds,
+      ...followingIds,
+      ...topSupporterIds,
+    ]),
   ];
   const [{ data: socialProfiles }, { data: currentUserFollows }] =
     await timeAsync("[Perf] Profile media/profile enrichment", () =>
@@ -328,6 +390,23 @@ export default async function ProfilePage({
   const following = followingIds
     .map((followingId) => socialProfilesById.get(followingId))
     .filter(Boolean);
+  const topSupporters =
+    profile.id === user.id
+      ? topSupporterIds
+          .flatMap((supporterId) => {
+            const supporter = socialProfilesById.get(supporterId);
+            const stats = supporterStats.get(supporterId);
+
+            return supporter && stats
+              ? [
+                  {
+                    ...supporter,
+                    gift_count: stats.count,
+                  },
+                ]
+              : [];
+          })
+      : [];
   const profileCompletion = getProfileCompletion({
     avatar_url: profile.avatar_url,
     bio: profile.bio,
@@ -543,6 +622,84 @@ export default async function ProfilePage({
                 <p className="text-[11px] text-neutral-500">Complete</p>
               </div>
             </div>
+
+            {recentGifts.length ? (
+              <div className="mt-3 rounded-xl border border-neutral-900 bg-white/[0.03] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-neutral-100">
+                    Recent gifts
+                  </p>
+                  <span className="text-xs text-neutral-500">
+                    {recentGifts.length}
+                  </span>
+                </div>
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {recentGifts.map((gift) => (
+                    <div
+                      key={gift.id}
+                      className="min-w-[132px] rounded-xl border border-emerald-300/10 bg-emerald-300/5 p-3"
+                    >
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200/20 bg-black/35 text-xs font-black text-emerald-100">
+                        {initialFor(gift.name)}
+                      </div>
+                      <p className="mt-2 truncate text-sm font-medium text-neutral-100">
+                        {gift.name}
+                      </p>
+                      {gift.cost ? (
+                        <p className="mt-0.5 text-xs text-neutral-500">
+                          {gift.cost} Gold
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {topSupporters.length ? (
+              <div className="mt-3 rounded-xl border border-neutral-900 bg-white/[0.03] p-3">
+                <p className="text-sm font-semibold text-neutral-100">
+                  Top supporters
+                </p>
+                <div className="mt-3 grid gap-2">
+                  {topSupporters.map((supporter) => (
+                    <Link
+                      key={supporter.id}
+                      href={getProfileHref(supporter)}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-neutral-900 bg-black/25 p-3 transition-colors hover:border-neutral-700"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-950">
+                          {supporter.avatar_url ? (
+                            <Image
+                              src={supporter.avatar_url}
+                              alt={supporter.display_name}
+                              width={40}
+                              height={40}
+                              sizes="40px"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-sm font-black text-neutral-600">
+                              {initialFor(supporter.display_name)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-neutral-100">
+                            {supporter.display_name}
+                          </span>
+                          <span className="block text-xs text-neutral-500">
+                            {supporter.gift_count} gifts
+                          </span>
+                        </span>
+                      </span>
+                      <span className="text-neutral-500">&gt;</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-3 overflow-hidden rounded-xl border border-neutral-900 bg-white/[0.03]">
               {profile.id === user.id ? (

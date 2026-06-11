@@ -876,6 +876,32 @@ function GiftsSheet({
 }) {
   const [giftState, setGiftState] = useState<GiftActionState | null>(null);
   const [sendingGiftType, setSendingGiftType] = useState<string | null>(null);
+  const [lastSentGift, setLastSentGift] = useState<GiftOption | null>(null);
+
+  async function sendMomentGift(gift: GiftOption) {
+    if (sendingGiftType) {
+      return;
+    }
+
+    setSendingGiftType(gift.type);
+
+    try {
+      const result = await giftMoment(
+        moment.id,
+        moment.user_id,
+        gift.type,
+        createGiftRequestId(),
+      );
+
+      setGiftState(result);
+
+      if (result?.status === "success") {
+        setLastSentGift(gift);
+      }
+    } finally {
+      setSendingGiftType(null);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/70 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] backdrop-blur-sm">
@@ -892,7 +918,9 @@ function GiftsSheet({
         {giftState?.status === "error" ? (
           <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
             <p className="font-black text-amber-100">Need Gold</p>
-            <p className="mt-1 text-sm text-amber-100/70">Top up to send this gift.</p>
+            <p className="mt-1 text-sm text-amber-100/70">
+              Top up your Gold to keep going.
+            </p>
             <div className="mt-3 flex gap-2">
               <Link
                 href="/wallet"
@@ -910,39 +938,48 @@ function GiftsSheet({
             </div>
           </div>
         ) : null}
+        {giftState?.status === "success" && lastSentGift ? (
+          <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <p className="font-black text-emerald-50">Sent.</p>
+            {giftState.streakDays && giftState.streakDays > 1 ? (
+              <p className="mt-1 text-sm text-emerald-100/75">
+                Streak: {giftState.streakDays} days
+              </p>
+            ) : null}
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                disabled={Boolean(sendingGiftType)}
+                onClick={() => void sendMomentGift(lastSentGift)}
+                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-60"
+              >
+                {sendingGiftType ? "Sending" : "Send again"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="mt-4 grid gap-2">
           {giftCatalog.map((gift) => (
             <form
               key={gift.type}
               action={async () => {
-                if (sendingGiftType) {
-                  return;
-                }
-
-                setSendingGiftType(gift.type);
-
-                try {
-                  const result = await giftMoment(
-                    moment.id,
-                    moment.user_id,
-                    gift.type,
-                    createGiftRequestId(),
-                  );
-                  setGiftState(result);
-
-                  if (result?.status === "success") {
-                    onClose();
-                  }
-                } finally {
-                  setSendingGiftType(null);
-                }
+                await sendMomentGift(gift);
               }}
             >
               <button
                 disabled={Boolean(sendingGiftType)}
                 className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55"
               >
-                <span className="text-2xl">{gift.icon}</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
+                  {gift.name.charAt(0).toUpperCase()}
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium text-white">{gift.name}</span>
                   <span className="text-xs text-neutral-500">

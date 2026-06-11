@@ -26,6 +26,11 @@ function createServerGiftRequestId() {
   return crypto.randomUUID();
 }
 
+function getGiftStreakDays(data: Record<string, unknown> | null) {
+  const streakDays = Number(data?.current_streak);
+  return Number.isFinite(streakDays) ? streakDays : null;
+}
+
 function getMediaExtension(file: File) {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
@@ -272,7 +277,7 @@ export async function giftMoment(
   if ((wallet?.gold_balance ?? 0) < gift.coinPrice) {
     await supabase.from("notifications").insert({
       actor_id: user.id,
-      body: "Add gold to continue.",
+      body: "Top up your Gold to keep going.",
       metadata: { gift_type: gift.type, moment_id: momentId },
       title: "Low gold",
       type: "low_gold",
@@ -280,7 +285,7 @@ export async function giftMoment(
     });
 
     return {
-      message: "Not enough gold. Add gold to continue.",
+      message: "Top up your Gold to keep going.",
       status: "error",
     } satisfies GiftActionState;
   }
@@ -299,16 +304,31 @@ export async function giftMoment(
   if (transactionError) {
     return {
       message: transactionError.message.includes("insufficient_gold")
-        ? "Not enough gold. Add gold to continue."
+        ? "Top up your Gold to keep going."
         : transactionError.message,
       status: "error",
     } satisfies GiftActionState;
   }
 
+  let streakDays: number | null = null;
+
   if (giftResult?.idempotent !== true) {
+    const { data: streakResult, error: streakError } = await supabase.rpc(
+      "record_gift_streak",
+      {
+        receiver_user_id: ownerId,
+      },
+    );
+
+    if (streakError) {
+      console.error("Moment gift streak update failed", streakError);
+    } else {
+      streakDays = getGiftStreakDays(streakResult);
+    }
+
     await supabase.from("notifications").insert({
       actor_id: user.id,
-      body: `Sent you ${gift.icon} ${gift.name}.`,
+      body: `Sent you ${gift.name}.`,
       metadata: {
         client_request_id: clientRequestId ?? null,
         coin_price: gift.coinPrice,
@@ -331,8 +351,9 @@ export async function giftMoment(
 
   revalidatePath("/moments");
   return {
-    message: `${gift.name} sent.`,
+    message: "Sent.",
     status: "success",
+    streakDays,
   } satisfies GiftActionState;
 }
 

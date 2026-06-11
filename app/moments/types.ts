@@ -5,4 +5,5 @@ export type MomentFormState = {
 export type GiftActionState = {
   message: string;
   status: "error" | "success";
+  streakDays?: number | null;
 };

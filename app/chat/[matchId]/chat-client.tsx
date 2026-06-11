@@ -55,6 +55,11 @@ type PresenceMeta = {
   user_id: string;
 };
 
+type GiftMomentumState = {
+  gift: GiftOption;
+  streakDays: number | null;
+};
+
 type ChatClientProps = {
   anonKey: string;
   currentUserId: string;
@@ -162,6 +167,8 @@ export function ChatClient({
   const [goldModal, setGoldModal] = useState("");
   const [spendableGold, setSpendableGold] = useState(goldBalance);
   const [pendingGift, setPendingGift] = useState<GiftOption | null>(null);
+  const [giftMomentum, setGiftMomentum] =
+    useState<GiftMomentumState | null>(null);
   const [activeReportMessageId, setActiveReportMessageId] = useState<
     string | null
   >(null);
@@ -889,12 +896,29 @@ export function ChatClient({
     }
 
     if (spendableGold < gift.coinPrice) {
-      setGoldModal("Not enough gold to send this gift.");
+      setGoldModal("Top up your Gold to keep going.");
       return;
     }
 
     setPendingGift(gift);
     setIsMediaMenuOpen(false);
+  }
+
+  async function recordGiftStreak(receiverUserId: string) {
+    const { data, error: streakError } = await supabase.rpc("record_gift_streak", {
+      receiver_user_id: receiverUserId,
+    });
+
+    if (streakError) {
+      console.error("Gift streak update failed", streakError);
+      return null;
+    }
+
+    const currentStreak = Number(
+      (data as { current_streak?: unknown } | null)?.current_streak,
+    );
+
+    return Number.isFinite(currentStreak) ? currentStreak : null;
   }
 
   async function confirmGift(gift: GiftOption) {
@@ -921,13 +945,16 @@ export function ChatClient({
 
       if (sendError) {
         if (sendError.message.includes("insufficient_gold")) {
-          setGoldModal("Not enough Gold to send this gift.");
+          setGoldModal("Top up your Gold to keep going.");
         } else {
           setError(sendError.message);
         }
       } else {
         mergeConfirmedMessage(savedMessage);
         setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
+        const streakDays = await recordGiftStreak(receiverId);
+        setGiftMomentum({ gift, streakDays });
+        setChatToast("Sent.");
         await supabase.from("notifications").insert({
           actor_id: currentUserId,
           body: `Sent you ${gift.name}.`,
@@ -1750,6 +1777,36 @@ export function ChatClient({
       {chatToast ? (
         <div className="fixed left-1/2 top-24 z-[80] -translate-x-1/2 rounded-full border border-emerald-200/25 bg-black/90 px-5 py-3 text-sm font-medium text-emerald-50 shadow-[0_0_40px_rgba(16,185,129,0.16)] backdrop-blur-xl">
           {chatToast}
+        </div>
+      ) : null}
+
+      {giftMomentum ? (
+        <div className="fixed left-1/2 top-36 z-[80] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-emerald-200/20 bg-black/95 p-4 shadow-[0_0_48px_rgba(16,185,129,0.16)] backdrop-blur-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Sent.</p>
+              {giftMomentum.streakDays && giftMomentum.streakDays > 1 ? (
+                <p className="mt-1 text-xs text-emerald-100/75">
+                  Streak: {giftMomentum.streakDays} days
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setGiftMomentum(null)}
+              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-neutral-300"
+            >
+              Close
+            </button>
+          </div>
+          <button
+            type="button"
+            disabled={sending}
+            onClick={() => void confirmGift(giftMomentum.gift)}
+            className="mt-3 w-full rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black disabled:opacity-60"
+          >
+            {sending ? "Sending" : "Send again"}
+          </button>
         </div>
       ) : null}
 

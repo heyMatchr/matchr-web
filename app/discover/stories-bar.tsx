@@ -64,6 +64,11 @@ type StoryEngagement = {
   viewers: StoryEngagementItem[];
 };
 
+type GiftMomentumState = {
+  gift: GiftOption;
+  streakDays: number | null;
+};
+
 const emptyEngagement: StoryEngagement = {
   gifts: [],
   reactions: [],
@@ -270,6 +275,8 @@ export function StoriesBar({
   const [activeStoryIndex, setActiveStoryIndex] = useState(0);
   const [engagement, setEngagement] = useState<StoryEngagement>(emptyEngagement);
   const [interactionMessage, setInteractionMessage] = useState("");
+  const [giftMomentum, setGiftMomentum] =
+    useState<GiftMomentumState | null>(null);
   const [isGiftPickerOpen, setIsGiftPickerOpen] = useState(false);
   const [sendingGiftType, setSendingGiftType] = useState<string | null>(null);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
@@ -981,6 +988,23 @@ export function StoriesBar({
     setInteractionMessage(sent ? "Reply sent to messages." : "Reply saved.");
   }
 
+  async function recordGiftStreak(receiverUserId: string) {
+    const { data, error: streakError } = await supabase.rpc("record_gift_streak", {
+      receiver_user_id: receiverUserId,
+    });
+
+    if (streakError) {
+      console.error("Story gift streak update failed", streakError);
+      return null;
+    }
+
+    const currentStreak = Number(
+      (data as { current_streak?: unknown } | null)?.current_streak,
+    );
+
+    return Number.isFinite(currentStreak) ? currentStreak : null;
+  }
+
   async function giftStory(gift: GiftOption) {
     if (!activeStory || activeStory.user_id === currentUserId || sendingGiftType) {
       return;
@@ -1006,26 +1030,23 @@ export function StoriesBar({
       if (transactionError) {
         setInteractionMessage(
           transactionError.message.includes("insufficient_gold")
-            ? "Not enough gold. Add gold to continue."
+            ? "Top up your Gold to keep going."
             : transactionError.message,
         );
         return;
       }
 
       const isDuplicateGift = giftResult?.idempotent === true;
-      const sent = isDuplicateGift
-        ? false
-        : await sendStoryDm(
-            activeStory.user_id,
-            "story_gift",
-            `Sent ${gift.icon} ${gift.name} from your story.`,
-            { giftType: gift.type },
-          );
-
       if (!isDuplicateGift) {
+        await sendStoryDm(
+          activeStory.user_id,
+          "story_gift",
+          `Sent ${gift.name} from your story.`,
+          { giftType: gift.type },
+        );
         await supabase.from("notifications").insert({
           actor_id: currentUserId,
-          body: `Sent you ${gift.icon} ${gift.name} from your story.`,
+          body: `Sent you ${gift.name} from your story.`,
           metadata: {
             client_request_id: clientRequestId,
             coin_price: gift.coinPrice,
@@ -1046,8 +1067,12 @@ export function StoriesBar({
         });
       }
 
+      const streakDays = isDuplicateGift
+        ? null
+        : await recordGiftStreak(activeStory.user_id);
+      setGiftMomentum({ gift, streakDays });
       setIsGiftPickerOpen(false);
-      setInteractionMessage(sent ? "Gift sent to messages." : "Gift sent.");
+      setInteractionMessage("Sent.");
     } finally {
       setSendingGiftType(null);
     }
@@ -1427,7 +1452,9 @@ export function StoriesBar({
                             onClick={() => void giftStory(gift)}
                             className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-55"
                           >
-                            <span className="text-2xl">{gift.icon}</span>
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
+                              {gift.name.charAt(0).toUpperCase()}
+                            </span>
                             <span className="min-w-0 flex-1">
                               <span className="block font-medium">{gift.name}</span>
                               <span className="text-xs text-neutral-500">
@@ -1450,6 +1477,24 @@ export function StoriesBar({
                     <p className="text-center text-xs text-emerald-100/80">
                       {interactionMessage}
                     </p>
+                  ) : null}
+
+                  {giftMomentum ? (
+                    <div className="rounded-2xl border border-emerald-200/20 bg-black/55 p-3 text-center">
+                      {giftMomentum.streakDays && giftMomentum.streakDays > 1 ? (
+                        <p className="text-xs text-emerald-100/75">
+                          Streak: {giftMomentum.streakDays} days
+                        </p>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={Boolean(sendingGiftType)}
+                        onClick={() => void giftStory(giftMomentum.gift)}
+                        className="mt-2 w-full rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black disabled:opacity-60"
+                      >
+                        {sendingGiftType ? "Sending" : "Send again"}
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               )}

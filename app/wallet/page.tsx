@@ -10,6 +10,8 @@ import { activateProfileBoost, startPremiumCheckout } from "./actions";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const PREMIUM_USD_TO_CONTRIBUTION_GOLD = 100;
+
 type WalletPageProps = {
   searchParams?: Promise<{
     boost?: string | string[];
@@ -60,6 +62,9 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     activeBoostResult,
     premiumPlansResult,
     eliteLevelsResult,
+    lifetimeGiftSpendResult,
+    lifetimeBoostSpendResult,
+    lifetimePaidOrdersResult,
     priorityMessageCost,
     profileBoostCost,
     availableProviders,
@@ -101,6 +106,22 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .from("elite_levels")
       .select("level, monthly_gold_requirement, badge, benefits_json")
       .order("level", { ascending: true }),
+    supabase
+      .from("gift_transactions")
+      .select("gold_cost")
+      .eq("sender_id", user.id)
+      .limit(1000),
+    supabase
+      .from("profile_boosts")
+      .select("gold_cost")
+      .eq("user_id", user.id)
+      .limit(1000),
+    supabase
+      .from("payment_orders")
+      .select("order_type, status, amount, amount_usd, gold_amount")
+      .eq("user_id", user.id)
+      .eq("status", "paid")
+      .limit(1000),
     getEconomyNumberConfig(supabase, "priority_message_cost", 15),
     getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
@@ -138,6 +159,57 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     ...activityRows.giftsOut,
     ...activityRows.messages,
   ].slice(0, 3);
+  const lifetimeGiftGold = sumGold(
+    (lifetimeGiftSpendResult.data ?? []).map((row) => row.gold_cost),
+  );
+  const lifetimeBoostGold = sumGold(
+    (lifetimeBoostSpendResult.data ?? []).map((row) => row.gold_cost),
+  );
+  const paidOrders = lifetimePaidOrdersResult.data ?? [];
+  const lifetimeGoldPurchased = paidOrders.reduce((total, order) => {
+    if (order.order_type !== "gold_purchase") {
+      return total;
+    }
+
+    return total + Math.max(0, Number(order.gold_amount ?? 0));
+  }, 0);
+  const lifetimePremiumContribution = paidOrders.reduce((total, order) => {
+    if (order.order_type !== "premium_subscription") {
+      return total;
+    }
+
+    const amount = Number(order.amount_usd ?? order.amount ?? 0);
+    return total + Math.round(Math.max(0, amount) * PREMIUM_USD_TO_CONTRIBUTION_GOLD);
+  }, 0);
+  const lifetimeGiftPurchaseContribution = paidOrders.reduce((total, order) => {
+    if (order.order_type !== "gift_purchase") {
+      return total;
+    }
+
+    const amount = Number(order.gold_amount ?? 0);
+    const usdFallback = Number(order.amount_usd ?? order.amount ?? 0);
+
+    return (
+      total +
+      (amount > 0
+        ? amount
+        : Math.round(Math.max(0, usdFallback) * PREMIUM_USD_TO_CONTRIBUTION_GOLD))
+    );
+  }, 0);
+  const lifetimeContributionGold =
+    lifetimeGiftGold +
+    lifetimeBoostGold +
+    lifetimeGoldPurchased +
+    lifetimePremiumContribution +
+    lifetimeGiftPurchaseContribution;
+  const eliteProgress = getEliteProgress(
+    lifetimeContributionGold,
+    eliteLevelsResult.data ?? [],
+  );
+  const milestones = getSpendingMilestones({
+    hasGifted: lifetimeGiftGold > 0,
+    lifetimeContributionGold,
+  });
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
@@ -181,6 +253,134 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             {!activePremium ? (
               <a href="#premium" className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Premium</a>
             ) : null}
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+                Private recognition
+              </p>
+              <h2 className="mt-2 text-xl font-black text-white">
+                Elite Progress
+              </h2>
+            </div>
+            <span className="rounded-full border border-[#D4AF37]/35 bg-black/25 px-3 py-1 text-xs font-medium text-[#E8C46A]">
+              {eliteProgress.currentLabel}
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+              <p className="text-sm text-[#E8C46A]/80">Lifetime Contribution</p>
+              <p className="mt-2 text-3xl font-black text-white">
+                {lifetimeContributionGold.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/65">Gold-equivalent</p>
+            </div>
+            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+              <p className="text-sm text-[#E8C46A]/80">Current level</p>
+              <p className="mt-2 text-3xl font-black text-white">
+                {eliteProgress.currentLevelText}
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/65">
+                {eliteProgress.currentBadge}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+              <p className="text-sm text-[#E8C46A]/80">Next level</p>
+              <p className="mt-2 text-3xl font-black text-white">
+                {eliteProgress.nextLevelText}
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/65">
+                {eliteProgress.remainingGold > 0
+                  ? `${eliteProgress.remainingGold.toLocaleString()} remaining`
+                  : "Elite reached"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-[#E8C46A]">
+                {eliteProgress.progressCopy}
+              </p>
+              <p className="text-sm font-black text-white">
+                {eliteProgress.progressPercent}%
+              </p>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/55">
+              <div
+                className="h-full rounded-full bg-[#D4AF37]"
+                style={{ width: `${eliteProgress.progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+              Elite Benefits
+            </p>
+            <h2 className="mt-2 text-xl font-black">Private status</h2>
+            <p className="mt-2 text-sm leading-6 text-neutral-400">
+              Recognition stays private while your status grows.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {eliteProgress.benefits.length ? (
+                eliteProgress.benefits.map((benefit) => (
+                  <span
+                    key={benefit}
+                    className="rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-1.5 text-sm text-[#E8C46A]"
+                  >
+                    {benefit}
+                  </span>
+                ))
+              ) : (
+                <span className="rounded-full border border-neutral-800 bg-white/[0.03] px-3 py-1.5 text-sm text-neutral-400">
+                  Benefits unlock with Elite levels
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+            <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+              Milestones
+            </p>
+            <h2 className="mt-2 text-xl font-black">Spending Milestones</h2>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {milestones.map((milestone) => (
+                <div
+                  key={milestone.label}
+                  className={`rounded-2xl border p-3 ${
+                    milestone.reached
+                      ? "border-[#D4AF37]/25 bg-[#D4AF37]/10"
+                      : "border-neutral-800 bg-white/[0.03]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-white">
+                      {milestone.label}
+                    </p>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs ${
+                        milestone.reached
+                          ? "bg-[#D4AF37]/15 text-[#E8C46A]"
+                          : "bg-black/35 text-neutral-500"
+                      }`}
+                    >
+                      {milestone.reached ? "Reached" : "Private"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {milestone.copy}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -461,6 +661,133 @@ function formatWalletTransaction(row: {
   const sign = row.gold_delta > 0 ? "+" : "";
 
   return `${labels[row.transaction_type] ?? row.transaction_type} · ${sign}${row.gold_delta} Gold`;
+}
+
+function sumGold(values: (number | null)[]): number {
+  let total = 0;
+
+  values.forEach((value) => {
+    total += Math.max(0, Number(value ?? 0));
+  });
+
+  return total;
+}
+
+function formatBenefitKey(key: string) {
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatBenefitValue(value: unknown) {
+  if (value === true) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }
+
+  if (typeof value === "number") {
+    return value.toLocaleString();
+  }
+
+  return "";
+}
+
+function formatEliteBenefits(benefitsJson: Record<string, unknown> | null) {
+  if (!benefitsJson) {
+    return [];
+  }
+
+  return Object.entries(benefitsJson)
+    .filter(([, value]) => Boolean(value))
+    .map(([key, value]) => {
+      const label = formatBenefitKey(key);
+      const detail = formatBenefitValue(value);
+
+      return detail ? `${label}: ${detail}` : label;
+    });
+}
+
+function getEliteProgress(
+  lifetimeContributionGold: number,
+  levels: {
+    badge: string;
+    benefits_json: Record<string, unknown>;
+    level: number;
+    monthly_gold_requirement: number;
+  }[],
+) {
+  const sortedLevels = [...levels].sort(
+    (left, right) => left.monthly_gold_requirement - right.monthly_gold_requirement,
+  );
+  const reachedLevel = [...sortedLevels]
+    .reverse()
+    .find((level) => lifetimeContributionGold >= level.monthly_gold_requirement);
+  const nextLevel = sortedLevels.find(
+    (level) => lifetimeContributionGold < level.monthly_gold_requirement,
+  );
+  const previousRequirement = reachedLevel?.monthly_gold_requirement ?? 0;
+  const nextRequirement = nextLevel?.monthly_gold_requirement ?? previousRequirement;
+  const progressRange = Math.max(1, nextRequirement - previousRequirement);
+  const progressValue = nextLevel
+    ? lifetimeContributionGold - previousRequirement
+    : progressRange;
+  const progressPercent = nextLevel
+    ? Math.max(0, Math.min(100, Math.round((progressValue / progressRange) * 100)))
+    : 100;
+  const currentLabel = reachedLevel
+    ? `Elite ${reachedLevel.level}`
+    : "Private";
+  const currentLevelText = reachedLevel ? `L${reachedLevel.level}` : "Base";
+  const currentBadge = reachedLevel?.badge ?? "Private";
+  const nextLevelText = nextLevel ? `L${nextLevel.level}` : "Max";
+  const remainingGold = nextLevel
+    ? Math.max(0, nextLevel.monthly_gold_requirement - lifetimeContributionGold)
+    : 0;
+  const progressCopy = nextLevel
+    ? `${remainingGold.toLocaleString()} to ${nextLevel.badge}`
+    : "Elite reached";
+
+  return {
+    benefits: formatEliteBenefits(
+      reachedLevel?.benefits_json ?? nextLevel?.benefits_json ?? null,
+    ),
+    currentBadge,
+    currentLabel,
+    currentLevelText,
+    nextLevelText,
+    progressCopy,
+    progressPercent,
+    remainingGold,
+  };
+}
+
+function getSpendingMilestones({
+  hasGifted,
+  lifetimeContributionGold,
+}: {
+  hasGifted: boolean;
+  lifetimeContributionGold: number;
+}) {
+  return [
+    {
+      copy: hasGifted ? "Milestone reached." : "Send your first gift.",
+      label: "First gift",
+      reached: hasGifted,
+    },
+    ...[100, 1000, 5000].map((amount) => ({
+      copy:
+        lifetimeContributionGold >= amount
+          ? "Milestone reached."
+          : `${(amount - lifetimeContributionGold).toLocaleString()} remaining.`,
+      label: `${amount.toLocaleString()} Gold`,
+      reached: lifetimeContributionGold >= amount,
+    })),
+  ];
 }
 
 function formatPaymentStatus(status: string | null) {

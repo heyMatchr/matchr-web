@@ -293,6 +293,18 @@ export type GiftTransactionRow = {
   created_at: string;
 };
 
+export type GiftStreakRow = {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  current_streak: number;
+  best_streak: number;
+  last_gift_date: string;
+  last_gift_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type UserWalletRow = {
   user_id: string;
   gold_balance: number;
@@ -932,6 +944,28 @@ export type Database = {
           created_at?: string;
         };
         Update: never;
+        Relationships: [];
+      };
+      gift_streaks: {
+        Row: GiftStreakRow;
+        Insert: {
+          id?: string;
+          sender_id: string;
+          receiver_id: string;
+          current_streak?: number;
+          best_streak?: number;
+          last_gift_date?: string;
+          last_gift_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          current_streak?: number;
+          best_streak?: number;
+          last_gift_date?: string;
+          last_gift_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       gold_packages: {
@@ -1772,6 +1806,12 @@ export type Database = {
           gift_source: string;
           source_uuid: string;
           client_request_id?: string;
+        };
+        Returns: Record<string, unknown>;
+      };
+      record_gift_streak: {
+        Args: {
+          receiver_user_id: string;
         };
         Returns: Record<string, unknown>;
       };
