@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import {
+  GiftChartsClient,
+  type GiftChartRow,
+} from "./gift-charts-client";
 
 type GiftCatalogRow = {
   active: boolean;
@@ -31,12 +34,6 @@ type GiftMetric = {
   repeatSends: number;
   revenue: number;
   sends: number;
-};
-
-type BarChartRow = {
-  label: string;
-  secondary?: string;
-  value: number;
 };
 
 const PRICE_BANDS = [
@@ -81,7 +78,7 @@ function formatShortDate(value: Date) {
   });
 }
 
-function getGiftActivityTrendRows(gifts: GiftTransactionRow[]) {
+function getGiftActivityTrendRows(gifts: GiftTransactionRow[]): GiftChartRow[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -92,6 +89,7 @@ function getGiftActivityTrendRows(gifts: GiftTransactionRow[]) {
     return date;
   });
   const countsByDay = new Map(days.map((date) => [date.toISOString().slice(0, 10), 0]));
+  const revenueByDay = new Map(days.map((date) => [date.toISOString().slice(0, 10), 0]));
 
   gifts.forEach((gift) => {
     const date = new Date(gift.created_at);
@@ -104,11 +102,25 @@ function getGiftActivityTrendRows(gifts: GiftTransactionRow[]) {
 
     if (countsByDay.has(key)) {
       countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
+      revenueByDay.set(
+        key,
+        (revenueByDay.get(key) ?? 0) + Math.max(0, Number(gift.gold_cost ?? 0)),
+      );
     }
   });
 
   return days.map((date) => ({
     label: formatShortDate(date),
+    tooltip: [
+      {
+        label: "Sends",
+        value: formatNumber(countsByDay.get(date.toISOString().slice(0, 10)) ?? 0),
+      },
+      {
+        label: "Gold generated",
+        value: formatNumber(revenueByDay.get(date.toISOString().slice(0, 10)) ?? 0),
+      },
+    ],
     value: countsByDay.get(date.toISOString().slice(0, 10)) ?? 0,
   }));
 }
@@ -159,226 +171,6 @@ function MetricTable({
         )}
       </div>
     </section>
-  );
-}
-
-function ChartFrame({
-  children,
-  empty,
-  title,
-}: {
-  children: ReactNode;
-  empty: string;
-  title: string;
-}) {
-  return (
-    <section className="min-w-0 rounded-3xl border border-neutral-800 bg-black/50 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-black text-white">{title}</h2>
-          <p className="mt-1 text-xs text-neutral-500">{empty}</p>
-        </div>
-        <span className="rounded-full border border-[#C8A24A]/25 bg-[#C8A24A]/10 px-3 py-1 text-xs font-bold text-[#E8C46A]">
-          Gifts
-        </span>
-      </div>
-      <div className="relative mt-4 overflow-hidden rounded-2xl border border-neutral-900 bg-black/60">
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function EmptyChart({ message }: { message: string }) {
-  return (
-    <div className="grid h-[300px] place-items-center px-5 text-center text-sm text-neutral-400">
-      {message}
-    </div>
-  );
-}
-
-function VerticalBarChart({
-  empty,
-  formatter = formatNumber,
-  rows,
-  title,
-}: {
-  empty: string;
-  formatter?: (value: number) => string;
-  rows: BarChartRow[];
-  title: string;
-}) {
-  const chartRows = rows.slice(0, 8);
-  const width = 720;
-  const height = 260;
-  const pad = { bottom: 48, left: 44, right: 20, top: 18 };
-  const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
-  const chartWidth = width - pad.left - pad.right;
-  const barWidth = Math.max(18, chartWidth / Math.max(1, chartRows.length) - 12);
-  const xFor = (index: number) =>
-    pad.left + (index + 0.5) * (chartWidth / Math.max(1, chartRows.length));
-  const yFor = (value: number) =>
-    height - pad.bottom - (value / maxValue) * (height - pad.top - pad.bottom);
-
-  return (
-    <ChartFrame empty={empty} title={title}>
-      {chartRows.length ? (
-        <svg className="h-[300px] w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
-          {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-            const y = pad.top + tick * (height - pad.top - pad.bottom);
-
-            return (
-              <g key={tick}>
-                <line
-                  stroke="rgba(255,255,255,0.07)"
-                  x1={pad.left}
-                  x2={width - pad.right}
-                  y1={y}
-                  y2={y}
-                />
-                <text fill="rgba(255,255,255,0.38)" fontSize="10" x="4" y={y + 3}>
-                  {formatter(maxValue * (1 - tick))}
-                </text>
-              </g>
-            );
-          })}
-          {chartRows.map((row, index) => {
-            const x = xFor(index) - barWidth / 2;
-            const y = yFor(row.value);
-            const barHeight = height - pad.bottom - y;
-
-            return (
-              <g key={`${title}-${row.label}`}>
-                <rect
-                  fill="#C8A24A"
-                  height={barHeight}
-                  opacity="0.9"
-                  rx="6"
-                  width={barWidth}
-                  x={x}
-                  y={y}
-                />
-                <text
-                  fill="#E8C46A"
-                  fontSize="11"
-                  fontWeight="700"
-                  textAnchor="middle"
-                  x={xFor(index)}
-                  y={Math.max(13, y - 7)}
-                >
-                  {formatter(row.value)}
-                </text>
-                <text
-                  fill="rgba(255,255,255,0.48)"
-                  fontSize="10"
-                  textAnchor="middle"
-                  x={xFor(index)}
-                  y={height - 24}
-                >
-                  {row.label.length > 10 ? `${row.label.slice(0, 10)}…` : row.label}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      ) : (
-        <EmptyChart message={empty} />
-      )}
-    </ChartFrame>
-  );
-}
-
-function HorizontalBarChart({
-  empty,
-  formatter = formatNumber,
-  rows,
-  title,
-}: {
-  empty: string;
-  formatter?: (value: number) => string;
-  rows: BarChartRow[];
-  title: string;
-}) {
-  const chartRows = rows.slice(0, 7);
-  const width = 720;
-  const height = 260;
-  const pad = { bottom: 24, left: 150, right: 78, top: 18 };
-  const rowGap = 10;
-  const rowHeight = Math.max(
-    18,
-    (height - pad.top - pad.bottom - rowGap * Math.max(0, chartRows.length - 1)) /
-      Math.max(1, chartRows.length),
-  );
-  const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
-  const chartWidth = width - pad.left - pad.right;
-
-  return (
-    <ChartFrame empty={empty} title={title}>
-      {chartRows.length ? (
-        <svg className="h-[300px] w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
-          {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
-            const x = pad.left + tick * chartWidth;
-
-            return (
-              <line
-                key={tick}
-                stroke="rgba(255,255,255,0.07)"
-                x1={x}
-                x2={x}
-                y1={pad.top}
-                y2={height - pad.bottom}
-              />
-            );
-          })}
-          {chartRows.map((row, index) => {
-            const y = pad.top + index * (rowHeight + rowGap);
-            const barWidth = Math.max(4, (row.value / maxValue) * chartWidth);
-
-            return (
-              <g key={`${title}-${row.label}`}>
-                <text
-                  fill="rgba(255,255,255,0.72)"
-                  fontSize="12"
-                  fontWeight="700"
-                  textAnchor="end"
-                  x={pad.left - 10}
-                  y={y + rowHeight / 2 + 4}
-                >
-                  {row.label.length > 18 ? `${row.label.slice(0, 18)}…` : row.label}
-                </text>
-                <rect
-                  fill="rgba(255,255,255,0.05)"
-                  height={rowHeight}
-                  rx="6"
-                  width={chartWidth}
-                  x={pad.left}
-                  y={y}
-                />
-                <rect
-                  fill="#C8A24A"
-                  height={rowHeight}
-                  rx="6"
-                  width={barWidth}
-                  x={pad.left}
-                  y={y}
-                />
-                <text
-                  fill="#E8C46A"
-                  fontSize="12"
-                  fontWeight="700"
-                  x={pad.left + barWidth + 8}
-                  y={y + rowHeight / 2 + 4}
-                >
-                  {formatter(row.value)}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      ) : (
-        <EmptyChart message={empty} />
-      )}
-    </ChartFrame>
   );
 }
 
@@ -594,6 +386,20 @@ export default async function AdminGiftAnalyticsPage() {
     .map((gift) => ({
       label: gift.name,
       secondary: `${gift.category} · ${gift.goldCost} Gold`,
+      tooltip: [
+        {
+          label: "Sends",
+          value: formatNumber(gift.sends),
+        },
+        {
+          label: "Gold generated",
+          value: formatNumber(gift.revenue),
+        },
+        {
+          label: "Repeat rate",
+          value: formatPercent(gift.repeatRate),
+        },
+      ],
       value: gift.sends,
     }));
   const highestRevenueRows = [...sentMetrics]
@@ -602,12 +408,40 @@ export default async function AdminGiftAnalyticsPage() {
     .map((gift) => ({
       label: gift.name,
       secondary: `${formatNumber(gift.sends)} sends`,
+      tooltip: [
+        {
+          label: "Gold generated",
+          value: formatNumber(gift.revenue),
+        },
+        {
+          label: "Sends",
+          value: formatNumber(gift.sends),
+        },
+        {
+          label: "Repeat rate",
+          value: formatPercent(gift.repeatRate),
+        },
+      ],
       value: gift.revenue,
     }));
   const priceBandRows = totalSends
     ? priceBandMetrics.map((band) => ({
         label: band.label,
         secondary: `${formatNumber(band.sends)} sends · ${formatPercent(band.repeatRate)} repeat`,
+        tooltip: [
+          {
+            label: "Sends",
+            value: formatNumber(band.sends),
+          },
+          {
+            label: "Gold generated",
+            value: formatNumber(band.revenue),
+          },
+          {
+            label: "Repeat rate",
+            value: formatPercent(band.repeatRate),
+          },
+        ],
         value: band.revenue,
       }))
     : [];
@@ -618,6 +452,20 @@ export default async function AdminGiftAnalyticsPage() {
     .map((gift) => ({
       label: gift.name,
       secondary: `${formatNumber(gift.repeatSends)} repeat sends`,
+      tooltip: [
+        {
+          label: "Repeat sends",
+          value: formatNumber(gift.repeatSends),
+        },
+        {
+          label: "Repeat rate",
+          value: formatPercent(gift.repeatRate),
+        },
+        {
+          label: "Total sends",
+          value: formatNumber(gift.sends),
+        },
+      ],
       value: gift.repeatRate,
     }));
   const activityTrendRows = totalSends ? getGiftActivityTrendRows(gifts) : [];
@@ -649,34 +497,13 @@ export default async function AdminGiftAnalyticsPage() {
         <StatCard label="Active streaks" value={formatNumber(activeStreaks)} />
       </section>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-2">
-        <VerticalBarChart
-          empty="No sent gifts yet."
-          rows={mostSentRows}
-          title="Gift Sends by Gift"
-        />
-        <VerticalBarChart
-          empty="No Gold revenue yet."
-          rows={highestRevenueRows}
-          title="Gold Generated by Gift"
-        />
-        <VerticalBarChart
-          empty="No price band revenue yet."
-          rows={priceBandRows}
-          title="Price Band Performance"
-        />
-        <VerticalBarChart
-          empty="Not enough gift activity yet."
-          rows={activityTrendRows}
-          title="Gift Activity Trend"
-        />
-        <HorizontalBarChart
-          empty="No repeat gift behavior yet."
-          formatter={formatPercent}
-          rows={repeatRateRows}
-          title="Repeat Behavior"
-        />
-      </section>
+      <GiftChartsClient
+        activityTrendRows={activityTrendRows}
+        highestRevenueRows={highestRevenueRows}
+        mostSentRows={mostSentRows}
+        priceBandRows={priceBandRows}
+        repeatRateRows={repeatRateRows}
+      />
 
       <div className="mt-6">
         <ReadinessSummary
