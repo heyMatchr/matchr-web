@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -73,6 +74,45 @@ function getPriceBand(cost: number) {
   return PRICE_BANDS.find((band) => cost >= band.min && cost <= band.max) ?? PRICE_BANDS[0];
 }
 
+function formatShortDate(value: Date) {
+  return value.toLocaleDateString("en-US", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function getGiftActivityTrendRows(gifts: GiftTransactionRow[]) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const days = Array.from({ length: 10 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() - (9 - index));
+
+    return date;
+  });
+  const countsByDay = new Map(days.map((date) => [date.toISOString().slice(0, 10), 0]));
+
+  gifts.forEach((gift) => {
+    const date = new Date(gift.created_at);
+
+    if (Number.isNaN(date.getTime())) {
+      return;
+    }
+
+    const key = date.toISOString().slice(0, 10);
+
+    if (countsByDay.has(key)) {
+      countsByDay.set(key, (countsByDay.get(key) ?? 0) + 1);
+    }
+  });
+
+  return days.map((date) => ({
+    label: formatShortDate(date),
+    value: countsByDay.get(date.toISOString().slice(0, 10)) ?? 0,
+  }));
+}
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <article className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-5">
@@ -122,7 +162,42 @@ function MetricTable({
   );
 }
 
-function HorizontalBarChart({
+function ChartFrame({
+  children,
+  empty,
+  title,
+}: {
+  children: ReactNode;
+  empty: string;
+  title: string;
+}) {
+  return (
+    <section className="min-w-0 rounded-3xl border border-neutral-800 bg-black/50 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-black text-white">{title}</h2>
+          <p className="mt-1 text-xs text-neutral-500">{empty}</p>
+        </div>
+        <span className="rounded-full border border-[#C8A24A]/25 bg-[#C8A24A]/10 px-3 py-1 text-xs font-bold text-[#E8C46A]">
+          Gifts
+        </span>
+      </div>
+      <div className="relative mt-4 overflow-hidden rounded-2xl border border-neutral-900 bg-black/60">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function EmptyChart({ message }: { message: string }) {
+  return (
+    <div className="grid h-[300px] place-items-center px-5 text-center text-sm text-neutral-400">
+      {message}
+    </div>
+  );
+}
+
+function VerticalBarChart({
   empty,
   formatter = formatNumber,
   rows,
@@ -134,52 +209,176 @@ function HorizontalBarChart({
   title: string;
 }) {
   const chartRows = rows.slice(0, 8);
+  const width = 720;
+  const height = 260;
+  const pad = { bottom: 48, left: 44, right: 20, top: 18 };
   const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
+  const chartWidth = width - pad.left - pad.right;
+  const barWidth = Math.max(18, chartWidth / Math.max(1, chartRows.length) - 12);
+  const xFor = (index: number) =>
+    pad.left + (index + 0.5) * (chartWidth / Math.max(1, chartRows.length));
+  const yFor = (value: number) =>
+    height - pad.bottom - (value / maxValue) * (height - pad.top - pad.bottom);
 
   return (
-    <section className="min-w-0 rounded-3xl border border-neutral-800 bg-black/50 p-5">
-      <h2 className="text-xl font-black">{title}</h2>
-      <div className="mt-5 grid gap-3">
-        {chartRows.length ? (
-          chartRows.map((row) => {
-            const width = Math.max(3, Math.round((row.value / maxValue) * 100));
+    <ChartFrame empty={empty} title={title}>
+      {chartRows.length ? (
+        <svg className="h-[300px] w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
+          {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+            const y = pad.top + tick * (height - pad.top - pad.bottom);
 
             return (
-              <div
-                key={`${title}-${row.label}`}
-                className="min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
-              >
-                <div className="flex min-w-0 items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-black text-white">
-                      {row.label}
-                    </p>
-                    {row.secondary ? (
-                      <p className="mt-1 truncate text-xs text-neutral-500">
-                        {row.secondary}
-                      </p>
-                    ) : null}
-                  </div>
-                  <p className="shrink-0 text-sm font-black text-[#E8C46A]">
-                    {formatter(row.value)}
-                  </p>
-                </div>
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/55">
-                  <div
-                    className="h-full rounded-full bg-[#C8A24A]"
-                    style={{ width: `${width}%` }}
-                  />
-                </div>
-              </div>
+              <g key={tick}>
+                <line
+                  stroke="rgba(255,255,255,0.07)"
+                  x1={pad.left}
+                  x2={width - pad.right}
+                  y1={y}
+                  y2={y}
+                />
+                <text fill="rgba(255,255,255,0.38)" fontSize="10" x="4" y={y + 3}>
+                  {formatter(maxValue * (1 - tick))}
+                </text>
+              </g>
             );
-          })
-        ) : (
-          <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
-            {empty}
-          </p>
-        )}
-      </div>
-    </section>
+          })}
+          {chartRows.map((row, index) => {
+            const x = xFor(index) - barWidth / 2;
+            const y = yFor(row.value);
+            const barHeight = height - pad.bottom - y;
+
+            return (
+              <g key={`${title}-${row.label}`}>
+                <rect
+                  fill="#C8A24A"
+                  height={barHeight}
+                  opacity="0.9"
+                  rx="6"
+                  width={barWidth}
+                  x={x}
+                  y={y}
+                />
+                <text
+                  fill="#E8C46A"
+                  fontSize="11"
+                  fontWeight="700"
+                  textAnchor="middle"
+                  x={xFor(index)}
+                  y={Math.max(13, y - 7)}
+                >
+                  {formatter(row.value)}
+                </text>
+                <text
+                  fill="rgba(255,255,255,0.48)"
+                  fontSize="10"
+                  textAnchor="middle"
+                  x={xFor(index)}
+                  y={height - 24}
+                >
+                  {row.label.length > 10 ? `${row.label.slice(0, 10)}…` : row.label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      ) : (
+        <EmptyChart message={empty} />
+      )}
+    </ChartFrame>
+  );
+}
+
+function HorizontalBarChart({
+  empty,
+  formatter = formatNumber,
+  rows,
+  title,
+}: {
+  empty: string;
+  formatter?: (value: number) => string;
+  rows: BarChartRow[];
+  title: string;
+}) {
+  const chartRows = rows.slice(0, 7);
+  const width = 720;
+  const height = 260;
+  const pad = { bottom: 24, left: 150, right: 78, top: 18 };
+  const rowGap = 10;
+  const rowHeight = Math.max(
+    18,
+    (height - pad.top - pad.bottom - rowGap * Math.max(0, chartRows.length - 1)) /
+      Math.max(1, chartRows.length),
+  );
+  const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
+  const chartWidth = width - pad.left - pad.right;
+
+  return (
+    <ChartFrame empty={empty} title={title}>
+      {chartRows.length ? (
+        <svg className="h-[300px] w-full" role="img" viewBox={`0 0 ${width} ${height}`}>
+          {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+            const x = pad.left + tick * chartWidth;
+
+            return (
+              <line
+                key={tick}
+                stroke="rgba(255,255,255,0.07)"
+                x1={x}
+                x2={x}
+                y1={pad.top}
+                y2={height - pad.bottom}
+              />
+            );
+          })}
+          {chartRows.map((row, index) => {
+            const y = pad.top + index * (rowHeight + rowGap);
+            const barWidth = Math.max(4, (row.value / maxValue) * chartWidth);
+
+            return (
+              <g key={`${title}-${row.label}`}>
+                <text
+                  fill="rgba(255,255,255,0.72)"
+                  fontSize="12"
+                  fontWeight="700"
+                  textAnchor="end"
+                  x={pad.left - 10}
+                  y={y + rowHeight / 2 + 4}
+                >
+                  {row.label.length > 18 ? `${row.label.slice(0, 18)}…` : row.label}
+                </text>
+                <rect
+                  fill="rgba(255,255,255,0.05)"
+                  height={rowHeight}
+                  rx="6"
+                  width={chartWidth}
+                  x={pad.left}
+                  y={y}
+                />
+                <rect
+                  fill="#C8A24A"
+                  height={rowHeight}
+                  rx="6"
+                  width={barWidth}
+                  x={pad.left}
+                  y={y}
+                />
+                <text
+                  fill="#E8C46A"
+                  fontSize="12"
+                  fontWeight="700"
+                  x={pad.left + barWidth + 8}
+                  y={y + rowHeight / 2 + 4}
+                >
+                  {formatter(row.value)}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      ) : (
+        <EmptyChart message={empty} />
+      )}
+    </ChartFrame>
   );
 }
 
@@ -405,11 +604,13 @@ export default async function AdminGiftAnalyticsPage() {
       secondary: `${formatNumber(gift.sends)} sends`,
       value: gift.revenue,
     }));
-  const priceBandRows = priceBandMetrics.map((band) => ({
-    label: band.label,
-    secondary: `${formatNumber(band.sends)} sends · ${formatPercent(band.repeatRate)} repeat`,
-    value: band.revenue,
-  }));
+  const priceBandRows = totalSends
+    ? priceBandMetrics.map((band) => ({
+        label: band.label,
+        secondary: `${formatNumber(band.sends)} sends · ${formatPercent(band.repeatRate)} repeat`,
+        value: band.revenue,
+      }))
+    : [];
   const repeatRateRows = [...sentMetrics]
     .filter((gift) => gift.repeatRate > 0)
     .sort((left, right) => right.repeatRate - left.repeatRate || right.repeatSends - left.repeatSends)
@@ -419,6 +620,7 @@ export default async function AdminGiftAnalyticsPage() {
       secondary: `${formatNumber(gift.repeatSends)} repeat sends`,
       value: gift.repeatRate,
     }));
+  const activityTrendRows = totalSends ? getGiftActivityTrendRows(gifts) : [];
 
   return (
     <AppShell
@@ -448,20 +650,25 @@ export default async function AdminGiftAnalyticsPage() {
       </section>
 
       <section className="mt-6 grid gap-6 lg:grid-cols-2">
-        <HorizontalBarChart
+        <VerticalBarChart
           empty="No sent gifts yet."
           rows={mostSentRows}
-          title="Most Sent Gifts"
+          title="Gift Sends by Gift"
         />
-        <HorizontalBarChart
+        <VerticalBarChart
           empty="No Gold revenue yet."
           rows={highestRevenueRows}
-          title="Highest Revenue Gifts"
+          title="Gold Generated by Gift"
         />
-        <HorizontalBarChart
+        <VerticalBarChart
           empty="No price band revenue yet."
           rows={priceBandRows}
           title="Price Band Performance"
+        />
+        <VerticalBarChart
+          empty="Not enough gift activity yet."
+          rows={activityTrendRows}
+          title="Gift Activity Trend"
         />
         <HorizontalBarChart
           empty="No repeat gift behavior yet."
