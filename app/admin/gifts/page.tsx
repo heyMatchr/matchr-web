@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -33,9 +32,9 @@ type GiftMetric = {
   sends: number;
 };
 
-type ChartDatum = {
+type BarChartRow = {
   label: string;
-  sublabel?: string;
+  secondary?: string;
   value: number;
 };
 
@@ -123,139 +122,68 @@ function MetricTable({
   );
 }
 
-function ChartCard({
-  children,
-  description,
+function HorizontalBarChart({
+  empty,
+  formatter = formatNumber,
+  rows,
   title,
 }: {
-  children: ReactNode;
-  description: string;
+  empty: string;
+  formatter?: (value: number) => string;
+  rows: BarChartRow[];
   title: string;
 }) {
+  const chartRows = rows.slice(0, 8);
+  const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
+
   return (
     <section className="min-w-0 rounded-3xl border border-neutral-800 bg-black/50 p-5">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-black text-white">{title}</h2>
-        <p className="text-sm leading-6 text-neutral-400">{description}</p>
+      <h2 className="text-xl font-black">{title}</h2>
+      <div className="mt-5 grid gap-3">
+        {chartRows.length ? (
+          chartRows.map((row) => {
+            const width = Math.max(3, Math.round((row.value / maxValue) * 100));
+
+            return (
+              <div
+                key={`${title}-${row.label}`}
+                className="min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-white">
+                      {row.label}
+                    </p>
+                    {row.secondary ? (
+                      <p className="mt-1 truncate text-xs text-neutral-500">
+                        {row.secondary}
+                      </p>
+                    ) : null}
+                  </div>
+                  <p className="shrink-0 text-sm font-black text-[#E8C46A]">
+                    {formatter(row.value)}
+                  </p>
+                </div>
+                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-black/55">
+                  <div
+                    className="h-full rounded-full bg-[#C8A24A]"
+                    style={{ width: `${width}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
+            {empty}
+          </p>
+        )}
       </div>
-      <div className="mt-5">{children}</div>
     </section>
   );
 }
 
-function VerticalBarChart({
-  empty,
-  rows,
-  valueLabel,
-}: {
-  empty: string;
-  rows: ChartDatum[];
-  valueLabel: string;
-}) {
-  const chartRows = rows.slice(0, 8);
-  const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
-
-  if (!chartRows.length) {
-    return (
-      <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
-        {empty}
-      </p>
-    );
-  }
-
-  return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-neutral-900 bg-black/55 p-4">
-      <div
-        className="grid h-56 min-w-0 items-end gap-2"
-        style={{
-          gridTemplateColumns: `repeat(${chartRows.length}, minmax(0, 1fr))`,
-        }}
-      >
-        {chartRows.map((row) => {
-          const height = Math.max(8, Math.round((row.value / maxValue) * 100));
-
-          return (
-            <div
-              key={`${row.label}-${row.value}`}
-              className="flex min-w-0 flex-col items-center justify-end gap-2"
-            >
-              <span className="text-[11px] font-black text-[#E8C46A]">
-                {formatNumber(row.value)}
-              </span>
-              <div className="flex h-36 w-full items-end rounded-full bg-white/[0.04] p-1">
-                <div
-                  aria-label={`${row.label}: ${formatNumber(row.value)} ${valueLabel}`}
-                  className="w-full rounded-full bg-[#C8A24A] shadow-[0_0_22px_rgba(200,162,74,0.20)]"
-                  style={{ height: `${height}%` }}
-                />
-              </div>
-              <span className="line-clamp-2 min-h-8 max-w-full text-center text-[11px] leading-4 text-neutral-400">
-                {row.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      <p className="mt-4 text-xs text-neutral-500">{valueLabel}</p>
-    </div>
-  );
-}
-
-function HorizontalProgressChart({
-  empty,
-  rows,
-  valueFormatter = formatNumber,
-}: {
-  empty: string;
-  rows: ChartDatum[];
-  valueFormatter?: (value: number) => string;
-}) {
-  const chartRows = rows.slice(0, 8);
-  const maxValue = Math.max(1, ...chartRows.map((row) => row.value));
-
-  if (!chartRows.length) {
-    return (
-      <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
-        {empty}
-      </p>
-    );
-  }
-
-  return (
-    <div className="grid min-w-0 gap-3">
-      {chartRows.map((row) => {
-        const width = Math.max(3, Math.round((row.value / maxValue) * 100));
-
-        return (
-          <div
-            key={`${row.label}-${row.value}`}
-            className="min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3"
-          >
-            <div className="flex min-w-0 items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-black text-white">{row.label}</p>
-                {row.sublabel ? (
-                  <p className="truncate text-xs text-neutral-500">{row.sublabel}</p>
-                ) : null}
-              </div>
-              <p className="shrink-0 text-sm font-black text-[#E8C46A]">
-                {valueFormatter(row.value)}
-              </p>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/60">
-              <div
-                className="h-full rounded-full bg-[#C8A24A]"
-                style={{ width: `${width}%` }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ReadinessSplitChart({
+function ReadinessSummary({
   premiumCount,
   retireCount,
   upgradeCount,
@@ -264,60 +192,41 @@ function ReadinessSplitChart({
   retireCount: number;
   upgradeCount: number;
 }) {
-  const total = retireCount + upgradeCount + premiumCount;
-  const segments = [
+  const rows = [
     {
-      className: "bg-rose-300/70",
       label: "Retire",
+      tone: "text-rose-100",
       value: retireCount,
     },
     {
-      className: "bg-amber-300/80",
       label: "Upgrade",
+      tone: "text-amber-100",
       value: upgradeCount,
     },
     {
-      className: "bg-[#C8A24A]",
       label: "Premium",
+      tone: "text-[#E8C46A]",
       value: premiumCount,
     },
   ];
 
-  if (!total) {
-    return (
-      <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
-        Not enough gift data yet.
-      </p>
-    );
-  }
-
   return (
-    <div className="rounded-2xl border border-neutral-900 bg-black/55 p-4">
-      <div className="flex h-4 overflow-hidden rounded-full bg-white/[0.04]">
-        {segments.map((segment) =>
-          segment.value > 0 ? (
-            <div
-              key={segment.label}
-              className={segment.className}
-              style={{ width: `${(segment.value / total) * 100}%` }}
-            />
-          ) : null,
-        )}
-      </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-3">
-        {segments.map((segment) => (
-          <div
-            key={segment.label}
-            className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-3"
+    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+      <h2 className="text-xl font-black">Catalog Readiness</h2>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {rows.map((row) => (
+          <article
+            key={row.label}
+            className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
           >
-            <p className="text-sm font-black text-white">{segment.label}</p>
-            <p className="mt-1 text-xs text-neutral-500">
-              {formatNumber(segment.value)} candidates
+            <p className="text-sm text-neutral-400">{row.label}</p>
+            <p className={`mt-2 text-3xl font-black ${row.tone}`}>
+              {formatNumber(row.value)}
             </p>
-          </div>
+          </article>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -480,33 +389,36 @@ export default async function AdminGiftAnalyticsPage() {
     .filter((gift) => gift.revenue >= 500 || getPriceBand(gift.goldCost).min >= 101)
     .sort((left, right) => right.revenue - left.revenue)
     .slice(0, 8);
-  const giftSendChartRows = [...sentMetrics]
+  const mostSentRows = [...sentMetrics]
     .sort((left, right) => right.sends - left.sends)
     .slice(0, 8)
     .map((gift) => ({
       label: gift.name,
+      secondary: `${gift.category} · ${gift.goldCost} Gold`,
       value: gift.sends,
     }));
-  const giftRevenueChartRows = [...sentMetrics]
+  const highestRevenueRows = [...sentMetrics]
     .sort((left, right) => right.revenue - left.revenue)
     .slice(0, 8)
     .map((gift) => ({
       label: gift.name,
+      secondary: `${formatNumber(gift.sends)} sends`,
       value: gift.revenue,
     }));
-  const repeatRateChartRows = [...sentMetrics]
+  const priceBandRows = priceBandMetrics.map((band) => ({
+    label: band.label,
+    secondary: `${formatNumber(band.sends)} sends · ${formatPercent(band.repeatRate)} repeat`,
+    value: band.revenue,
+  }));
+  const repeatRateRows = [...sentMetrics]
     .filter((gift) => gift.repeatRate > 0)
-    .sort((left, right) => right.repeatRate - left.repeatRate || right.sends - left.sends)
+    .sort((left, right) => right.repeatRate - left.repeatRate || right.repeatSends - left.repeatSends)
     .slice(0, 8)
     .map((gift) => ({
       label: gift.name,
-      sublabel: `${formatNumber(gift.sends)} sends`,
+      secondary: `${formatNumber(gift.repeatSends)} repeat sends`,
       value: gift.repeatRate,
     }));
-  const priceBandRevenueChartRows = priceBandMetrics.map((band) => ({
-    label: band.label,
-    value: band.revenue,
-  }));
 
   return (
     <AppShell
@@ -535,60 +447,36 @@ export default async function AdminGiftAnalyticsPage() {
         <StatCard label="Active streaks" value={formatNumber(activeStreaks)} />
       </section>
 
-      <section className="mt-6 grid min-w-0 gap-6 lg:grid-cols-2">
-        <ChartCard
-          description="Which gifts are moving most often."
-          title="Gift Sends by Gift"
-        >
-          <VerticalBarChart
-            empty="Not enough gift data yet."
-            rows={giftSendChartRows}
-            valueLabel="Sends"
-          />
-        </ChartCard>
-        <ChartCard
-          description="Which gifts create the strongest Gold movement."
-          title="Gold Generated by Gift"
-        >
-          <VerticalBarChart
-            empty="Not enough gift revenue yet."
-            rows={giftRevenueChartRows}
-            valueLabel="Gold generated"
-          />
-        </ChartCard>
-        <ChartCard
-          description="Price bands that carry gift activity."
+      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+        <HorizontalBarChart
+          empty="No sent gifts yet."
+          rows={mostSentRows}
+          title="Most Sent Gifts"
+        />
+        <HorizontalBarChart
+          empty="No Gold revenue yet."
+          rows={highestRevenueRows}
+          title="Highest Revenue Gifts"
+        />
+        <HorizontalBarChart
+          empty="No price band revenue yet."
+          rows={priceBandRows}
           title="Price Band Performance"
-        >
-          <VerticalBarChart
-            empty="Not enough price band data yet."
-            rows={priceBandRevenueChartRows}
-            valueLabel="Gold generated"
-          />
-        </ChartCard>
-        <ChartCard
-          description="Repeat behavior by gift type."
-          title="Repeat Rate by Gift"
-        >
-          <HorizontalProgressChart
-            empty="Not enough repeat gift data yet."
-            rows={repeatRateChartRows}
-            valueFormatter={formatPercent}
-          />
-        </ChartCard>
+        />
+        <HorizontalBarChart
+          empty="No repeat gift behavior yet."
+          formatter={formatPercent}
+          rows={repeatRateRows}
+          title="Repeat Behavior"
+        />
       </section>
 
       <div className="mt-6">
-        <ChartCard
-          description="Catalog readiness signals for Gift Catalog 2.0."
-          title="Catalog Readiness Split"
-        >
-          <ReadinessSplitChart
-            premiumCount={premiumCandidates.length}
-            retireCount={retireCandidates.length}
-            upgradeCount={upgradeCandidates.length}
-          />
-        </ChartCard>
+        <ReadinessSummary
+          premiumCount={premiumCandidates.length}
+          retireCount={retireCandidates.length}
+          upgradeCount={upgradeCandidates.length}
+        />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
