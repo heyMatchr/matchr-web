@@ -81,6 +81,11 @@ body::before {
   background-color: #050907;
 }
 
+.matchr-app-shell {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
 .matchr-app-section,
 .matchr-route-surface {
   animation: matchr-page-enter 180ms ease-out both;

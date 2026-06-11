@@ -213,7 +213,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
-      <div className="mt-8 grid gap-5">
+      <div className="mt-8 grid gap-5 pb-6 md:pb-0">
         <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
           <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
