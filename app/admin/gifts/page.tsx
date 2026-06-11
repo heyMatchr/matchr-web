@@ -48,6 +48,21 @@ function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function logAdminGiftQueryError(
+  label: string,
+  error: { message?: string } | null | undefined,
+) {
+  if (error) {
+    console.error(`[Admin Gifts] ${label} query failed`, error.message ?? error);
+  }
+}
+
+function isValidGiftTransaction(
+  gift: Partial<GiftTransactionRow>,
+): gift is GiftTransactionRow {
+  return Boolean(gift.sender_id && gift.receiver_id && gift.gift_type);
+}
+
 function getPriceBand(cost: number) {
   return PRICE_BANDS.find((band) => cost >= band.min && cost <= band.max) ?? PRICE_BANDS[0];
 }
@@ -131,16 +146,15 @@ export default async function AdminGiftAnalyticsPage() {
       .order("current_streak", { ascending: false })
       .limit(50000),
   ]);
-  const firstError = [catalogResult, giftsResult, streaksResult].find(
-    (result) => result.error,
-  )?.error;
+  logAdminGiftQueryError("gift catalog", catalogResult.error);
+  logAdminGiftQueryError("gift transactions", giftsResult.error);
+  logAdminGiftQueryError("gift streaks", streaksResult.error);
 
-  if (firstError) {
-    throw new Error(firstError.message);
-  }
-
-  const catalog = (catalogResult.data ?? []) as GiftCatalogRow[];
-  const gifts = (giftsResult.data ?? []) as GiftTransactionRow[];
+  const catalog = catalogResult.error ? [] : ((catalogResult.data ?? []) as GiftCatalogRow[]);
+  const gifts = giftsResult.error
+    ? []
+    : ((giftsResult.data ?? []) as GiftTransactionRow[]).filter(isValidGiftTransaction);
+  const streaks = streaksResult.error ? [] : (streaksResult.data ?? []);
   const catalogById = new Map(catalog.map((gift) => [gift.id, gift]));
   const pairGiftCounts = new Map<string, number>();
 
@@ -225,7 +239,7 @@ export default async function AdminGiftAnalyticsPage() {
     ? gifts.filter((gift) => Boolean(gift.client_request_id)).length / gifts.length
     : 0;
   const activeStreaks =
-    streaksResult.data?.filter((streak) => (streak.current_streak ?? 0) > 1).length ?? 0;
+    streaks.filter((streak) => (streak.current_streak ?? 0) > 1).length ?? 0;
   const repeatPairs = [...pairGiftCounts.values()].filter((count) => count > 1).length;
   const priceBandMetrics = PRICE_BANDS.map((band) => {
     const bandGifts = gifts.filter((gift) => {
