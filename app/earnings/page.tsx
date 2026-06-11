@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
 import { getEconomyConfig, getGiftCatalog } from "@/lib/economy";
@@ -73,6 +72,10 @@ function logEarningsQueryError(
   if (error) {
     console.error(`[Earnings] ${label} query failed`, error.message ?? error);
   }
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -281,8 +284,11 @@ export default async function EarningsPage() {
   const topSupporterIds = [...supporterStats.entries()]
     .sort(([, left], [, right]) => right.count - left.count || right.gold - left.gold)
     .slice(0, 5)
-    .map(([supporterId]) => supporterId);
-  const recentSupporterIds = recentSupportRows.map((gift) => gift.sender_id);
+    .map(([supporterId]) => supporterId)
+    .filter(isNonEmptyString);
+  const recentSupporterIds = recentSupportRows
+    .map((gift) => gift.sender_id)
+    .filter(isNonEmptyString);
   const supporterLookupIds = [
     ...new Set([...topSupporterIds, ...recentSupporterIds]),
   ];
@@ -434,12 +440,10 @@ export default async function EarningsPage() {
                   <span className="flex min-w-0 items-center gap-3">
                     <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-950">
                       {supporter.avatar_url ? (
-                        <Image
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
                           src={supporter.avatar_url}
                           alt={supporter.display_name ?? "Supporter"}
-                          width={44}
-                          height={44}
-                          sizes="44px"
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -548,12 +552,10 @@ export default async function EarningsPage() {
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-neutral-950">
                     {gift.sender?.avatar_url ? (
-                      <Image
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
                         src={gift.sender.avatar_url}
                         alt={gift.sender.display_name ?? "Supporter"}
-                        width={40}
-                        height={40}
-                        sizes="40px"
                         className="h-full w-full object-cover"
                       />
                     ) : (
