@@ -213,10 +213,10 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
-      <div className="mt-8 grid gap-5 pb-6 md:pb-0">
-        <section className="rounded-3xl border border-emerald-300/15 bg-emerald-300/10 p-6 sm:p-7">
+      <div className="mt-6 grid min-w-0 max-w-full gap-4 overflow-x-hidden pb-6 md:mt-8 md:gap-5 md:pb-0">
+        <section className="min-w-0 max-w-full rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4 sm:rounded-3xl sm:p-7">
           <p className="text-sm uppercase tracking-[0.22em] text-emerald-100/70">Gold balance</p>
-          <p className="mt-2 text-5xl font-black">{walletResult.data?.gold_balance ?? 0}</p>
+          <p className="mt-2 break-words text-4xl font-black sm:text-5xl">{walletResult.data?.gold_balance ?? 0}</p>
           <p className="mt-3 text-[15px] leading-6 text-neutral-300">Chat · Gifts · Access</p>
           {paymentState === "success" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
@@ -248,7 +248,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               Boost could not start. Try again.
             </p>
           ) : null}
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5 flex min-w-0 flex-wrap gap-2">
             <a href="#gold-packages" className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">Buy Gold</a>
             {!activePremium ? (
               <a href="#premium" className="rounded-full border border-emerald-200/30 px-5 py-2.5 text-sm text-emerald-100">Premium</a>
@@ -256,9 +256,9 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
+        <section className="min-w-0 max-w-full rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-4 sm:rounded-3xl sm:p-6">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
               <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
                 Private recognition
               </p>
@@ -271,26 +271,26 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             </span>
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+          <div className="mt-4 grid min-w-0 gap-2.5 sm:mt-5 sm:grid-cols-3 sm:gap-3">
+            <div className="min-w-0 rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3.5 sm:p-4">
               <p className="text-sm text-[#E8C46A]/80">Lifetime Contribution</p>
-              <p className="mt-2 text-3xl font-black text-white">
+              <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">
                 {lifetimeContributionGold.toLocaleString()}
               </p>
               <p className="mt-1 text-xs text-[#E8C46A]/65">Gold-equivalent</p>
             </div>
-            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+            <div className="min-w-0 rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3.5 sm:p-4">
               <p className="text-sm text-[#E8C46A]/80">Current level</p>
-              <p className="mt-2 text-3xl font-black text-white">
+              <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">
                 {eliteProgress.currentLevelText}
               </p>
               <p className="mt-1 text-xs text-[#E8C46A]/65">
                 {eliteProgress.currentBadge}
               </p>
             </div>
-            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
+            <div className="min-w-0 rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3.5 sm:p-4">
               <p className="text-sm text-[#E8C46A]/80">Next level</p>
-              <p className="mt-2 text-3xl font-black text-white">
+              <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">
                 {eliteProgress.nextLevelText}
               </p>
               <p className="mt-1 text-xs text-[#E8C46A]/65">
@@ -301,9 +301,9 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-[#E8C46A]">
+          <div className="mt-4 min-w-0 rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3.5 sm:mt-5 sm:p-4">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <p className="min-w-0 text-sm font-medium text-[#E8C46A]">
                 {eliteProgress.progressCopy}
               </p>
               <p className="text-sm font-black text-white">
@@ -319,8 +319,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
-          <div className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+        <section className="grid min-w-0 max-w-full gap-3 sm:gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="min-w-0 rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
               Elite Benefits
             </p>
@@ -328,12 +328,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             <p className="mt-2 text-sm leading-6 text-neutral-400">
               Recognition stays private while your status grows.
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex min-w-0 flex-wrap gap-2">
               {eliteProgress.benefits.length ? (
                 eliteProgress.benefits.map((benefit) => (
                   <span
                     key={benefit}
-                    className="rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-1.5 text-sm text-[#E8C46A]"
+                    className="max-w-full rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-1.5 text-sm text-[#E8C46A]"
                   >
                     {benefit}
                   </span>
@@ -346,23 +346,23 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
+          <div className="min-w-0 rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
               Milestones
             </p>
             <h2 className="mt-2 text-xl font-black">Spending Milestones</h2>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
               {milestones.map((milestone) => (
                 <div
                   key={milestone.label}
-                  className={`rounded-2xl border p-3 ${
+                  className={`min-w-0 rounded-2xl border p-3 ${
                     milestone.reached
                       ? "border-[#D4AF37]/25 bg-[#D4AF37]/10"
                       : "border-neutral-800 bg-white/[0.03]"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-white">
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <p className="min-w-0 text-sm font-medium text-white">
                       {milestone.label}
                     </p>
                     <span
@@ -384,8 +384,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3">
+        <section className="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
+          <div className="flex min-w-0 items-center justify-between gap-3">
             <h2 className="text-lg font-black">Quick Actions</h2>
             {activeBoost ? (
               <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
@@ -393,41 +393,41 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </span>
             ) : null}
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <a href="#premium" className="block">
+          <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+            <a href="#premium" className="block min-w-0">
               <ActionCard
                 icon="♛"
                 label={activePremium ? "Premium Active" : "Premium"}
                 sublabel={activePremium ? formatPremiumExpiry(activePremium.expires_at) : "More access"}
               />
             </a>
-            <form action={activateProfileBoost}>
+            <form action={activateProfileBoost} className="min-w-0">
               <button
-                className="h-full w-full rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-3 text-left transition-colors hover:border-emerald-300/50 hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-75"
+                className="h-full w-full min-w-0 rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-3 py-3 text-left transition-colors hover:border-emerald-300/50 hover:bg-emerald-300/15 disabled:cursor-not-allowed disabled:opacity-75"
                 disabled={Boolean(activeBoost)}
                 type="submit"
               >
                 <p className="text-lg leading-none text-emerald-100">↟</p>
-                <p className="mt-2 text-sm font-black text-white">
+                <p className="mt-2 truncate text-sm font-black text-white">
                   {activeBoost ? "Boost active" : "Boost profile"}
                 </p>
-                <p className="mt-0.5 text-xs text-emerald-50/75">
+                <p className="mt-0.5 truncate text-xs text-emerald-50/75">
                   {activeBoost
                     ? `Ends in ${formatTimeRemaining(activeBoost.expires_at)}`
                     : `${profileBoostCost} Gold · 24h`}
                 </p>
               </button>
             </form>
-            <a href="#elite" className="block">
+            <a href="#elite" className="block min-w-0">
               <ActionCard icon="◇" label="Elite" sublabel="Levels" />
             </a>
-            <a href="/earnings" className="block">
+            <a href="/earnings" className="block min-w-0">
               <ActionCard icon="◆" label="Gifts" sublabel="Earnings" />
             </a>
           </div>
         </section>
 
-        <section id="gold-packages" className="grid gap-3.5 rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+        <section id="gold-packages" className="grid min-w-0 max-w-full gap-3 rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-6">
           <div>
             <h2 className="text-lg font-black">Gold packages</h2>
             <p className="mt-1 text-sm text-neutral-400">Choose a package, then pick a payment method.</p>
@@ -435,24 +435,24 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           {(packagesResult.data ?? []).map((pack, index) => (
             <details
               key={`${pack.id}-${pack.name}-${pack.gold_amount}-${pack.price_usd}-${index}`}
-              className="group rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 transition-colors open:border-emerald-300/30 sm:p-5"
+              className="group min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 transition-colors open:border-emerald-300/30 sm:p-5"
             >
-              <summary className="flex cursor-pointer list-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <span>
-                  <span className="block font-black">{pack.name}</span>
+              <summary className="flex min-w-0 cursor-pointer list-none flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="min-w-0">
+                  <span className="block truncate font-black">{pack.name}</span>
                   <span className="mt-1.5 block text-[15px] leading-6 text-neutral-300">
                     {pack.gold_amount + (pack.bonus_gold ?? 0)} Gold
                     {pack.bonus_gold ? ` · ${pack.bonus_gold} bonus` : ""} · $
                     {pack.usd_price ?? pack.price_usd}
                   </span>
                 </span>
-                <span className="w-fit rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black">
+                <span className="w-full rounded-full bg-white px-4 py-2.5 text-center text-sm font-medium text-black sm:w-fit sm:px-5">
                   Select Package
                 </span>
               </summary>
               <form
                 action="/wallet/checkout"
-                className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3"
+                className="mt-4 min-w-0 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-3"
                 data-wallet-checkout-form="gold"
                 method="post"
               >
@@ -460,12 +460,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 <p className="text-sm font-black text-emerald-50">
                   Pay With
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex min-w-0 flex-wrap gap-2">
                   {availableProviders.length ? (
                     availableProviders.map((provider, providerIndex) => (
                       <label
                         key={`${pack.id}-${provider.provider_key}`}
-                        className="rounded-full border border-neutral-700 bg-black/30 px-3 py-1.5 text-xs text-neutral-300"
+                        className="max-w-full rounded-full border border-neutral-700 bg-black/30 px-3 py-1.5 text-xs text-neutral-300"
                       >
                         <input
                           className="mr-1 accent-emerald-300"
@@ -481,7 +481,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                     <span className="text-sm text-neutral-400">No payment options right now.</span>
                   )}
                 </div>
-                <button disabled={!availableProviders.length} className="mt-4 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50">
+                <button disabled={!availableProviders.length} className="mt-4 w-full rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
                   Complete Purchase
                 </button>
               </form>
@@ -489,8 +489,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           ))}
         </section>
 
-        <section id="premium" className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
-          <div className="flex flex-wrap items-center gap-2">
+        <section id="premium" className="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="text-lg font-black">Premium</h2>
             {activePremium ? <PremiumPill /> : null}
           </div>
@@ -499,7 +499,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               ? `${activePremium.plan_name} · ${formatPremiumExpiry(activePremium.expires_at)}`
               : "Inactive"}
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex min-w-0 flex-wrap gap-2">
             {["Priority", "Insights", "Discounts", "Badge"].map((benefit) => (
               <span
                 key={benefit}
@@ -510,18 +510,18 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             ))}
           </div>
           {!activePremium ? (
-            <details className="mt-4 rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+            <details className="mt-4 min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 sm:p-4">
               <summary className="cursor-pointer list-none text-sm font-black text-white">
                 Premium plans
               </summary>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">
                 {(premiumPlansResult.data ?? []).length ? (
                   (premiumPlansResult.data ?? []).map((plan) => (
-                    <form key={plan.id} action={startPremiumCheckout}>
+                    <form key={plan.id} action={startPremiumCheckout} className="min-w-0">
                       <input type="hidden" name="plan_id" value={plan.id} />
                       <input type="hidden" name="provider_key" value={defaultProvider} />
-                      <button className="h-full w-full rounded-2xl border border-neutral-800 bg-black/30 p-4 text-left text-[15px] leading-6 text-neutral-200 transition-colors hover:border-emerald-300/30">
-                        <span className="block font-black text-white">
+                      <button className="h-full w-full min-w-0 rounded-2xl border border-neutral-800 bg-black/30 p-3.5 text-left text-[15px] leading-6 text-neutral-200 transition-colors hover:border-emerald-300/30 sm:p-4">
+                        <span className="block truncate font-black text-white">
                           {plan.name ?? plan.plan_name}
                         </span>
                         <span className="mt-1 block text-neutral-300">
@@ -540,12 +540,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           ) : null}
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+        <section className="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
           <a
             href="/wallet?panel=payment-methods"
-            className="flex items-center justify-between gap-4"
+            className="flex min-w-0 items-center justify-between gap-4"
           >
-            <span>
+            <span className="min-w-0">
               <span className="block text-lg font-black">Payment Options</span>
               <span className="mt-1 block text-sm text-neutral-400">
                 {availableProviders.length} available
@@ -557,18 +557,18 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </a>
         </section>
 
-        <section id="elite" className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+        <section id="elite" className="min-w-0 max-w-full overflow-hidden rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
           <h2 className="text-lg font-black">Elite levels</h2>
-          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          <div className="mt-3 flex max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1">
             {(eliteLevelsResult.data ?? []).map((level) => (
               <div
                 key={level.level}
-                className="min-w-36 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3 text-sm text-neutral-200"
+                className="w-32 shrink-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3 text-sm text-neutral-200 sm:w-36"
               >
-                <p className="font-black text-white">
+                <p className="truncate font-black text-white">
                   L{level.level} · {level.badge}
                 </p>
-                <p className="mt-1 text-neutral-400">
+                <p className="mt-1 truncate text-neutral-400">
                   {level.monthly_gold_requirement.toLocaleString()} Gold/mo
                 </p>
               </div>
@@ -579,14 +579,14 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </p>
         </section>
 
-        <section className="rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+        <section className="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-5">
           <a
             href="/wallet?panel=activity"
-            className="flex items-center justify-between gap-4"
+            className="flex min-w-0 items-center justify-between gap-4"
           >
-            <span>
+            <span className="min-w-0">
               <span className="block text-lg font-black">Recent Activity</span>
-              <span className="mt-1 block text-sm text-neutral-400">
+              <span className="mt-1 block truncate text-sm text-neutral-400">
                 {recentActivityPreview[0] ?? "No purchases yet"}
               </span>
             </span>
@@ -601,15 +601,15 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             <p className="text-sm leading-6 text-neutral-400">
               Available here: {currentProfile.country ?? "your region"}.
             </p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2">
               {availableProviders.length ? (
                 availableProviders.map((provider) => (
                   <div
                     key={provider.provider_key}
-                    className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200"
+                    className="min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 text-[15px] leading-6 text-neutral-200 sm:p-4"
                   >
-                    <p className="font-black text-white">{provider.name}</p>
-                    <p className="mt-1 text-sm text-neutral-500">
+                    <p className="truncate font-black text-white">{provider.name}</p>
+                    <p className="mt-1 break-words text-sm text-neutral-500">
                       {provider.supported_currencies.join(", ")}
                     </p>
                   </div>
@@ -857,10 +857,10 @@ function ActionCard({
   sublabel: string;
 }) {
   return (
-    <div className="rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3">
+    <div className="min-w-0 rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-3">
       <p className="text-lg leading-none text-emerald-100">{icon}</p>
-      <p className="mt-2 text-sm font-black text-white">{label}</p>
-      <p className="mt-0.5 text-xs text-emerald-50/65">{sublabel}</p>
+      <p className="mt-2 truncate text-sm font-black text-white">{label}</p>
+      <p className="mt-0.5 truncate text-xs text-emerald-50/65">{sublabel}</p>
     </div>
   );
 }
@@ -873,18 +873,18 @@ function WalletPanel({
   title: string;
 }) {
   return (
-    <div className="fixed inset-0 z-[80] bg-black/75 px-4 py-5 backdrop-blur-sm">
-      <section className="mx-auto max-h-[calc(100dvh-2.5rem)] max-w-2xl overflow-y-auto rounded-3xl border border-neutral-800 bg-black p-5 shadow-[0_0_70px_rgba(0,0,0,0.45)]">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-xl font-black">{title}</h2>
+    <div className="fixed inset-0 z-[80] overflow-hidden bg-black/75 px-3 py-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+0.75rem)] backdrop-blur-sm sm:px-4 sm:py-5">
+      <section className="mx-auto flex max-h-full w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-black p-4 shadow-[0_0_70px_rgba(0,0,0,0.45)] sm:rounded-3xl sm:p-5">
+        <div className="flex min-w-0 shrink-0 items-center justify-between gap-4">
+          <h2 className="min-w-0 truncate text-xl font-black">{title}</h2>
           <a
             href="/wallet"
-            className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+            className="shrink-0 rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
           >
             Close
           </a>
         </div>
-        <div className="mt-5 grid gap-4">{children}</div>
+        <div className="mt-5 grid min-h-0 min-w-0 gap-4 overflow-y-auto overscroll-contain pr-1">{children}</div>
       </section>
     </div>
   );
@@ -913,13 +913,13 @@ function History({
   title: string;
 }) {
   return (
-    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5 sm:p-6">
+    <section className="min-w-0 rounded-2xl border border-neutral-800 bg-black/50 p-4 sm:rounded-3xl sm:p-6">
       <h2 className="text-lg font-black">{title}</h2>
-      <div className="mt-4 grid gap-2.5">
+      <div className="mt-4 grid min-w-0 gap-2.5">
         {rows.length ? rows.map((row, index) => (
-          <div key={`${row}-${index}`} className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-[15px] leading-6 text-neutral-200">{row}</div>
+          <div key={`${row}-${index}`} className="min-w-0 break-words rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 text-[15px] leading-6 text-neutral-200 sm:p-4">{row}</div>
         )) : (
-          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+          <div className="min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 sm:p-4">
             <p className="text-sm leading-6 text-neutral-400">{emptyText}</p>
             {actionHref && actionLabel ? (
               <a
