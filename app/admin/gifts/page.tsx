@@ -174,6 +174,31 @@ function MetricTable({
   );
 }
 
+function IntelligenceCard({
+  label,
+  meta,
+  title,
+  value,
+}: {
+  label: string;
+  meta: string;
+  title: string;
+  value: string;
+}) {
+  return (
+    <article className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
+        {label}
+      </p>
+      <p className="mt-3 truncate text-base font-black text-white">{title}</p>
+      <p className="mt-2 text-2xl font-black tracking-tight text-[#E8C46A]">
+        {value}
+      </p>
+      <p className="mt-2 text-xs leading-5 text-neutral-400">{meta}</p>
+    </article>
+  );
+}
+
 function ReadinessSummary({
   premiumCount,
   retireCount,
@@ -185,16 +210,19 @@ function ReadinessSummary({
 }) {
   const rows = [
     {
+      copy: "Low-use gifts to review.",
       label: "Retire",
       tone: "text-rose-100",
       value: retireCount,
     },
     {
+      copy: "Gifts worth improving.",
       label: "Upgrade",
       tone: "text-amber-100",
       value: upgradeCount,
     },
     {
+      copy: "Strong premium signals.",
       label: "Premium",
       tone: "text-[#E8C46A]",
       value: premiumCount,
@@ -204,6 +232,9 @@ function ReadinessSummary({
   return (
     <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
       <h2 className="text-xl font-black">Catalog Readiness</h2>
+      <p className="mt-2 text-sm leading-6 text-neutral-400">
+        Compact candidate counts for Gift Catalog 2.0 decisions.
+      </p>
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         {rows.map((row) => (
           <article
@@ -214,6 +245,7 @@ function ReadinessSummary({
             <p className={`mt-2 text-3xl font-black ${row.tone}`}>
               {formatNumber(row.value)}
             </p>
+            <p className="mt-2 text-xs leading-5 text-neutral-500">{row.copy}</p>
           </article>
         ))}
       </div>
@@ -469,6 +501,19 @@ export default async function AdminGiftAnalyticsPage() {
       value: gift.repeatRate,
     }));
   const activityTrendRows = totalSends ? getGiftActivityTrendRows(gifts) : [];
+  const topPerformer = [...sentMetrics].sort((left, right) => right.sends - left.sends)[0];
+  const highestRevenueGift = [...sentMetrics].sort(
+    (left, right) => right.revenue - left.revenue,
+  )[0];
+  const highestRepeatGift = [...sentMetrics]
+    .filter((gift) => gift.repeatSends > 0)
+    .sort((left, right) => right.repeatRate - left.repeatRate || right.repeatSends - left.repeatSends)[0];
+  const weakestGift = [...metrics].sort(
+    (left, right) => left.sends - right.sends || left.revenue - right.revenue,
+  )[0];
+  const strongestPriceBand = [...priceBandMetrics].sort(
+    (left, right) => right.revenue - left.revenue || right.sends - left.sends,
+  )[0];
 
   return (
     <AppShell
@@ -505,6 +550,79 @@ export default async function AdminGiftAnalyticsPage() {
         repeatRateRows={repeatRateRows}
       />
 
+      <section className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-xl font-black">Gift Intelligence</h2>
+            <p className="mt-2 text-sm leading-6 text-neutral-400">
+              The fastest read on catalog performance.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <IntelligenceCard
+            label="Top Performer"
+            meta={
+              topPerformer
+                ? `${formatNumber(topPerformer.revenue)} Gold · ${formatPercent(topPerformer.repeatRate)} repeat`
+                : "No gift sends yet."
+            }
+            title={topPerformer?.name ?? "No data"}
+            value={topPerformer ? `${formatNumber(topPerformer.sends)} sends` : "0 sends"}
+          />
+          <IntelligenceCard
+            label="Highest Revenue Gift"
+            meta={
+              highestRevenueGift
+                ? `${formatNumber(highestRevenueGift.sends)} sends · ${formatPercent(highestRevenueGift.repeatRate)} repeat`
+                : "No revenue yet."
+            }
+            title={highestRevenueGift?.name ?? "No data"}
+            value={
+              highestRevenueGift
+                ? `${formatNumber(highestRevenueGift.revenue)} Gold`
+                : "0 Gold"
+            }
+          />
+          <IntelligenceCard
+            label="Highest Repeat Gift"
+            meta={
+              highestRepeatGift
+                ? `${formatNumber(highestRepeatGift.repeatSends)} repeat sends · ${formatNumber(highestRepeatGift.sends)} total`
+                : "No repeat behavior yet."
+            }
+            title={highestRepeatGift?.name ?? "No data"}
+            value={
+              highestRepeatGift ? formatPercent(highestRepeatGift.repeatRate) : "0%"
+            }
+          />
+          <IntelligenceCard
+            label="Weakest Gift"
+            meta={
+              weakestGift
+                ? `${formatNumber(weakestGift.revenue)} Gold · ${formatPercent(weakestGift.repeatRate)} repeat`
+                : "No catalog gifts found."
+            }
+            title={weakestGift?.name ?? "No data"}
+            value={weakestGift ? `${formatNumber(weakestGift.sends)} sends` : "0 sends"}
+          />
+          <IntelligenceCard
+            label="Strongest Price Band"
+            meta={
+              strongestPriceBand
+                ? `${formatNumber(strongestPriceBand.sends)} sends · ${formatPercent(strongestPriceBand.repeatRate)} repeat`
+                : "No price band activity yet."
+            }
+            title={strongestPriceBand?.label ?? "No data"}
+            value={
+              strongestPriceBand
+                ? `${formatNumber(strongestPriceBand.revenue)} Gold`
+                : "0 Gold"
+            }
+          />
+        </div>
+      </section>
+
       <div className="mt-6">
         <ReadinessSummary
           premiumCount={premiumCandidates.length}
@@ -513,69 +631,65 @@ export default async function AdminGiftAnalyticsPage() {
         />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <MetricTable
-          empty="No sent gifts yet."
-          rows={[...sentMetrics].sort((left, right) => right.sends - left.sends).slice(0, 10)}
-          title="Most Sent Gifts"
-        />
-        <MetricTable
-          empty="No Gold revenue yet."
-          rows={[...sentMetrics].sort((left, right) => right.revenue - left.revenue).slice(0, 10)}
-          title="Highest Gold Revenue"
-        />
-        <MetricTable
-          empty="No repeat gift behavior yet."
-          rows={[...sentMetrics].sort((left, right) => right.repeatSends - left.repeatSends).slice(0, 10)}
-          title="Most Repeated Gifts"
-        />
-        <MetricTable
-          empty="Every catalog gift has usage."
-          rows={[...metrics].sort((left, right) => left.sends - right.sends).slice(0, 10)}
-          title="Least Used Gifts"
-        />
-      </div>
+      <details className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-5">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-left">
+          <span>
+            <span className="block text-xl font-black">View Full Gift Breakdown</span>
+            <span className="mt-1 block text-sm text-neutral-400">
+              Detailed rankings and price band tables.
+            </span>
+          </span>
+          <span className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-300">
+            Open
+          </span>
+        </summary>
 
-      <section className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-5">
-        <h2 className="text-xl font-black">Price Band Analysis</h2>
-        <div className="mt-5 grid gap-3 md:grid-cols-5">
-          {priceBandMetrics.map((band) => (
-            <article
-              key={band.label}
-              className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
-            >
-              <p className="font-black text-white">{band.label}</p>
-              <p className="mt-3 text-sm text-neutral-400">
-                {formatNumber(band.sends)} sends
-              </p>
-              <p className="mt-1 text-sm text-neutral-400">
-                {formatNumber(band.revenue)} Gold
-              </p>
-              <p className="mt-1 text-sm text-neutral-400">
-                {formatPercent(band.repeatRate)} repeat
-              </p>
-            </article>
-          ))}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <MetricTable
+            empty="No sent gifts yet."
+            rows={[...sentMetrics].sort((left, right) => right.sends - left.sends).slice(0, 10)}
+            title="Most Sent Gifts"
+          />
+          <MetricTable
+            empty="No Gold revenue yet."
+            rows={[...sentMetrics].sort((left, right) => right.revenue - left.revenue).slice(0, 10)}
+            title="Highest Gold Revenue"
+          />
+          <MetricTable
+            empty="No repeat gift behavior yet."
+            rows={[...sentMetrics].sort((left, right) => right.repeatSends - left.repeatSends).slice(0, 10)}
+            title="Most Repeated Gifts"
+          />
+          <MetricTable
+            empty="Every catalog gift has usage."
+            rows={[...metrics].sort((left, right) => left.sends - right.sends).slice(0, 10)}
+            title="Least Used Gifts"
+          />
         </div>
-      </section>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-3">
-        <ReadinessCard
-          copy="Low or unused gifts. Review before Catalog 2.0."
-          rows={retireCandidates}
-          title="Retire candidates"
-        />
-        <ReadinessCard
-          copy="Strong repeat or high send behavior. Consider better visuals or placement."
-          rows={upgradeCandidates}
-          title="Upgrade candidates"
-        />
-        <ReadinessCard
-          copy="High revenue or high-price gifts. Consider premium treatment."
-          rows={premiumCandidates}
-          title="Premium candidates"
-        />
-      </section>
+        <section className="mt-6 rounded-3xl border border-neutral-800 bg-white/[0.03] p-5">
+          <h2 className="text-xl font-black">Price Band Analysis</h2>
+          <div className="mt-5 grid gap-3 md:grid-cols-5">
+            {priceBandMetrics.map((band) => (
+              <article
+                key={band.label}
+                className="rounded-2xl border border-neutral-800 bg-black/40 p-4"
+              >
+                <p className="font-black text-white">{band.label}</p>
+                <p className="mt-3 text-sm text-neutral-400">
+                  {formatNumber(band.sends)} sends
+                </p>
+                <p className="mt-1 text-sm text-neutral-400">
+                  {formatNumber(band.revenue)} Gold
+                </p>
+                <p className="mt-1 text-sm text-neutral-400">
+                  {formatPercent(band.repeatRate)} repeat
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </details>
 
       <section className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-5">
         <h2 className="text-xl font-black">Repeat Gift Analytics</h2>
@@ -590,42 +704,5 @@ export default async function AdminGiftAnalyticsPage() {
         </p>
       </section>
     </AppShell>
-  );
-}
-
-function ReadinessCard({
-  copy,
-  rows,
-  title,
-}: {
-  copy: string;
-  rows: GiftMetric[];
-  title: string;
-}) {
-  return (
-    <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
-      <h2 className="text-xl font-black">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-neutral-400">{copy}</p>
-      <div className="mt-5 grid gap-2">
-        {rows.length ? (
-          rows.map((gift) => (
-            <div
-              key={`${title}-${gift.id}`}
-              className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
-            >
-              <p className="font-black text-white">{gift.name}</p>
-              <p className="mt-1 text-sm text-neutral-400">
-                {formatNumber(gift.sends)} sends · {formatNumber(gift.revenue)} Gold ·{" "}
-                {formatPercent(gift.repeatRate)} repeat
-              </p>
-            </div>
-          ))
-        ) : (
-          <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
-            No candidates yet.
-          </p>
-        )}
-      </div>
-    </section>
   );
 }
