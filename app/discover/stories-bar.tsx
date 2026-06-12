@@ -10,6 +10,8 @@ import {
   getGiftCategory,
   getGiftRarityLabel,
   isGiftLocked,
+  shouldShowGiftRarity,
+  sortGiftCatalogGroups,
   type GiftOption,
 } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
@@ -300,7 +302,7 @@ export function StoriesBar({
       const category = getGiftCategory(gift);
       giftGroups.set(category, [...(giftGroups.get(category) ?? []), gift]);
     });
-    return [...giftGroups.entries()];
+    return sortGiftCatalogGroups([...giftGroups.entries()]);
   }, [giftCatalog]);
 
   const activeGroup =
@@ -1461,47 +1463,76 @@ export function StoriesBar({
                       Send gift
                     </button>
                     {isGiftPickerOpen ? (
-                      <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-4 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
-                        {groupedGiftCatalog.map(([category, gifts]) => (
-                          <div key={category}>
-                            <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
-                              {category}
-                            </p>
-                            <div className="grid gap-2">
-                              {gifts.map((gift) => {
-                                const locked = isGiftLocked(gift);
+                      <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-3 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
+                        {groupedGiftCatalog.length ? (
+                          groupedGiftCatalog.map(([category, gifts]) => (
+                            <div key={category}>
+                              <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/60">
+                                {category}
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {gifts.map((gift) => {
+                                  const locked = isGiftLocked(gift);
+                                  const showRarity = shouldShowGiftRarity(gift);
+                                  const signature =
+                                    gift.signature || gift.rarity === "signature";
 
-                                return (
-                                  <button
-                                    key={gift.type}
-                                    type="button"
-                                    disabled={Boolean(sendingGiftType) || locked}
-                                    onClick={() => void giftStory(gift)}
-                                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-55"
-                                  >
-                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
-                                      {gift.name.charAt(0).toUpperCase()}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block font-medium">{gift.name}</span>
-                                      <span className="text-xs text-neutral-500">
-                                        {gift.coinPrice} Gold ·{" "}
-                                        {locked
-                                          ? `Elite ${gift.requiresEliteLevel}`
-                                          : getGiftRarityLabel(gift)}
+                                  return (
+                                    <button
+                                      key={gift.type}
+                                      type="button"
+                                      disabled={Boolean(sendingGiftType) || locked}
+                                      onClick={() => void giftStory(gift)}
+                                      className={`flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-center text-sm text-white transition-colors hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55 ${
+                                        signature
+                                          ? "border-amber-200/30 bg-amber-200/10 hover:border-amber-200/45"
+                                          : "border-white/10 bg-white/[0.05] hover:border-emerald-200/30"
+                                      }`}
+                                    >
+                                      <span
+                                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-black ${
+                                          signature
+                                            ? "border-amber-200/25 bg-amber-200/10 text-amber-100"
+                                            : "border-emerald-200/15 bg-emerald-300/10 text-emerald-100"
+                                        }`}
+                                      >
+                                        {gift.name.charAt(0).toUpperCase()}
                                       </span>
-                                    </span>
-                                    {sendingGiftType === gift.type ? (
-                                      <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
-                                        Sending
+                                      <span className="line-clamp-1 max-w-full font-black">
+                                        {gift.name}
                                       </span>
-                                    ) : null}
-                                  </button>
-                                );
-                              })}
+                                      {locked || showRarity ? (
+                                        <span
+                                          className={`text-[10px] font-bold uppercase tracking-[0.16em] ${
+                                            signature
+                                              ? "text-amber-100/80"
+                                              : "text-neutral-500"
+                                          }`}
+                                        >
+                                          {locked
+                                            ? `Elite ${gift.requiresEliteLevel} required`
+                                            : getGiftRarityLabel(gift)}
+                                        </span>
+                                      ) : null}
+                                      <span className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100">
+                                        {gift.coinPrice} Gold
+                                      </span>
+                                      {sendingGiftType === gift.type ? (
+                                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-white">
+                                          Sending
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        ) : (
+                          <p className="rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-center text-sm text-neutral-400">
+                            No gifts available
+                          </p>
+                        )}
                       </div>
                     ) : null}
                   </div>

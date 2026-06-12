@@ -29,6 +29,8 @@ import {
   getGiftOption,
   getGiftRarityLabel,
   isGiftLocked,
+  shouldShowGiftRarity,
+  sortGiftCatalogGroups,
   type GiftOption,
 } from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
@@ -209,7 +211,7 @@ export function ChatClient({
       const category = getGiftCategory(gift);
       groups.set(category, [...(groups.get(category) ?? []), gift]);
     });
-    return [...groups.entries()];
+    return sortGiftCatalogGroups([...groups.entries()]);
   }, [giftCatalog]);
   const { isUserOnline } = useGlobalPresence();
   const receiverIsGloballyOnline = isUserOnline(receiverId);
@@ -1746,15 +1748,18 @@ export function ChatClient({
                 <p className="px-1 text-sm font-black text-emerald-50">
                   Gifts
                 </p>
-                <div className="mt-3 grid max-h-[34dvh] gap-4 overflow-y-auto pr-1">
-                  {groupedGiftCatalog.map(([category, gifts]) => (
-                    <div key={category}>
-                      <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
-                        {category}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {groupedGiftCatalog.length ? (
+                  <div className="mt-3 grid max-h-[34dvh] gap-3 overflow-y-auto pr-1">
+                    {groupedGiftCatalog.map(([category, gifts]) => (
+                      <div key={category}>
+                        <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/60">
+                          {category}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {gifts.map((gift) => {
                           const locked = isGiftLocked(gift);
+                          const showRarity = shouldShowGiftRarity(gift);
+                          const signature = gift.signature || gift.rarity === "signature";
 
                           return (
                             <button
@@ -1762,30 +1767,49 @@ export function ChatClient({
                               type="button"
                               disabled={locked}
                               onClick={() => void sendGift(gift)}
-                              className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-3 text-center text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+                              className={`flex min-h-28 flex-col items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-center text-sm text-neutral-200 transition-colors hover:bg-emerald-300/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55 ${
+                                signature
+                                  ? "border-amber-200/30 bg-amber-200/10 hover:border-amber-200/45"
+                                  : "border-white/10 bg-white/[0.035] hover:border-emerald-300/30"
+                              }`}
                             >
                               <GiftVisual
-                                className="h-10 w-10 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-2 text-emerald-100"
+                                className={`h-9 w-9 rounded-2xl border p-2 ${
+                                  signature
+                                    ? "border-amber-200/25 bg-amber-200/10 text-amber-100"
+                                    : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                                }`}
                                 type={gift.type}
                               />
                               <span className="line-clamp-1 max-w-full font-black text-white">
                                 {gift.name}
                               </span>
-                              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">
-                                {locked
-                                  ? `Elite ${gift.requiresEliteLevel}`
-                                  : getGiftRarityLabel(gift)}
-                              </span>
+                              {locked || showRarity ? (
+                                <span
+                                  className={`text-[10px] font-bold uppercase tracking-[0.16em] ${
+                                    signature ? "text-amber-100/80" : "text-neutral-500"
+                                  }`}
+                                >
+                                  {locked
+                                    ? `Elite ${gift.requiresEliteLevel} required`
+                                    : getGiftRarityLabel(gift)}
+                                </span>
+                              ) : null}
                               <span className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100">
                                 {gift.coinPrice} Gold
                               </span>
                             </button>
                           );
                         })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.035] p-4 text-center text-sm text-neutral-400">
+                    No gifts available
+                  </p>
+                )}
               </div>
             </div>
           </div>

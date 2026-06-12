@@ -18,6 +18,8 @@ import {
   getGiftCategory,
   getGiftRarityLabel,
   isGiftLocked,
+  shouldShowGiftRarity,
+  sortGiftCatalogGroups,
   type GiftOption,
 } from "@/lib/gifts";
 import { compressImageFile } from "@/lib/client-media";
@@ -888,7 +890,7 @@ function GiftsSheet({
       const category = getGiftCategory(gift);
       giftGroups.set(category, [...(giftGroups.get(category) ?? []), gift]);
     });
-    return [...giftGroups.entries()];
+    return sortGiftCatalogGroups([...giftGroups.entries()]);
   }, [giftCatalog]);
 
   async function sendMomentGift(gift: GiftOption) {
@@ -978,49 +980,75 @@ function GiftsSheet({
             </div>
           </div>
         ) : null}
-        <div className="mt-4 grid gap-4">
-          {groupedGiftCatalog.map(([category, gifts]) => (
-            <div key={category}>
-              <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
-                {category}
-              </p>
-              <div className="grid gap-2">
-                {gifts.map((gift) => {
-                  const locked = isGiftLocked(gift);
+        <div className="mt-4 grid gap-3">
+          {groupedGiftCatalog.length ? (
+            groupedGiftCatalog.map(([category, gifts]) => (
+              <div key={category}>
+                <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100/60">
+                  {category}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {gifts.map((gift) => {
+                    const locked = isGiftLocked(gift);
+                    const showRarity = shouldShowGiftRarity(gift);
+                    const signature = gift.signature || gift.rarity === "signature";
 
-                  return (
-                    <form
-                      key={gift.type}
-                      action={async () => {
-                        await sendMomentGift(gift);
-                      }}
-                    >
-                      <button
-                        disabled={Boolean(sendingGiftType) || locked}
-                        className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55"
+                    return (
+                      <form
+                        key={gift.type}
+                        action={async () => {
+                          await sendMomentGift(gift);
+                        }}
                       >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
-                          {gift.name.charAt(0).toUpperCase()}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block font-medium text-white">{gift.name}</span>
-                          <span className="text-xs text-neutral-500">
-                            {gift.coinPrice} Gold ·{" "}
-                            {locked
-                              ? `Elite ${gift.requiresEliteLevel}`
-                              : getGiftRarityLabel(gift)}
+                        <button
+                          disabled={Boolean(sendingGiftType) || locked}
+                          className={`flex min-h-28 w-full flex-col items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-center text-sm transition-colors hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55 ${
+                            signature
+                              ? "border-amber-200/30 bg-amber-200/10 hover:border-amber-200/45"
+                              : "border-neutral-800 bg-white/[0.03] hover:border-emerald-300/30"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-black ${
+                              signature
+                                ? "border-amber-200/25 bg-amber-200/10 text-amber-100"
+                                : "border-emerald-200/15 bg-emerald-300/10 text-emerald-100"
+                            }`}
+                          >
+                            {gift.name.charAt(0).toUpperCase()}
                           </span>
-                        </span>
-                        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
-                          {sendingGiftType === gift.type ? "Sending" : "Send Gift"}
-                        </span>
-                      </button>
-                    </form>
-                  );
-                })}
+                          <span className="line-clamp-1 max-w-full font-black text-white">
+                            {gift.name}
+                          </span>
+                          {locked || showRarity ? (
+                            <span
+                              className={`text-[10px] font-bold uppercase tracking-[0.16em] ${
+                                signature ? "text-amber-100/80" : "text-neutral-500"
+                              }`}
+                            >
+                              {locked
+                                ? `Elite ${gift.requiresEliteLevel} required`
+                                : getGiftRarityLabel(gift)}
+                            </span>
+                          ) : null}
+                          <span className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100">
+                            {gift.coinPrice} Gold
+                          </span>
+                          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">
+                            {sendingGiftType === gift.type ? "Sending" : "Send Gift"}
+                          </span>
+                        </button>
+                      </form>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-center text-sm text-neutral-400">
+              No gifts available
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -70,6 +70,17 @@ export const DEFAULT_GIFT_CATALOG = [
 
 export const GIFT_CATALOG = DEFAULT_GIFT_CATALOG;
 
+const GIFT_CATEGORY_ORDER = [
+  "Signal",
+  "Presence",
+  "Creator Support",
+  "Luxury",
+  "Signature",
+  "Seasonal",
+  "Elite",
+  "Other",
+];
+
 export function getGiftOption(
   type: string | null | undefined,
   catalog: GiftOption[] = DEFAULT_GIFT_CATALOG,
@@ -78,12 +89,33 @@ export function getGiftOption(
 }
 
 export function getGiftCategory(gift: GiftOption) {
-  return gift.category || "Signal";
+  const category = gift.category || "Signal";
+  return GIFT_CATEGORY_ORDER.includes(category) ? category : "Other";
 }
 
 export function getGiftRarityLabel(gift: GiftOption) {
   const rarity = gift.rarity ?? "common";
   return rarity.charAt(0).toUpperCase() + rarity.slice(1);
+}
+
+export function shouldShowGiftRarity(gift: GiftOption) {
+  return (
+    gift.rarity === "rare" ||
+    gift.rarity === "icon" ||
+    gift.rarity === "signature" ||
+    gift.signature === true
+  );
+}
+
+export function sortGiftCatalogGroups(groups: [string, GiftOption[]][]) {
+  return groups.sort(([left], [right]) => {
+    const leftIndex = GIFT_CATEGORY_ORDER.indexOf(left);
+    const rightIndex = GIFT_CATEGORY_ORDER.indexOf(right);
+    const normalizedLeftIndex = leftIndex === -1 ? GIFT_CATEGORY_ORDER.length : leftIndex;
+    const normalizedRightIndex = rightIndex === -1 ? GIFT_CATEGORY_ORDER.length : rightIndex;
+
+    return normalizedLeftIndex - normalizedRightIndex || left.localeCompare(right);
+  });
 }
 
 export function isGiftLocked(gift: GiftOption, currentEliteLevel = 0) {
