@@ -1,6 +1,7 @@
 import { AppShell } from "@/app/_components/app-shell";
 import { getGiftCatalog } from "@/lib/economy";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+import { getActiveGiftStreakDays } from "@/lib/retention";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -48,6 +49,7 @@ export default async function MomentsPage() {
     likesResult,
     commentsResult,
     giftsResult,
+    giftStreaksResult,
     myLikesResult,
     walletResult,
     giftCatalog,
@@ -70,6 +72,13 @@ export default async function MomentsPage() {
         : Promise.resolve({ data: [] }),
       momentIds.length
         ? supabase.from("moment_gifts").select("moment_id").in("moment_id", momentIds)
+        : Promise.resolve({ data: [] }),
+      userIds.length
+        ? supabase
+            .from("gift_streaks")
+            .select("receiver_id, current_streak, last_gift_date")
+            .eq("sender_id", user.id)
+            .in("receiver_id", userIds)
         : Promise.resolve({ data: [] }),
       momentIds.length
         ? supabase
@@ -103,6 +112,13 @@ export default async function MomentsPage() {
   const likeCounts = countByMoment(likesResult.data);
   const commentCounts = countByMoment(commentsResult.data);
   const giftCounts = countByMoment(giftsResult.data);
+  const giftStreaksByReceiver = new Map(
+    (giftStreaksResult.data ?? []).flatMap((streak) => {
+      const streakDays = getActiveGiftStreakDays(streak);
+
+      return streakDays ? [[streak.receiver_id, streakDays]] : [];
+    }),
+  );
   const momentCards = visibleMoments
     .map((moment) => {
       const profile = profilesById.get(moment.user_id);
@@ -115,6 +131,7 @@ export default async function MomentsPage() {
         ...moment,
         commentCount: commentCounts.get(moment.id) ?? 0,
         giftCount: giftCounts.get(moment.id) ?? 0,
+        giftStreakDays: giftStreaksByReceiver.get(moment.user_id) ?? null,
         liked: likedMomentIds.has(moment.id),
         likeCount: likeCounts.get(moment.id) ?? 0,
         likers: [] as MomentCard["likers"],

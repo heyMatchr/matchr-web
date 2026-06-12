@@ -6,6 +6,7 @@ import {
 import { getGiftCatalog } from "@/lib/economy";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
+import { getActiveGiftStreakDays } from "@/lib/retention";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -388,6 +389,22 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
     getGiftCatalog(supabase),
   );
   const activeStoryUserIds = new Set(storyGroups.map((group) => group.user_id));
+  const { data: storyGiftStreakRows } = activeStoryUserIds.size
+    ? await timeAsync("[Perf] Discover story streaks", () =>
+        supabase
+          .from("gift_streaks")
+          .select("receiver_id, current_streak, last_gift_date")
+          .eq("sender_id", user.id)
+          .in("receiver_id", [...activeStoryUserIds]),
+      )
+    : { data: [] };
+  const storyGiftStreaksByReceiver = Object.fromEntries(
+    (storyGiftStreakRows ?? []).flatMap((streak) => {
+      const streakDays = getActiveGiftStreakDays(streak);
+
+      return streakDays ? [[streak.receiver_id, streakDays]] : [];
+    }),
+  );
   const visibleProfileIds = visibleProfiles.map((profile) => profile.id);
   const [
     settingsResult,
@@ -712,6 +729,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
           giftCatalog={giftCatalog}
+          giftStreaksByReceiver={storyGiftStreaksByReceiver}
           initialGroups={storyGroups}
           targetStoryUserId={query?.storyUserId ?? null}
           supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}

@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
+import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
+import {
+  getTodayStartIso,
+  type DailyAttentionDigestCounts,
+} from "@/lib/retention";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { NotificationsClient } from "./notifications-client";
@@ -38,6 +43,41 @@ export default async function NotificationsPage() {
       userId: user.id,
     });
   }
+
+  const todayStartIso = getTodayStartIso();
+  const [
+    profileViewsTodayResult,
+    storyReactionsTodayResult,
+    giftsTodayResult,
+    messagesTodayResult,
+  ] = await Promise.all([
+    supabase
+      .from("profile_views")
+      .select("id", { count: "exact", head: true })
+      .eq("viewed_user_id", user.id)
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("story_reactions")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id)
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("gift_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("receiver_id", user.id)
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("receiver_id", user.id)
+      .gte("created_at", todayStartIso),
+  ]);
+  const dailyDigestCounts: DailyAttentionDigestCounts = {
+    gifts: giftsTodayResult.count ?? 0,
+    messages: messagesTodayResult.count ?? 0,
+    profileViews: profileViewsTodayResult.count ?? 0,
+    storyReactions: storyReactionsTodayResult.count ?? 0,
+  };
 
   const { data: notifications, error } = await supabase
     .from("notifications")
@@ -81,6 +121,7 @@ export default async function NotificationsPage() {
       profileId={currentProfile.public_id ?? currentProfile.id}
       title="Notifications"
     >
+      <DailyAttentionDigest counts={dailyDigestCounts} className="mt-5 md:mt-8" />
       <NotificationsClient
         anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
         currentUserId={user.id}

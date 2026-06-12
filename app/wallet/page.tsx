@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
+import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
 import { getEconomyNumberConfig } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { isActivePremiumSubscription } from "@/lib/premium";
+import {
+  getTodayStartIso,
+  type DailyAttentionDigestCounts,
+} from "@/lib/retention";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { activateProfileBoost, startPremiumCheckout } from "./actions";
 
@@ -50,6 +55,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     redirect("/onboarding");
   }
 
+  const todayStartIso = getTodayStartIso();
   const [
     walletResult,
     packagesResult,
@@ -68,6 +74,10 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     priorityMessageCost,
     profileBoostCost,
     availableProviders,
+    profileViewsTodayResult,
+    storyReactionsTodayResult,
+    giftsTodayResult,
+    messagesTodayResult,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -125,6 +135,26 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     getEconomyNumberConfig(supabase, "priority_message_cost", 15),
     getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
+    supabase
+      .from("profile_views")
+      .select("id", { count: "exact", head: true })
+      .eq("viewed_user_id", user.id)
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("story_reactions")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", user.id)
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("gift_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("receiver_id", user.id)
+      .gte("created_at", todayStartIso),
+    supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("receiver_id", user.id)
+      .gte("created_at", todayStartIso),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
@@ -210,6 +240,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     hasGifted: lifetimeGiftGold > 0,
     lifetimeContributionGold,
   });
+  const dailyDigestCounts: DailyAttentionDigestCounts = {
+    gifts: giftsTodayResult.count ?? 0,
+    messages: messagesTodayResult.count ?? 0,
+    profileViews: profileViewsTodayResult.count ?? 0,
+    storyReactions: storyReactionsTodayResult.count ?? 0,
+  };
 
   return (
     <AppShell currentUserId={user.id} profileId={currentProfile.public_id ?? currentProfile.id} title="Wallet">
@@ -255,6 +291,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             ) : null}
           </div>
         </section>
+
+        <DailyAttentionDigest counts={dailyDigestCounts} />
 
         <section className="min-w-0 max-w-full rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-4 sm:rounded-3xl sm:p-6">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 sm:gap-4">
@@ -316,6 +354,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 style={{ width: `${eliteProgress.progressPercent}%` }}
               />
             </div>
+            {eliteProgress.isNearNextLevel ? (
+              <p className="mt-3 rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-3 py-2 text-sm font-medium text-[#E8C46A]">
+                {eliteProgress.remainingGold.toLocaleString()} Gold to{" "}
+                {eliteProgress.nextLevelText}
+              </p>
+            ) : null}
           </div>
         </section>
 
@@ -751,6 +795,8 @@ function getEliteProgress(
   const progressCopy = nextLevel
     ? `${remainingGold.toLocaleString()} to ${nextLevel.badge}`
     : "Elite reached";
+  const isNearNextLevel =
+    Boolean(nextLevel) && progressPercent >= 80 && remainingGold > 0;
 
   return {
     benefits: formatEliteBenefits(
@@ -760,6 +806,7 @@ function getEliteProgress(
     currentLabel,
     currentLevelText,
     nextLevelText,
+    isNearNextLevel,
     progressCopy,
     progressPercent,
     remainingGold,

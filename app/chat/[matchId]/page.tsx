@@ -11,6 +11,7 @@ import {
 } from "@/lib/economy";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
+import { getActiveGiftStreakDays } from "@/lib/retention";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 
@@ -83,6 +84,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
     { data: wallet },
     { data: premiumSubscriptions },
     { data: receiverPreviewVideo },
+    { data: activeGiftStreak },
     giftCatalog,
     messageRules,
     creatorSplit,
@@ -114,6 +116,12 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
           .eq("active", true)
           .order("created_at", { ascending: false })
           .limit(1)
+          .maybeSingle(),
+        supabase
+          .from("gift_streaks")
+          .select("current_streak, last_gift_date")
+          .eq("sender_id", user.id)
+          .eq("receiver_id", receiverId)
           .maybeSingle(),
         getGiftCatalog(supabase),
         getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(
@@ -156,6 +164,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
     >
         <ChatClient
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+          activeGiftStreakDays={getActiveGiftStreakDays(activeGiftStreak)}
           currentUserId={user.id}
           currentUserGender={currentProfile.gender}
           currentUserGenderIdentity={currentProfile.gender_identity}

@@ -51,6 +51,7 @@ export type StoriesBarProps = {
   anonKey: string;
   currentUserId: string;
   giftCatalog: GiftOption[];
+  giftStreaksByReceiver?: Record<string, number>;
   initialGroups: StoryGroup[];
   supabaseUrl: string;
   targetStoryUserId?: string | null;
@@ -265,6 +266,7 @@ export function StoriesBar({
   anonKey,
   currentUserId,
   giftCatalog,
+  giftStreaksByReceiver = {},
   initialGroups,
   supabaseUrl,
   targetStoryUserId = null,
@@ -308,6 +310,9 @@ export function StoriesBar({
   const activeGroup =
     activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
   const activeStory = activeGroup?.stories[activeStoryIndex] ?? null;
+  const activeGiftStreakDays = activeStory
+    ? giftStreaksByReceiver[activeStory.user_id] ?? null
+    : null;
   const storyActivityItems = useMemo(
     () =>
       [
@@ -1464,6 +1469,11 @@ export function StoriesBar({
                     </button>
                     {isGiftPickerOpen ? (
                       <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-3 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
+                        {activeGiftStreakDays ? (
+                          <p className="rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm text-[#E8C46A]">
+                            Keep your {activeGiftStreakDays}-day support streak alive.
+                          </p>
+                        ) : null}
                         {groupedGiftCatalog.length ? (
                           groupedGiftCatalog.map(([category, gifts]) => (
                             <div key={category}>

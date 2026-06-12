@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
+import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
@@ -16,6 +17,11 @@ import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import { getProfileHref, isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
 import { getProfileCompletion } from "@/lib/profile-completion";
+import {
+  getActiveGiftStreakDays,
+  getTodayStartIso,
+  type DailyAttentionDigestCounts,
+} from "@/lib/retention";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -370,6 +376,7 @@ export default async function ProfilePage({
   }
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
   const activePreviewVideo = activePreviewVideoResult.data;
+  const todayStartIso = getTodayStartIso();
   const giftCatalog = await getGiftCatalog(supabase);
   const giftsByType = new Map(giftCatalog.map((gift) => [gift.type, gift]));
   const recentGifts =
@@ -409,6 +416,53 @@ export default async function ProfilePage({
     .sort(([, left], [, right]) => right.count - left.count || right.gold - left.gold)
     .slice(0, 3)
     .map(([supporterId]) => supporterId);
+  const [dailyDigestResults, activeGiftStreakResult] = await timeAsync(
+    "[Perf] Profile retention signals",
+    () =>
+      Promise.all([
+        profile.id === user.id
+          ? Promise.all([
+              supabase
+                .from("profile_views")
+                .select("id", { count: "exact", head: true })
+                .eq("viewed_user_id", user.id)
+                .gte("created_at", todayStartIso),
+              supabase
+                .from("story_reactions")
+                .select("id", { count: "exact", head: true })
+                .eq("owner_id", user.id)
+                .gte("created_at", todayStartIso),
+              supabase
+                .from("gift_transactions")
+                .select("id", { count: "exact", head: true })
+                .eq("receiver_id", user.id)
+                .gte("created_at", todayStartIso),
+              supabase
+                .from("messages")
+                .select("id", { count: "exact", head: true })
+                .eq("receiver_id", user.id)
+                .gte("created_at", todayStartIso),
+            ])
+          : Promise.resolve([]),
+        profile.id !== user.id
+          ? supabase
+              .from("gift_streaks")
+              .select("current_streak, last_gift_date")
+              .eq("sender_id", user.id)
+              .eq("receiver_id", profile.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]),
+  );
+  const dailyDigestCounts: DailyAttentionDigestCounts = {
+    gifts: dailyDigestResults[2]?.count ?? 0,
+    messages: dailyDigestResults[3]?.count ?? 0,
+    profileViews: dailyDigestResults[0]?.count ?? 0,
+    storyReactions: dailyDigestResults[1]?.count ?? 0,
+  };
+  const activeGiftStreakDays = getActiveGiftStreakDays(
+    activeGiftStreakResult.data,
+  );
 
   const recentViewerIds =
     recentViewsResult.data?.map((view) => view.viewer_id) ?? [];
@@ -449,6 +503,24 @@ export default async function ProfilePage({
     socialProfiles?.map((socialProfile) => [socialProfile.id, socialProfile]) ??
       [],
   );
+  const { data: repeatVisitorRows } =
+    profile.id === user.id && recentViewerIds.length
+      ? await timeAsync("[Perf] Profile returned visitor signals", () =>
+          supabase
+            .from("profile_views")
+            .select("viewer_id")
+            .eq("viewed_user_id", profile.id)
+            .in("viewer_id", recentViewerIds)
+            .limit(500),
+        )
+      : { data: [] };
+  const visitorViewCounts = new Map<string, number>();
+  repeatVisitorRows?.forEach((view) => {
+    visitorViewCounts.set(
+      view.viewer_id,
+      (visitorViewCounts.get(view.viewer_id) ?? 0) + 1,
+    );
+  });
   const recentVisitors =
     recentViewsResult.data
       ?.map((view) => {
@@ -457,6 +529,7 @@ export default async function ProfilePage({
         return visitor
           ? {
               ...visitor,
+              returned: (visitorViewCounts.get(view.viewer_id) ?? 0) > 1,
               viewed_at: view.created_at,
             }
           : null;
@@ -737,7 +810,19 @@ export default async function ProfilePage({
                     </span>
                   )}
                 </div>
+                {activeGiftStreakDays ? (
+                  <p className="mt-3 rounded-xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm text-[#E8C46A]">
+                    Keep your {activeGiftStreakDays}-day support streak alive.
+                  </p>
+                ) : null}
               </section>
+            ) : null}
+
+            {profile.id === user.id ? (
+              <DailyAttentionDigest
+                className="mt-4"
+                counts={dailyDigestCounts}
+              />
             ) : null}
 
             {creatorNudges.length ? (
@@ -1211,10 +1296,17 @@ export default async function ProfilePage({
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-neutral-100">
-                          {visitor?.display_name ?? "Someone"}
-                          {visitor?.age ? `, ${visitor.age}` : ""}
-                        </p>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-sm font-medium text-neutral-100">
+                            {visitor?.display_name ?? "Someone"}
+                            {visitor?.age ? `, ${visitor.age}` : ""}
+                          </p>
+                          {visitor?.returned ? (
+                            <span className="shrink-0 rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-2 py-0.5 text-[10px] font-medium text-[#E8C46A]">
+                              Returned
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="truncate text-xs text-neutral-500">
                           {visitor?.location}
                         </p>

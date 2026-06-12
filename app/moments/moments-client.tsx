@@ -64,6 +64,7 @@ export type MomentCard = {
   commentCount: number;
   created_at: string;
   giftCount: number;
+  giftStreakDays: number | null;
   hide_likes: boolean;
   liked: boolean;
   likeCount: number;
@@ -930,6 +931,11 @@ function GiftsSheet({
         <p className="mt-2 text-sm text-neutral-500">
           {goldBalance} Gold available
         </p>
+        {moment.giftStreakDays ? (
+          <p className="mt-3 rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm text-[#E8C46A]">
+            Keep your {moment.giftStreakDays}-day support streak alive.
+          </p>
+        ) : null}
         {giftState?.status === "error" ? (
           <div className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
             <p className="font-black text-amber-100">Need Gold</p>

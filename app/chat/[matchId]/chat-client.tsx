@@ -69,6 +69,7 @@ type GiftMomentumState = {
 };
 
 type ChatClientProps = {
+  activeGiftStreakDays: number | null;
   anonKey: string;
   currentUserId: string;
   currentUserGender: string;
@@ -129,6 +130,7 @@ function createGiftRequestId() {
 }
 
 export function ChatClient({
+  activeGiftStreakDays,
   anonKey,
   currentUserId,
   currentUserGender,
@@ -1748,6 +1750,11 @@ export function ChatClient({
                 <p className="px-1 text-sm font-black text-emerald-50">
                   Gifts
                 </p>
+                {activeGiftStreakDays ? (
+                  <p className="mt-2 rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm text-[#E8C46A]">
+                    Keep your {activeGiftStreakDays}-day support streak alive.
+                  </p>
+                ) : null}
                 {groupedGiftCatalog.length ? (
                   <div className="mt-3 grid max-h-[34dvh] gap-3 overflow-y-auto pr-1">
                     {groupedGiftCatalog.map(([category, gifts]) => (
