@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
 import { CreatorDailyActionCard } from "@/app/_components/creator-daily-action-card";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
+import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import {
   calculateCreatorContentStreak,
   getCreatorHabitAction,
@@ -1293,7 +1294,15 @@ export default async function EarningsPage() {
 
           <div className="mt-5 space-y-3">
             {topSupporters.length ? (
-              topSupporters.map((supporter, index) => (
+              topSupporters.map((supporter, index) => {
+                const visibleBadges = getVisibleStatusBadges([
+                  supporter.hasPremium ? { type: "premium" } : null,
+                  supporter.eliteLevel > 0
+                    ? { level: supporter.eliteLevel, type: "elite" }
+                    : null,
+                ]);
+
+                return (
                 <Link
                   key={supporter.id}
                   href={getProfileHref(supporter)}
@@ -1322,16 +1331,14 @@ export default async function EarningsPage() {
                         {supporter.giftCount} gifts
                       </span>
                       <span className="mt-1 flex flex-wrap gap-1">
-                        {supporter.hasPremium ? (
-                          <span className="rounded-full border border-[#D4AF37]/30 px-2 py-0.5 text-[10px] font-black text-[#D4AF37]">
-                            Premium
-                          </span>
-                        ) : null}
-                        {supporter.eliteLevel > 0 ? (
-                          <span className="rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2 py-0.5 text-[10px] font-black text-[#E8C46A]">
-                            Elite {supporter.eliteLevel}
-                          </span>
-                        ) : null}
+                        {visibleBadges.map((badge) => (
+                          <StatusBadge
+                            key={badge.type}
+                            level={badge.level}
+                            size="compact"
+                            type={badge.type}
+                          />
+                        ))}
                       </span>
                     </span>
                   </span>
@@ -1339,7 +1346,8 @@ export default async function EarningsPage() {
                     #{index + 1}
                   </span>
                 </Link>
-              ))
+                );
+              })
             ) : (
               <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400">
                 Supporters will appear after gifts arrive.
@@ -1418,7 +1426,15 @@ export default async function EarningsPage() {
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {recentSupport.length ? (
-            recentSupport.map((gift, index) => (
+            recentSupport.map((gift, index) => {
+              const visibleBadges = getVisibleStatusBadges([
+                gift.senderHasPremium ? { type: "premium" } : null,
+                gift.senderEliteLevel > 0
+                  ? { level: gift.senderEliteLevel, type: "elite" }
+                  : null,
+              ]);
+
+              return (
               <div
                 key={`${gift.giftName}-${gift.createdAt}-${index}`}
                 className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4"
@@ -1445,18 +1461,16 @@ export default async function EarningsPage() {
                     <p className="truncate text-xs text-neutral-500">
                       {formatDate(gift.createdAt)}
                     </p>
-                    {gift.senderHasPremium || gift.senderEliteLevel > 0 ? (
+                    {visibleBadges.length ? (
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {gift.senderHasPremium ? (
-                          <span className="rounded-full border border-[#D4AF37]/30 px-2 py-0.5 text-[10px] font-black text-[#D4AF37]">
-                            Premium
-                          </span>
-                        ) : null}
-                        {gift.senderEliteLevel > 0 ? (
-                          <span className="rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-2 py-0.5 text-[10px] font-black text-[#E8C46A]">
-                            Elite {gift.senderEliteLevel}
-                          </span>
-                        ) : null}
+                        {visibleBadges.map((badge) => (
+                          <StatusBadge
+                            key={badge.type}
+                            level={badge.level}
+                            size="compact"
+                            type={badge.type}
+                          />
+                        ))}
                       </div>
                     ) : null}
                   </div>
@@ -1473,7 +1487,8 @@ export default async function EarningsPage() {
                   </span>
                 </div>
               </div>
-            ))
+              );
+            })
           ) : (
             <p className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-4 text-sm text-neutral-400 md:col-span-2 xl:col-span-3">
               Recent support will appear here.

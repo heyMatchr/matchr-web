@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
@@ -556,6 +557,13 @@ export function MessagesClient({
               isOnline: isConversationActiveNow(conversation, isUserOnline, now),
               now,
             });
+            const visibleBadges = getVisibleStatusBadges([
+              conversation.profile.verified ? { type: "verified" } : null,
+              conversation.profile.has_premium ? { type: "premium" } : null,
+              isConversationActiveNow(conversation, isUserOnline, now)
+                ? { type: "online" }
+                : null,
+            ]);
 
             return (
             <Link
@@ -611,11 +619,14 @@ export function MessagesClient({
                           {messageTypeChip(conversation.latestMessage)}
                         </span>
                       ) : null}
-                      {conversation.profile.has_premium ? (
-                        <span className="rounded-full border border-[#D4AF37]/35 px-2 py-0.5 text-[10px] font-black text-[#D4AF37]">
-                          Premium
-                        </span>
-                      ) : null}
+                      {visibleBadges.map((badge) => (
+                        <StatusBadge
+                          key={badge.type}
+                          level={badge.level}
+                          size="compact"
+                          type={badge.type}
+                        />
+                      ))}
                       {conversation.profile.preview_video_url ? (
                         <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[10px] text-neutral-300">
                           Preview

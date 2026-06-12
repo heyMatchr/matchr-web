@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
+import { StatusBadge } from "@/app/_components/status-badge";
 import {
   DEFAULT_MESSAGE_RULES,
   getEconomyConfig,
@@ -1090,12 +1091,7 @@ function WalletPanel({
 }
 
 function PremiumPill() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-2.5 py-1 text-xs font-black text-[#D4AF37]">
-      <span aria-hidden="true">✦</span>
-      Premium
-    </span>
-  );
+  return <StatusBadge type="premium" />;
 }
 
 function History({

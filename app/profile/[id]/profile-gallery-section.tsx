@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 
 type ProfileGalleryItem = {
   duration_seconds: number | null;
@@ -98,6 +99,10 @@ export function ProfileGallerySection({
     return [...items, ...galleryItems];
   }, [avatarUrl, displayName, photos, previewVideo]);
   const activeItem = mediaItems[activeIndex] ?? null;
+  const visibleBadges = getVisibleStatusBadges([
+    verified ? { type: "verified" } : null,
+    activePremium ? { type: "premium" } : null,
+  ]);
   const canGoPrevious = activeIndex > 0;
   const canGoNext = activeIndex < mediaItems.length - 1;
   const activeMediaFailed = activeItem
@@ -260,16 +265,13 @@ export function ProfileGallerySection({
         <div className="absolute inset-x-0 bottom-0 z-20 p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] sm:p-7">
           <div className="max-w-3xl">
             <div className="flex flex-wrap items-center gap-2">
-              {verified ? (
-                <span className="rounded-full border border-emerald-300/40 bg-black/35 px-3 py-1 text-xs text-emerald-100 backdrop-blur">
-                  Verified
-                </span>
-              ) : null}
-              {activePremium ? (
-                <span className="rounded-full border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1 text-xs font-black text-[#D4AF37] backdrop-blur">
-                  Premium
-                </span>
-              ) : null}
+              {visibleBadges.map((badge) => (
+                <StatusBadge
+                  key={badge.type}
+                  level={badge.level}
+                  type={badge.type}
+                />
+              ))}
               {activeItem?.media_type === "preview_video" ? (
                 <span className="rounded-full border border-white/15 bg-black/35 px-3 py-1 text-xs text-white/90 backdrop-blur">
                   Preview

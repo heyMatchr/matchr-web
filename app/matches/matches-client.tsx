@@ -4,6 +4,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import type { Database, MatchRow } from "@/lib/supabase/types";
 
 type MatchProfile = {
@@ -203,7 +204,15 @@ export function MatchesClient({
 
       {matches.length > 0 ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-10">
-          {matches.map((match) => (
+          {matches.map((match) => {
+            const visibleBadges = getVisibleStatusBadges([
+              match.profile.verified ? { type: "verified" } : null,
+              match.profile.has_premium ? { type: "premium" } : null,
+              match.profile.has_active_boost ? { type: "boosted" } : null,
+              isUserOnline(match.profile.id) ? { type: "online" } : null,
+            ]);
+
+            return (
             <Link
               key={match.id}
               href={`/chat/${match.id}`}
@@ -222,32 +231,19 @@ export function MatchesClient({
                     {match.profile.display_name.charAt(0)}
                   </div>
                 )}
-                {isUserOnline(match.profile.id) ? (
-                  <span className="absolute right-3 top-3 rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black shadow-[0_0_18px_rgba(74,222,128,0.35)]">
-                    Online
-                  </span>
-                ) : null}
                 <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                   {match.profile.preview_video_url ? (
                     <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1 text-xs font-black text-white backdrop-blur">
                       Preview
                     </span>
                   ) : null}
-                  {match.profile.verified ? (
-                    <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1 text-xs text-white backdrop-blur">
-                      Verified
-                    </span>
-                  ) : null}
-                  {match.profile.has_premium ? (
-                    <span className="rounded-full border border-[#D4AF37]/45 bg-black/55 px-3 py-1 text-xs font-black text-[#D4AF37] backdrop-blur">
-                      Premium
-                    </span>
-                  ) : null}
-                  {match.profile.has_active_boost ? (
-                    <span className="rounded-full border border-emerald-300/35 bg-black/55 px-3 py-1 text-xs font-black text-emerald-100 backdrop-blur">
-                      Boosted
-                    </span>
-                  ) : null}
+                  {visibleBadges.map((badge) => (
+                    <StatusBadge
+                      key={badge.type}
+                      level={badge.level}
+                      type={badge.type}
+                    />
+                  ))}
                 </div>
               </div>
               <div className="p-5">
@@ -276,7 +272,8 @@ export function MatchesClient({
                 </p>
               </div>
             </Link>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">

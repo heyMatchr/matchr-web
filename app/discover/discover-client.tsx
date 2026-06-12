@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import {
   getProfileHref,
   isMatchrPublicId,
@@ -534,6 +535,12 @@ const SwipeCard = memo(function SwipeCard({
     ? failedMediaUrls.has(activeMedia.url)
     : false;
   const showMediaProgress = profile.mediaItems.length > 1;
+  const visibleBadges = getVisibleStatusBadges([
+    profile.verified ? { type: "verified" } : null,
+    profile.hasPremium ? { type: "premium" } : null,
+    profile.hasActiveBoost ? { type: "boosted" } : null,
+    profileIsOnline ? { type: "online" } : null,
+  ]);
   const goPreviousMedia = useCallback(() => {
     setActiveMediaIndex((currentIndex) => Math.max(0, currentIndex - 1));
   }, []);
@@ -713,10 +720,13 @@ const SwipeCard = memo(function SwipeCard({
           </>
         ) : null}
         <div className={`absolute left-3 flex flex-wrap gap-2 ${showMediaProgress ? "top-7" : "top-3"}`}>
-          {profileIsOnline ? <span className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-black">Online</span> : null}
-          {profile.hasActiveBoost ? <span className="rounded-full border border-emerald-300/35 bg-black/45 px-3 py-1 text-xs font-black text-emerald-100">↟ Boosted</span> : null}
-          {profile.verified ? <span className="rounded-full border border-white/20 bg-black/45 px-3 py-1 text-xs text-white">Verified</span> : null}
-          {profile.hasPremium ? <span className="rounded-full border border-[#D4AF37]/45 bg-black/45 px-3 py-1 text-xs font-black text-[#D4AF37]">✦ Premium</span> : null}
+          {visibleBadges.map((badge) => (
+            <StatusBadge
+              key={badge.type}
+              level={badge.level}
+              type={badge.type}
+            />
+          ))}
         </div>
         {activeMedia?.isVideo ? (
           <span className="absolute bottom-4 left-4 rounded-full border border-white/20 bg-black/65 px-3 py-1 text-xs font-black text-white backdrop-blur">

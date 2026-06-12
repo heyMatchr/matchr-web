@@ -4,10 +4,12 @@ import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
 import { CreatorDailyActionCard } from "@/app/_components/creator-daily-action-card";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
+import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { getGiftCatalog } from "@/lib/economy";
+import { getUserEliteStatus } from "@/lib/elite-status";
 import {
   getGiftRarityLabel,
   shouldShowGiftRarity,
@@ -662,8 +664,22 @@ export default async function ProfilePage({
   const activePremium = (premiumResult.data ?? []).find((subscription) =>
     isActivePremiumSubscription(subscription),
   );
+  const ownEliteStatus =
+    profile.id === user.id ? await getUserEliteStatus(supabase, user.id) : null;
+  const nextEliteEntry = ownEliteStatus
+    ? Object.entries(ownEliteStatus.remainingByLevel)
+        .map(([level, remaining]) => ({
+          level: Number(level),
+          remaining,
+        }))
+        .filter((entry) => entry.level > ownEliteStatus.currentLevel)
+        .sort((left, right) => left.level - right.level)[0] ?? null
+    : null;
+  const profileIdentityBadges = getVisibleStatusBadges([
+    profile.verified ? { type: "verified" } : null,
+    activePremium ? { type: "premium" } : null,
+  ]);
   const profileBadges = [
-    profile.verified ? "Verified" : "",
     (giftsReceivedResult.count ?? 0) >= 3 ? "Top gifted" : "",
     (followersResult.count ?? 0) >= 10 ? "Trending" : "",
   ].filter(Boolean);
@@ -1148,6 +1164,13 @@ export default async function ProfilePage({
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
+              {profileIdentityBadges.map((badge) => (
+                <StatusBadge
+                  key={badge.type}
+                  level={badge.level}
+                  type={badge.type}
+                />
+              ))}
               {profileBadges.map((badge) => (
                 <span
                   key={badge}
@@ -1177,6 +1200,35 @@ export default async function ProfilePage({
                   Wallet
                 </Link>
               </div>
+            ) : null}
+
+            {ownEliteStatus ? (
+              <Link
+                href="/wallet#elite"
+                className="mt-4 block rounded-2xl border border-[#C8A24A]/25 bg-[#C8A24A]/10 p-4 transition-colors hover:border-[#C8A24A]/40"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+                      Private status
+                    </p>
+                    <h2 className="mt-2 text-lg font-black text-white">
+                      {ownEliteStatus.currentLevel > 0
+                        ? `Elite ${ownEliteStatus.currentLevel}`
+                        : "Elite progress"}
+                    </h2>
+                    <p className="mt-1 text-sm text-[#E8C46A]/75">
+                      {nextEliteEntry
+                        ? `${nextEliteEntry.remaining.toLocaleString()} Gold to Elite ${nextEliteEntry.level}`
+                        : "Top level reached"}
+                    </p>
+                  </div>
+                  <StatusBadge
+                    level={ownEliteStatus.currentLevel || undefined}
+                    type="elite"
+                  />
+                </div>
+              </Link>
             ) : null}
 
             {profile.id === user.id ? (
