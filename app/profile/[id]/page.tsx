@@ -6,6 +6,11 @@ import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { getGiftCatalog } from "@/lib/economy";
+import {
+  getGiftRarityLabel,
+  shouldShowGiftRarity,
+  type GiftOption,
+} from "@/lib/gifts";
 import { isVisibleIdentityValue } from "@/lib/identity";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
@@ -52,6 +57,72 @@ function formatGiftName(giftType: string) {
 
 function searchValue(value?: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function GiftVisual({
+  className = "",
+  type,
+}: {
+  className?: string;
+  type?: string | null;
+}) {
+  const normalizedType = type?.toLowerCase() ?? "";
+
+  if (normalizedType.includes("signal") || normalizedType.includes("spotlight")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M12 19v-3" />
+        <path d="M12 8V5" />
+        <path d="M5 12h3" />
+        <path d="M16 12h3" />
+        <path d="M8.5 15.5 6.4 17.6" />
+        <path d="m17.6 6.4-2.1 2.1" />
+        <path d="M8.5 8.5 6.4 6.4" />
+        <path d="m17.6 17.6-2.1-2.1" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("crown")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M5 18h14" />
+        <path d="M6 15 5 7l5 4 2-6 2 6 5-4-1 8H6Z" />
+        <path d="M8 21h8" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("card") || normalizedType.includes("invite") || normalizedType.includes("note")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5v-9Z" />
+        <path d="m5 8 7 5 7-5" />
+        <path d="M16 15h2" />
+      </svg>
+    );
+  }
+
+  if (normalizedType.includes("room")) {
+    return (
+      <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+        <path d="M8 21V5.5A2.5 2.5 0 0 1 10.5 3H18v18" />
+        <path d="M6 21h14" />
+        <path d="M13 12h.01" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.7">
+      <path d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9Z" />
+      <path d="M3 6h18v4H3z" />
+      <path d="M12 6v14" />
+      <path d="M12 6c-2.4 0-4-1-4-2.3C8 2.8 8.8 2 9.8 2 11.2 2 12 3.4 12 6Z" />
+      <path d="M12 6c2.4 0 4-1 4-2.3 0-.9-.8-1.7-1.8-1.7C12.8 2 12 3.4 12 6Z" />
+    </svg>
+  );
 }
 
 export default async function ProfilePage({
@@ -306,9 +377,16 @@ export default async function ProfilePage({
       const catalogGift = giftsByType.get(gift.gift_type);
 
       return {
-        cost: gift.gold_cost ?? catalogGift?.coinPrice ?? null,
+        coinPrice: gift.gold_cost ?? catalogGift?.coinPrice ?? 0,
+        icon: catalogGift?.icon ?? gift.gift_type,
         id: gift.id,
         name: catalogGift?.name ?? formatGiftName(gift.gift_type),
+        rarity: catalogGift?.rarity,
+        signature:
+          catalogGift && "signature" in catalogGift
+            ? catalogGift.signature
+            : false,
+        type: gift.gift_type,
       };
     }) ?? [];
   const supporterRows = supporterGiftsResult.data ?? [];
@@ -407,6 +485,37 @@ export default async function ProfilePage({
               : [];
           })
       : [];
+  const latestMoment = profileMomentsResult.data?.[0] ?? null;
+  let latestMomentReactions = 0;
+  let latestMomentGifts = 0;
+
+  if (latestMoment) {
+    const [
+      latestMomentLikesResult,
+      latestMomentCommentsResult,
+      latestMomentGiftsResult,
+    ] = await timeAsync("[Perf] Profile latest moment engagement", () =>
+      Promise.all([
+        supabase
+          .from("moment_likes")
+          .select("id", { count: "exact", head: true })
+          .eq("moment_id", latestMoment.id),
+        supabase
+          .from("moment_comments")
+          .select("id", { count: "exact", head: true })
+          .eq("moment_id", latestMoment.id),
+        supabase
+          .from("moment_gifts")
+          .select("id", { count: "exact", head: true })
+          .eq("moment_id", latestMoment.id),
+      ]),
+    );
+
+    latestMomentReactions =
+      (latestMomentLikesResult.count ?? 0) +
+      (latestMomentCommentsResult.count ?? 0);
+    latestMomentGifts = latestMomentGiftsResult.count ?? 0;
+  }
   const profileCompletion = getProfileCompletion({
     avatar_url: profile.avatar_url,
     bio: profile.bio,
@@ -489,6 +598,21 @@ export default async function ProfilePage({
         ];
   const profileHref = getProfileHref(profile);
   const panelHref = (panel: string) => `${profileHref}?panel=${panel}`;
+  const supportGiftHref = chatHref ? `${chatHref}?gift=1` : null;
+  const creatorNudges =
+    profile.id === user.id
+      ? [
+          !activePreviewVideo?.media_url
+            ? { href: "/profile/edit", label: "Add preview" }
+            : null,
+          !hasActiveStories ? { href: "/discover", label: "Post story" } : null,
+          (giftsReceivedResult.count ?? 0) < 3
+            ? { href: "/moments", label: "Share a moment" }
+            : null,
+        ].filter(
+          (nudge): nudge is { href: string; label: string } => Boolean(nudge),
+        )
+      : [];
 
   finishPerfTimer("[Perf] Profile queries", perfStartedAt);
 
@@ -584,6 +708,59 @@ export default async function ProfilePage({
               )}
             </div>
 
+            {profile.id !== user.id ? (
+              <section className="mt-4 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.06] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-200">
+                      Support
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                      <span className="rounded-full bg-black/35 px-3 py-1.5 text-neutral-100">
+                        {giftsReceivedResult.count ?? 0} Gifts
+                      </span>
+                      <span className="rounded-full bg-black/35 px-3 py-1.5 text-neutral-100">
+                        {recentGifts.length} Recent
+                      </span>
+                    </div>
+                  </div>
+                  {supportGiftHref ? (
+                    <Link
+                      href={supportGiftHref}
+                      className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-neutral-200"
+                    >
+                      Send Gift
+                    </Link>
+                  ) : (
+                    <span className="rounded-full border border-neutral-800 px-4 py-2 text-sm text-neutral-400">
+                      Match first
+                    </span>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {creatorNudges.length ? (
+              <section className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/[0.06] p-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs uppercase tracking-[0.2em] text-amber-100">
+                    Momentum
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {creatorNudges.map((nudge) => (
+                      <Link
+                        key={nudge.label}
+                        href={nudge.href}
+                        className="rounded-full border border-amber-200/20 bg-black/30 px-3 py-1.5 text-sm text-amber-50 transition-colors hover:bg-amber-300/10"
+                      >
+                        {nudge.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
             <div className="mt-5 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
               <Link
                 href={panelHref("followers")}
@@ -627,7 +804,7 @@ export default async function ProfilePage({
               <div className="mt-3 rounded-xl border border-neutral-900 bg-white/[0.03] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-neutral-100">
-                    Recent gifts
+                    Recent Support
                   </p>
                   <span className="text-xs text-neutral-500">
                     {recentGifts.length}
@@ -637,23 +814,94 @@ export default async function ProfilePage({
                   {recentGifts.map((gift) => (
                     <div
                       key={gift.id}
-                      className="min-w-[132px] rounded-xl border border-emerald-300/10 bg-emerald-300/5 p-3"
+                      className={`min-w-[132px] rounded-xl border p-3 ${
+                        gift.signature || gift.rarity === "signature"
+                          ? "border-[#D4AF37]/35 bg-[#D4AF37]/10"
+                          : "border-emerald-300/10 bg-emerald-300/5"
+                      }`}
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-emerald-200/20 bg-black/35 text-xs font-black text-emerald-100">
-                        {initialFor(gift.name)}
+                      <div
+                        className={`flex h-9 w-9 items-center justify-center rounded-full border bg-black/35 ${
+                          gift.signature || gift.rarity === "signature"
+                            ? "border-[#D4AF37]/35 text-[#D4AF37]"
+                            : "border-emerald-200/20 text-emerald-100"
+                        }`}
+                      >
+                        <GiftVisual className="h-4 w-4" type={gift.type} />
                       </div>
                       <p className="mt-2 truncate text-sm font-medium text-neutral-100">
                         {gift.name}
                       </p>
-                      {gift.cost ? (
+                      {shouldShowGiftRarity(gift as GiftOption) ? (
                         <p className="mt-0.5 text-xs text-neutral-500">
-                          {gift.cost} Gold
+                          {getGiftRarityLabel(gift as GiftOption)}
                         </p>
                       ) : null}
                     </div>
                   ))}
                 </div>
               </div>
+            ) : null}
+
+            {latestMoment ? (
+              <section className="mt-3 overflow-hidden rounded-xl border border-neutral-900 bg-white/[0.03]">
+                <div className="grid gap-3 p-3 sm:grid-cols-[112px_1fr]">
+                  <Link
+                    href="/moments"
+                    className="aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950"
+                  >
+                    {latestMoment.media_type === "video" ? (
+                      <video
+                        src={latestMoment.media_url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Image
+                        src={latestMoment.media_url}
+                        alt=""
+                        width={180}
+                        height={225}
+                        sizes="112px"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                  </Link>
+                  <div className="flex min-w-0 flex-col justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-neutral-100">
+                        Latest Moment
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-neutral-400">
+                        <span className="rounded-full bg-black/35 px-3 py-1">
+                          {latestMomentReactions} Reactions
+                        </span>
+                        <span className="rounded-full bg-black/35 px-3 py-1">
+                          {latestMomentGifts} Gifts
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Link
+                        href="/moments"
+                        className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-100 transition-colors hover:bg-white/[0.05]"
+                      >
+                        View
+                      </Link>
+                      {profile.id !== user.id ? (
+                        <Link
+                          href="/moments"
+                          className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm text-emerald-50 transition-colors hover:bg-emerald-300/15"
+                        >
+                          Gift
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </section>
             ) : null}
 
             {topSupporters.length ? (
