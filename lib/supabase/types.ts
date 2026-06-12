@@ -247,6 +247,10 @@ export type ManagedGiftCatalogRow = {
   icon_url: string | null;
   active: boolean;
   sort_order: number;
+  rarity: "common" | "select" | "rare" | "icon" | "signature";
+  signature: boolean;
+  limited_until: string | null;
+  requires_elite_level: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -889,6 +893,10 @@ export type Database = {
           icon_url?: string | null;
           active?: boolean;
           sort_order?: number;
+          rarity?: "common" | "select" | "rare" | "icon" | "signature";
+          signature?: boolean;
+          limited_until?: string | null;
+          requires_elite_level?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -902,6 +910,10 @@ export type Database = {
           icon_url?: string | null;
           active?: boolean;
           sort_order?: number;
+          rarity?: "common" | "select" | "rare" | "icon" | "signature";
+          signature?: boolean;
+          limited_until?: string | null;
+          requires_elite_level?: number | null;
           updated_at?: string;
         };
         Relationships: [];

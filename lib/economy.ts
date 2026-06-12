@@ -50,14 +50,16 @@ export const DEFAULT_CREATOR_SPLIT: CreatorSplit = {
 const DEFAULT_CONFIG: Record<string, unknown> = {
   creator_split: DEFAULT_CREATOR_SPLIT,
   gift_catalog: [
-    { id: "rose", name: "Rose", price: 5 },
-    { id: "kiss", name: "Kiss", price: 8 },
-    { id: "heart_box", name: "Heart Box", price: 10 },
-    { id: "teddy", name: "Teddy", price: 20 },
-    { id: "wine", name: "Wine", price: 30 },
-    { id: "private_jet", name: "Private Jet", price: 80 },
-    { id: "diamond_ring", name: "Diamond Ring", price: 120 },
-    { id: "matchr_crown", name: "Matchr Crown", price: 150 },
+    { category: "Signal", id: "signal_flare", name: "Signal Flare", price: 10, rarity: "common" },
+    { category: "Signal", id: "rose_signal", name: "Rose Signal", price: 25, rarity: "common" },
+    { category: "Presence", id: "after_hours", name: "After Hours", price: 50, rarity: "select" },
+    { category: "Presence", id: "velvet_note", name: "Velvet Note", price: 75, rarity: "select" },
+    { category: "Creator Support", id: "spotlight", name: "Spotlight", price: 100, rarity: "select" },
+    { category: "Creator Support", id: "gold_signal", name: "Gold Signal", price: 250, rarity: "rare" },
+    { category: "Luxury", id: "private_room", name: "Private Room", price: 500, rarity: "rare" },
+    { category: "Luxury", id: "black_card", name: "Black Card", price: 1000, rarity: "icon" },
+    { category: "Signature", id: "matchr_crown", name: "Matchr Crown", price: 2500, rarity: "signature", signature: true },
+    { category: "Signature", id: "midnight_invite", name: "Midnight Invite", price: 5000, rarity: "signature", signature: true },
   ],
   message_rules: DEFAULT_MESSAGE_RULES,
   minimum_withdrawal: 5000,
@@ -89,7 +91,7 @@ export async function getEconomyConfig<T = unknown>(
 export async function getGiftCatalog(supabase: EconomyClient) {
   const { data: managedGifts, error: managedGiftError } = await supabase
     .from("gift_catalog")
-    .select("id, name, description, category, gold_cost, creator_percentage, icon_url, active, sort_order")
+    .select("id, name, description, category, gold_cost, creator_percentage, icon_url, active, sort_order, rarity, signature, limited_until, requires_elite_level")
     .eq("active", true)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
@@ -102,7 +104,11 @@ export async function getGiftCatalog(supabase: EconomyClient) {
         creatorPercentage: Number(gift.creator_percentage),
         description: gift.description,
         icon: gift.icon_url ?? GIFT_ICON_BY_TYPE[gift.id] ?? "✦",
+        limitedUntil: gift.limited_until,
         name: gift.name,
+        rarity: gift.rarity,
+        requiresEliteLevel: gift.requires_elite_level,
+        signature: gift.signature,
         type: gift.id,
       }))
       .filter((gift): gift is GiftOption =>
@@ -111,7 +117,18 @@ export async function getGiftCatalog(supabase: EconomyClient) {
   }
 
   const configuredGifts = await getEconomyConfig<
-    { id: string; name: string; price: number; icon?: string }[]
+    {
+      category?: string;
+      creator_percentage?: number;
+      icon?: string;
+      id: string;
+      limited_until?: string | null;
+      name: string;
+      price: number;
+      rarity?: GiftOption["rarity"];
+      requires_elite_level?: number | null;
+      signature?: boolean;
+    }[]
   >(supabase, "gift_catalog");
 
   if (!Array.isArray(configuredGifts) || configuredGifts.length === 0) {
@@ -119,10 +136,16 @@ export async function getGiftCatalog(supabase: EconomyClient) {
   }
 
   return configuredGifts
-    .map((gift) => ({
+    .map<GiftOption>((gift) => ({
+      category: gift.category,
       coinPrice: Number(gift.price),
+      creatorPercentage: Number(gift.creator_percentage ?? 50),
       icon: gift.icon ?? GIFT_ICON_BY_TYPE[gift.id] ?? "✦",
+      limitedUntil: gift.limited_until,
       name: gift.name,
+      rarity: gift.rarity,
+      requiresEliteLevel: gift.requires_elite_level,
+      signature: gift.signature,
       type: gift.id,
     }))
     .filter((gift): gift is GiftOption =>

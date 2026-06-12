@@ -18,6 +18,35 @@ function getBoolean(formData: FormData, key: string) {
   return getString(formData, key) === "true" || formData.get(key) === "on";
 }
 
+function getNullableNumber(formData: FormData, key: string) {
+  const value = getString(formData, key);
+
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+type GiftRarity = "common" | "select" | "rare" | "icon" | "signature";
+
+function getGiftRarity(formData: FormData): GiftRarity {
+  const rarity = getString(formData, "rarity");
+
+  if (
+    rarity === "common" ||
+    rarity === "select" ||
+    rarity === "rare" ||
+    rarity === "icon" ||
+    rarity === "signature"
+  ) {
+    return rarity;
+  }
+
+  return "common";
+}
+
 function parseJson(value: string, fallback: Record<string, unknown> = {}) {
   if (!value) return fallback;
 
@@ -123,7 +152,11 @@ export async function saveGift(formData: FormData) {
     gold_cost: goldCost,
     icon_url: getString(formData, "icon_url") || null,
     id,
+    limited_until: getString(formData, "limited_until") || null,
     name,
+    rarity: getGiftRarity(formData),
+    requires_elite_level: getNullableNumber(formData, "requires_elite_level"),
+    signature: getBoolean(formData, "signature"),
     sort_order: Math.floor(getNumber(formData, "sort_order")),
     updated_at: new Date().toISOString(),
   };

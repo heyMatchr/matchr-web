@@ -14,7 +14,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
-import type { GiftOption } from "@/lib/gifts";
+import {
+  getGiftCategory,
+  getGiftRarityLabel,
+  isGiftLocked,
+  type GiftOption,
+} from "@/lib/gifts";
 import { compressImageFile } from "@/lib/client-media";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import { getProfileHref } from "@/lib/profile-public-id";
@@ -877,9 +882,17 @@ function GiftsSheet({
   const [giftState, setGiftState] = useState<GiftActionState | null>(null);
   const [sendingGiftType, setSendingGiftType] = useState<string | null>(null);
   const [lastSentGift, setLastSentGift] = useState<GiftOption | null>(null);
+  const groupedGiftCatalog = useMemo(() => {
+    const giftGroups = new Map<string, GiftOption[]>();
+    giftCatalog.forEach((gift) => {
+      const category = getGiftCategory(gift);
+      giftGroups.set(category, [...(giftGroups.get(category) ?? []), gift]);
+    });
+    return [...giftGroups.entries()];
+  }, [giftCatalog]);
 
   async function sendMomentGift(gift: GiftOption) {
-    if (sendingGiftType) {
+    if (sendingGiftType || isGiftLocked(gift)) {
       return;
     }
 
@@ -965,33 +978,48 @@ function GiftsSheet({
             </div>
           </div>
         ) : null}
-        <div className="mt-4 grid gap-2">
-          {giftCatalog.map((gift) => (
-            <form
-              key={gift.type}
-              action={async () => {
-                await sendMomentGift(gift);
-              }}
-            >
-              <button
-                disabled={Boolean(sendingGiftType)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
-                  {gift.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium text-white">{gift.name}</span>
-                  <span className="text-xs text-neutral-500">
-                    {gift.coinPrice} Gold
-                    {gift.description ? ` · ${gift.description}` : ""}
-                  </span>
-                </span>
-                <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
-                  {sendingGiftType === gift.type ? "Sending" : "Send Gift"}
-                </span>
-              </button>
-            </form>
+        <div className="mt-4 grid gap-4">
+          {groupedGiftCatalog.map(([category, gifts]) => (
+            <div key={category}>
+              <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
+                {category}
+              </p>
+              <div className="grid gap-2">
+                {gifts.map((gift) => {
+                  const locked = isGiftLocked(gift);
+
+                  return (
+                    <form
+                      key={gift.type}
+                      action={async () => {
+                        await sendMomentGift(gift);
+                      }}
+                    >
+                      <button
+                        disabled={Boolean(sendingGiftType) || locked}
+                        className="flex w-full items-center gap-3 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-4 text-left text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
+                          {gift.name.charAt(0).toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-white">{gift.name}</span>
+                          <span className="text-xs text-neutral-500">
+                            {gift.coinPrice} Gold ·{" "}
+                            {locked
+                              ? `Elite ${gift.requiresEliteLevel}`
+                              : getGiftRarityLabel(gift)}
+                          </span>
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
+                          {sendingGiftType === gift.type ? "Sending" : "Send Gift"}
+                        </span>
+                      </button>
+                    </form>
+                  );
+                })}
+              </div>
+            </div>
           ))}
         </div>
       </div>

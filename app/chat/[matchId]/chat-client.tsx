@@ -24,7 +24,13 @@ import {
   getConversationSuggestions,
   type ConversationTone,
 } from "@/lib/conversation-assist";
-import { getGiftOption, type GiftOption } from "@/lib/gifts";
+import {
+  getGiftCategory,
+  getGiftOption,
+  getGiftRarityLabel,
+  isGiftLocked,
+  type GiftOption,
+} from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
 import { getProfileHref } from "@/lib/profile-public-id";
 import {
@@ -200,7 +206,7 @@ export function ChatClient({
   const groupedGiftCatalog = useMemo(() => {
     const groups = new Map<string, GiftOption[]>();
     giftCatalog.forEach((gift) => {
-      const category = gift.category || "Classic";
+      const category = getGiftCategory(gift);
       groups.set(category, [...(groups.get(category) ?? []), gift]);
     });
     return [...groups.entries()];
@@ -895,6 +901,10 @@ export function ChatClient({
       return;
     }
 
+    if (isGiftLocked(gift)) {
+      return;
+    }
+
     if (spendableGold < gift.coinPrice) {
       setGoldModal("Top up your Gold to keep going.");
       return;
@@ -923,6 +933,10 @@ export function ChatClient({
 
   async function confirmGift(gift: GiftOption) {
     if (sending) {
+      return;
+    }
+
+    if (isGiftLocked(gift)) {
       return;
     }
 
@@ -1739,25 +1753,35 @@ export function ChatClient({
                         {category}
                       </p>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        {gifts.map((gift) => (
-                          <button
-                            key={gift.type}
-                            type="button"
-                            onClick={() => void sendGift(gift)}
-                            className="flex min-h-28 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-3 text-center text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 active:scale-[0.98]"
-                          >
-                            <GiftVisual
-                              className="h-10 w-10 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-2 text-emerald-100"
-                              type={gift.type}
-                            />
-                            <span className="line-clamp-1 max-w-full font-black text-white">
-                              {gift.name}
-                            </span>
-                            <span className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100">
-                              {gift.coinPrice} Gold
-                            </span>
-                          </button>
-                        ))}
+                        {gifts.map((gift) => {
+                          const locked = isGiftLocked(gift);
+
+                          return (
+                            <button
+                              key={gift.type}
+                              type="button"
+                              disabled={locked}
+                              onClick={() => void sendGift(gift)}
+                              className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 py-3 text-center text-sm text-neutral-200 transition-colors hover:border-emerald-300/30 hover:bg-emerald-300/10 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+                            >
+                              <GiftVisual
+                                className="h-10 w-10 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-2 text-emerald-100"
+                                type={gift.type}
+                              />
+                              <span className="line-clamp-1 max-w-full font-black text-white">
+                                {gift.name}
+                              </span>
+                              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-neutral-500">
+                                {locked
+                                  ? `Elite ${gift.requiresEliteLevel}`
+                                  : getGiftRarityLabel(gift)}
+                              </span>
+                              <span className="rounded-full border border-amber-200/20 bg-amber-200/10 px-2.5 py-1 text-xs font-bold text-amber-100">
+                                {gift.coinPrice} Gold
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}

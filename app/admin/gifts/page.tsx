@@ -13,6 +13,7 @@ type GiftCatalogRow = {
   gold_cost: number;
   id: string;
   name: string;
+  rarity: "common" | "select" | "rare" | "icon" | "signature";
   sort_order: number;
 };
 
@@ -30,6 +31,7 @@ type GiftMetric = {
   goldCost: number;
   id: string;
   name: string;
+  rarity: string;
   repeatRate: number;
   repeatSends: number;
   revenue: number;
@@ -269,7 +271,7 @@ export default async function AdminGiftAnalyticsPage() {
   const [catalogResult, giftsResult, streaksResult] = await Promise.all([
     supabase
       .from("gift_catalog")
-      .select("id, name, category, gold_cost, active, sort_order")
+      .select("id, name, category, gold_cost, active, sort_order, rarity")
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true }),
     supabase
@@ -321,6 +323,7 @@ export default async function AdminGiftAnalyticsPage() {
       goldCost: gift.gold_cost,
       id: gift.id,
       name: gift.name,
+      rarity: gift.rarity,
       repeatRate: 0,
       repeatSends: 0,
       revenue: 0,
@@ -337,6 +340,7 @@ export default async function AdminGiftAnalyticsPage() {
         goldCost: catalogGift?.gold_cost ?? gift.gold_cost ?? 0,
         id: gift.gift_type,
         name: catalogGift?.name ?? gift.gift_type,
+        rarity: catalogGift?.rarity ?? "common",
         repeatRate: 0,
         repeatSends: 0,
         revenue: 0,
@@ -417,8 +421,12 @@ export default async function AdminGiftAnalyticsPage() {
     .slice(0, 8)
     .map((gift) => ({
       label: gift.name,
-      secondary: `${gift.category} · ${gift.goldCost} Gold`,
+      secondary: `${gift.category} · ${gift.rarity} · ${gift.goldCost} Gold`,
       tooltip: [
+        {
+          label: "Rarity",
+          value: gift.rarity,
+        },
         {
           label: "Sends",
           value: formatNumber(gift.sends),

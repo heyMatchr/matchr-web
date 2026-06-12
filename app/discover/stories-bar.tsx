@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
-import type { GiftOption } from "@/lib/gifts";
+import {
+  getGiftCategory,
+  getGiftRarityLabel,
+  isGiftLocked,
+  type GiftOption,
+} from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import {
@@ -289,6 +294,14 @@ export function StoriesBar({
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  const groupedGiftCatalog = useMemo(() => {
+    const giftGroups = new Map<string, GiftOption[]>();
+    giftCatalog.forEach((gift) => {
+      const category = getGiftCategory(gift);
+      giftGroups.set(category, [...(giftGroups.get(category) ?? []), gift]);
+    });
+    return [...giftGroups.entries()];
+  }, [giftCatalog]);
 
   const activeGroup =
     activeGroupIndex === null ? null : groups[activeGroupIndex] ?? null;
@@ -1006,7 +1019,12 @@ export function StoriesBar({
   }
 
   async function giftStory(gift: GiftOption) {
-    if (!activeStory || activeStory.user_id === currentUserId || sendingGiftType) {
+    if (
+      !activeStory ||
+      activeStory.user_id === currentUserId ||
+      sendingGiftType ||
+      isGiftLocked(gift)
+    ) {
       return;
     }
 
@@ -1443,31 +1461,46 @@ export function StoriesBar({
                       Send gift
                     </button>
                     {isGiftPickerOpen ? (
-                      <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-2 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
-                        {giftCatalog.map((gift) => (
-                          <button
-                            key={gift.type}
-                            type="button"
-                            disabled={Boolean(sendingGiftType)}
-                            onClick={() => void giftStory(gift)}
-                            className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-55"
-                          >
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
-                              {gift.name.charAt(0).toUpperCase()}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block font-medium">{gift.name}</span>
-                              <span className="text-xs text-neutral-500">
-                                {gift.coinPrice} Gold
-                                {gift.description ? ` · ${gift.description}` : ""}
-                              </span>
-                            </span>
-                            {sendingGiftType === gift.type ? (
-                              <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
-                                Sending
-                              </span>
-                            ) : null}
-                          </button>
+                      <div className="absolute bottom-14 left-0 right-0 grid max-h-72 gap-4 overflow-y-auto rounded-3xl border border-white/10 bg-black/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
+                        {groupedGiftCatalog.map(([category, gifts]) => (
+                          <div key={category}>
+                            <p className="mb-2 px-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-100/70">
+                              {category}
+                            </p>
+                            <div className="grid gap-2">
+                              {gifts.map((gift) => {
+                                const locked = isGiftLocked(gift);
+
+                                return (
+                                  <button
+                                    key={gift.type}
+                                    type="button"
+                                    disabled={Boolean(sendingGiftType) || locked}
+                                    onClick={() => void giftStory(gift)}
+                                    className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-3 text-left text-sm text-white hover:border-emerald-200/30 disabled:cursor-not-allowed disabled:opacity-55"
+                                  >
+                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-200/15 bg-emerald-300/10 text-xs font-black text-emerald-100">
+                                      {gift.name.charAt(0).toUpperCase()}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block font-medium">{gift.name}</span>
+                                      <span className="text-xs text-neutral-500">
+                                        {gift.coinPrice} Gold ·{" "}
+                                        {locked
+                                          ? `Elite ${gift.requiresEliteLevel}`
+                                          : getGiftRarityLabel(gift)}
+                                      </span>
+                                    </span>
+                                    {sendingGiftType === gift.type ? (
+                                      <span className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-black">
+                                        Sending
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     ) : null}

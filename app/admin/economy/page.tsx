@@ -150,7 +150,11 @@ function GiftForm({
     gold_cost: number;
     icon_url: string | null;
     id: string;
+    limited_until: string | null;
     name: string;
+    rarity: "common" | "select" | "rare" | "icon" | "signature";
+    requires_elite_level: number | null;
+    signature: boolean;
     sort_order: number;
   };
 }) {
@@ -166,11 +170,26 @@ function GiftForm({
         <Field label="Category">
           <input className={inputClass} defaultValue={gift?.category ?? "classic"} name="category" />
         </Field>
+        <Field label="Rarity">
+          <select className={inputClass} defaultValue={gift?.rarity ?? "common"} name="rarity">
+            <option value="common">Common</option>
+            <option value="select">Select</option>
+            <option value="rare">Rare</option>
+            <option value="icon">Icon</option>
+            <option value="signature">Signature</option>
+          </select>
+        </Field>
         <Field label="Gold cost">
           <input className={inputClass} defaultValue={gift?.gold_cost} min="1" name="gold_cost" type="number" />
         </Field>
         <Field label="Creator %">
           <input className={inputClass} defaultValue={gift?.creator_percentage ?? 50} max="100" min="0" name="creator_percentage" step="0.01" type="number" />
+        </Field>
+        <Field label="Elite level">
+          <input className={inputClass} defaultValue={gift?.requires_elite_level ?? ""} min="1" name="requires_elite_level" placeholder="Optional" type="number" />
+        </Field>
+        <Field label="Limited until">
+          <input className={inputClass} defaultValue={gift?.limited_until ? gift.limited_until.slice(0, 16) : ""} name="limited_until" type="datetime-local" />
         </Field>
         <Field label="Animation key">
           <input className={inputClass} defaultValue={gift?.animation_key ?? ""} name="animation_key" />
@@ -189,6 +208,10 @@ function GiftForm({
         <div className="flex items-end">
           <ActiveCheckbox defaultChecked={gift?.active ?? true} />
         </div>
+        <label className="flex items-end gap-2 text-sm text-neutral-300">
+          <input defaultChecked={gift?.signature ?? false} name="signature" type="checkbox" />
+          Signature
+        </label>
         <div className="flex items-end">
           <SubmitButton>{gift ? "Update gift" : "Add gift"}</SubmitButton>
         </div>
