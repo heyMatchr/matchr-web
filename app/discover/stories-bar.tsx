@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   getGiftCategory,
+  getGiftEliteLockLabel,
   getGiftRarityLabel,
   isGiftLocked,
   shouldShowGiftRarity,
@@ -49,7 +50,9 @@ export type StoryGroup = {
 
 export type StoriesBarProps = {
   anonKey: string;
+  currentEliteLevel: number;
   currentUserId: string;
+  eliteGoldRemainingByLevel: Record<number, number>;
   giftCatalog: GiftOption[];
   giftStreaksByReceiver?: Record<string, number>;
   initialGroups: StoryGroup[];
@@ -264,7 +267,9 @@ async function compressStoryImage(file: File) {
 
 export function StoriesBar({
   anonKey,
+  currentEliteLevel,
   currentUserId,
+  eliteGoldRemainingByLevel,
   giftCatalog,
   giftStreaksByReceiver = {},
   initialGroups,
@@ -1030,7 +1035,7 @@ export function StoriesBar({
       !activeStory ||
       activeStory.user_id === currentUserId ||
       sendingGiftType ||
-      isGiftLocked(gift)
+      isGiftLocked(gift, currentEliteLevel)
     ) {
       return;
     }
@@ -1482,7 +1487,7 @@ export function StoriesBar({
                               </p>
                               <div className="grid grid-cols-2 gap-2">
                                 {gifts.map((gift) => {
-                                  const locked = isGiftLocked(gift);
+                                  const locked = isGiftLocked(gift, currentEliteLevel);
                                   const showRarity = shouldShowGiftRarity(gift);
                                   const signature =
                                     gift.signature || gift.rarity === "signature";
@@ -1520,7 +1525,12 @@ export function StoriesBar({
                                           }`}
                                         >
                                           {locked
-                                            ? `Elite ${gift.requiresEliteLevel} required`
+                                            ? getGiftEliteLockLabel({
+                                                currentEliteLevel,
+                                                gift,
+                                                remainingByLevel:
+                                                  eliteGoldRemainingByLevel,
+                                              })
                                             : getGiftRarityLabel(gift)}
                                         </span>
                                       ) : null}

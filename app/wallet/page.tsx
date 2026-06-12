@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
-import { getEconomyNumberConfig } from "@/lib/economy";
+import {
+  DEFAULT_MESSAGE_RULES,
+  getEconomyConfig,
+  getEconomyNumberConfig,
+} from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import {
@@ -56,6 +60,10 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   }
 
   const todayStartIso = getTodayStartIso();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const [
     walletResult,
     packagesResult,
@@ -63,7 +71,9 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     incomingGiftsResult,
     outgoingGiftsResult,
     messageChargesResult,
+    messageChargesSavingsResult,
     premiumSubscriptionsResult,
+    premiumSubscriptionsHistoryResult,
     paymentOrdersResult,
     activeBoostResult,
     premiumPlansResult,
@@ -73,6 +83,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     lifetimePaidOrdersResult,
     priorityMessageCost,
     profileBoostCost,
+    messageRules,
     availableProviders,
     profileViewsTodayResult,
     storyReactionsTodayResult,
@@ -91,12 +102,24 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     supabase.from("gift_transactions").select("gift_type, gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase.from("message_charges").select("gold_cost, created_at").eq("sender_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase
+      .from("message_charges")
+      .select("gold_cost, created_at")
+      .eq("sender_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabase
       .from("premium_subscriptions")
       .select("plan_name, status, price_usd, interval, expires_at")
       .eq("user_id", user.id)
       .eq("status", "active")
       .order("expires_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("premium_subscriptions")
+      .select("plan_name, status, created_at, expires_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(50),
     supabase.from("payment_orders").select("provider, order_type, status, amount, amount_usd, currency, gold_amount, metadata, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(10),
     supabase
       .from("profile_boosts")
@@ -134,6 +157,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .limit(1000),
     getEconomyNumberConfig(supabase, "priority_message_cost", 15),
     getEconomyNumberConfig(supabase, "profile_boost_cost", 50),
+    getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(supabase, "message_rules"),
     getAvailablePaymentProviders(supabase, currentProfile.country, "USD"),
     supabase
       .from("profile_views")
@@ -164,6 +188,49 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
     isActivePremiumSubscription(subscription),
   );
+  const normalizedMessageRules = { ...DEFAULT_MESSAGE_RULES, ...messageRules };
+  const standardMessageCost = Math.max(
+    0,
+    Number(
+      normalizedMessageRules.male_message_cost ??
+        normalizedMessageRules.male_to_female ??
+        5,
+    ),
+  );
+  const paidPremiumWindows = (premiumSubscriptionsHistoryResult.data ?? []).filter(
+    (subscription) => subscription.status === "active",
+  );
+  const premiumMessageSavings = (messageChargesSavingsResult.data ?? []).reduce(
+    (totals, charge) => {
+      const chargedAt = new Date(charge.created_at).getTime();
+      const happenedDuringPremium = paidPremiumWindows.some((subscription) => {
+        const startsAt = new Date(subscription.created_at).getTime();
+        const expiresAt = subscription.expires_at
+          ? new Date(subscription.expires_at).getTime()
+          : Number.POSITIVE_INFINITY;
+
+        return chargedAt >= startsAt && chargedAt <= expiresAt;
+      });
+
+      if (!happenedDuringPremium) {
+        return totals;
+      }
+
+      const saved = Math.max(0, standardMessageCost - Number(charge.gold_cost ?? 0));
+
+      return {
+        lifetime: totals.lifetime + saved,
+        recent:
+          chargedAt >= sevenDaysAgo.getTime()
+            ? totals.recent + saved
+            : totals.recent,
+      };
+    },
+    { lifetime: 0, recent: 0 },
+  );
+  const premiumExpiresSoon =
+    Boolean(activePremium?.expires_at) &&
+    new Date(activePremium?.expires_at ?? 0).getTime() - nowMs <= 3 * 24 * 60 * 60 * 1000;
   const latestPaidPaymentOrder = (paymentOrdersResult.data ?? []).find(
     (order) => order.status === "paid",
   );
@@ -293,6 +360,76 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
         </section>
 
         <DailyAttentionDigest counts={dailyDigestCounts} />
+
+        <section className="grid min-w-0 max-w-full gap-3 sm:grid-cols-2">
+          <div className="min-w-0 rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-4 sm:rounded-3xl sm:p-5">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+                  Premium savings
+                </p>
+                <h2 className="mt-2 text-xl font-black text-white">
+                  Gold saved
+                </h2>
+              </div>
+              <span className="rounded-full border border-[#D4AF37]/35 bg-black/25 px-3 py-1 text-xs text-[#E8C46A]">
+                Messages
+              </span>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
+                <p className="text-2xl font-black text-white">
+                  {premiumMessageSavings.lifetime.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[#E8C46A]/70">Lifetime</p>
+              </div>
+              <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
+                <p className="text-2xl font-black text-white">
+                  {premiumMessageSavings.recent.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[#E8C46A]/70">Last 7 days</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-w-0 rounded-2xl border border-[#8B2FC9]/25 bg-[#8B2FC9]/10 p-4 sm:rounded-3xl sm:p-5">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.24em] text-[#B06EEE]">
+                  Premium value
+                </p>
+                <h2 className="mt-2 text-xl font-black text-white">
+                  {activePremium ? "Premium Active" : "Premium available"}
+                </h2>
+              </div>
+              {activePremium ? <PremiumPill /> : null}
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                "Discounted Messages",
+                "Priority Visibility",
+                activePremium
+                  ? formatPremiumDays(activePremium.expires_at, nowMs)
+                  : "Upgrade ready",
+              ].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-sm text-neutral-100"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+            {premiumExpiresSoon ? (
+              <a
+                href="#premium"
+                className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-black"
+              >
+                Keep Premium Active
+              </a>
+            ) : null}
+          </div>
+        </section>
 
         <section className="min-w-0 max-w-full rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-4 sm:rounded-3xl sm:p-6">
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 sm:gap-4">
@@ -442,7 +579,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               <ActionCard
                 icon="♛"
                 label={activePremium ? "Premium Active" : "Premium"}
-                sublabel={activePremium ? formatPremiumExpiry(activePremium.expires_at) : "More access"}
+                sublabel={activePremium ? formatPremiumExpiry(activePremium.expires_at, nowMs) : "More access"}
               />
             </a>
             <form action={activateProfileBoost} className="min-w-0">
@@ -457,7 +594,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 </p>
                 <p className="mt-0.5 truncate text-xs text-emerald-50/75">
                   {activeBoost
-                    ? `Ends in ${formatTimeRemaining(activeBoost.expires_at)}`
+                    ? `Ends in ${formatTimeRemaining(activeBoost.expires_at, nowMs)}`
                     : `${profileBoostCost} Gold · 24h`}
                 </p>
               </button>
@@ -540,7 +677,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
           </div>
           <p className="mt-2 text-[15px] leading-6 text-neutral-300">
             {activePremium
-              ? `${activePremium.plan_name} · ${formatPremiumExpiry(activePremium.expires_at)}`
+              ? `${activePremium.plan_name} · ${formatPremiumExpiry(activePremium.expires_at, nowMs)}`
               : "Inactive"}
           </p>
           <div className="mt-3 flex min-w-0 flex-wrap gap-2">
@@ -553,7 +690,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </span>
             ))}
           </div>
-          {!activePremium ? (
+          {!activePremium || premiumExpiresSoon ? (
             <details className="mt-4 min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 sm:p-4">
               <summary className="cursor-pointer list-none text-sm font-black text-white">
                 Premium plans
@@ -869,8 +1006,8 @@ function getPaymentSuccessMessage(type: string | null) {
   return labels[type ?? ""] ?? "Payment successful.";
 }
 
-function formatTimeRemaining(expiresAt: string) {
-  const milliseconds = new Date(expiresAt).getTime() - Date.now();
+function formatTimeRemaining(expiresAt: string, nowMs: number) {
+  const milliseconds = new Date(expiresAt).getTime() - nowMs;
 
   if (milliseconds <= 0) {
     return "soon";
@@ -886,12 +1023,27 @@ function formatTimeRemaining(expiresAt: string) {
   return `${minutes}m`;
 }
 
-function formatPremiumExpiry(expiresAt: string | null) {
+function formatPremiumExpiry(expiresAt: string | null, nowMs: number) {
   if (!expiresAt) {
     return "Active";
   }
 
-  return `Ends in ${formatTimeRemaining(expiresAt)}`;
+  return `Ends in ${formatTimeRemaining(expiresAt, nowMs)}`;
+}
+
+function formatPremiumDays(expiresAt: string | null, nowMs: number) {
+  if (!expiresAt) {
+    return "Active";
+  }
+
+  const milliseconds = new Date(expiresAt).getTime() - nowMs;
+
+  if (milliseconds <= 0) {
+    return "Ends soon";
+  }
+
+  const days = Math.ceil(milliseconds / (24 * 60 * 60 * 1000));
+  return `Ends in ${days} day${days === 1 ? "" : "s"}`;
 }
 
 function ActionCard({

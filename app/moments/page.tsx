@@ -1,5 +1,6 @@
 import { AppShell } from "@/app/_components/app-shell";
 import { getGiftCatalog } from "@/lib/economy";
+import { getUserEliteStatus } from "@/lib/elite-status";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getActiveGiftStreakDays } from "@/lib/retention";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
@@ -52,6 +53,7 @@ export default async function MomentsPage() {
     giftStreaksResult,
     myLikesResult,
     walletResult,
+    eliteStatus,
     giftCatalog,
   ] = await timeAsync("[Perf] Moments media/profile enrichment", () =>
     Promise.all([
@@ -92,6 +94,7 @@ export default async function MomentsPage() {
         .select("gold_balance")
         .eq("user_id", user.id)
         .maybeSingle(),
+      getUserEliteStatus(supabase, user.id),
       getGiftCatalog(supabase),
     ]),
   );
@@ -150,9 +153,11 @@ export default async function MomentsPage() {
       title="Moments"
     >
       <MomentsClient
-        anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
-        currentUserId={user.id}
-        giftCatalog={giftCatalog}
+          anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+          currentUserId={user.id}
+          currentEliteLevel={eliteStatus.currentLevel}
+          eliteGoldRemainingByLevel={eliteStatus.remainingByLevel}
+          giftCatalog={giftCatalog}
         goldBalance={walletResult.data?.gold_balance ?? 0}
         moments={momentCards}
         supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}

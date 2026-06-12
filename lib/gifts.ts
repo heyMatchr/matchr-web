@@ -123,3 +123,25 @@ export function isGiftLocked(gift: GiftOption, currentEliteLevel = 0) {
     gift.requiresEliteLevel && gift.requiresEliteLevel > currentEliteLevel,
   );
 }
+
+export function getGiftEliteLockLabel({
+  currentEliteLevel = 0,
+  gift,
+  remainingByLevel = {},
+}: {
+  currentEliteLevel?: number;
+  gift: GiftOption;
+  remainingByLevel?: Record<number, number>;
+}) {
+  if (!isGiftLocked(gift, currentEliteLevel) || !gift.requiresEliteLevel) {
+    return "";
+  }
+
+  const remaining = remainingByLevel[gift.requiresEliteLevel];
+
+  if (Number.isFinite(remaining) && remaining > 0) {
+    return `Elite ${gift.requiresEliteLevel} required · ${remaining.toLocaleString()} Gold to unlock`;
+  }
+
+  return `Elite ${gift.requiresEliteLevel} required`;
+}

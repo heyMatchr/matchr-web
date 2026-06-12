@@ -4,6 +4,7 @@ import {
   scoreProfileForUser,
 } from "@/lib/discovery-ranking";
 import { getGiftCatalog } from "@/lib/economy";
+import { getUserEliteStatus } from "@/lib/elite-status";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import { getActiveGiftStreakDays } from "@/lib/retention";
@@ -385,8 +386,9 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       new Date(a.stories[0].created_at).getTime()
     );
   });
-  const giftCatalog = await timeAsync("[Perf] Discover economy config", () =>
-    getGiftCatalog(supabase),
+  const [giftCatalog, eliteStatus] = await timeAsync(
+    "[Perf] Discover economy config",
+    () => Promise.all([getGiftCatalog(supabase), getUserEliteStatus(supabase, user.id)]),
   );
   const activeStoryUserIds = new Set(storyGroups.map((group) => group.user_id));
   const { data: storyGiftStreakRows } = activeStoryUserIds.size
@@ -728,6 +730,8 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
         <StoriesBarLazy
           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
           currentUserId={user.id}
+          currentEliteLevel={eliteStatus.currentLevel}
+          eliteGoldRemainingByLevel={eliteStatus.remainingByLevel}
           giftCatalog={giftCatalog}
           giftStreaksByReceiver={storyGiftStreaksByReceiver}
           initialGroups={storyGroups}

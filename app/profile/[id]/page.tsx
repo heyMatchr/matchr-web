@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
+import { CreatorDailyActionCard } from "@/app/_components/creator-daily-action-card";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
@@ -17,6 +18,11 @@ import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import { getProfileHref, isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
 import { getProfileCompletion } from "@/lib/profile-completion";
+import {
+  getCreatorHabitAction,
+  hasLowCreatorActivity,
+  type CreatorHabitSignals,
+} from "@/lib/creator-habits";
 import {
   getActiveGiftStreakDays,
   getTodayStartIso,
@@ -377,6 +383,9 @@ export default async function ProfilePage({
   const hasActiveStories = Boolean(activeStoriesResult.data?.length);
   const activePreviewVideo = activePreviewVideoResult.data;
   const todayStartIso = getTodayStartIso();
+  const threeDaysAgo = new Date();
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  const threeDaysAgoIso = threeDaysAgo.toISOString();
   const giftCatalog = await getGiftCatalog(supabase);
   const giftsByType = new Map(giftCatalog.map((gift) => [gift.type, gift]));
   const recentGifts =
@@ -442,6 +451,31 @@ export default async function ProfilePage({
                 .select("id", { count: "exact", head: true })
                 .eq("receiver_id", user.id)
                 .gte("created_at", todayStartIso),
+              supabase
+                .from("stories")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .gte("created_at", todayStartIso),
+              supabase
+                .from("moments")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .gte("created_at", todayStartIso),
+              supabase
+                .from("stories")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .gte("created_at", threeDaysAgoIso),
+              supabase
+                .from("moments")
+                .select("id", { count: "exact", head: true })
+                .eq("user_id", user.id)
+                .gte("created_at", threeDaysAgoIso),
+              supabase
+                .from("gift_transactions")
+                .select("id", { count: "exact", head: true })
+                .eq("receiver_id", user.id)
+                .gte("created_at", threeDaysAgoIso),
             ])
           : Promise.resolve([]),
         profile.id !== user.id
@@ -460,6 +494,18 @@ export default async function ProfilePage({
     profileViews: dailyDigestResults[0]?.count ?? 0,
     storyReactions: dailyDigestResults[1]?.count ?? 0,
   };
+  const creatorHabitSignals: CreatorHabitSignals = {
+    momentsLast3Days: dailyDigestResults[7]?.count ?? 0,
+    momentsToday: dailyDigestResults[5]?.count ?? 0,
+    profileViewsToday: dailyDigestCounts.profileViews,
+    storyReactionsToday: dailyDigestCounts.storyReactions,
+    storiesLast3Days: dailyDigestResults[6]?.count ?? 0,
+    storiesToday: dailyDigestResults[4]?.count ?? 0,
+    supportLast3Days: dailyDigestResults[8]?.count ?? 0,
+    supportToday: dailyDigestCounts.gifts,
+  };
+  const creatorHabitAction = getCreatorHabitAction(creatorHabitSignals);
+  const creatorQuietLately = hasLowCreatorActivity(creatorHabitSignals);
   const activeGiftStreakDays = getActiveGiftStreakDays(
     activeGiftStreakResult.data,
   );
@@ -822,7 +868,33 @@ export default async function ProfilePage({
               <DailyAttentionDigest
                 className="mt-4"
                 counts={dailyDigestCounts}
+                nextAction={creatorHabitAction}
               />
+            ) : null}
+
+            {profile.id === user.id ? (
+              <CreatorDailyActionCard
+                action={creatorHabitAction}
+                className="mt-4"
+                quiet={creatorQuietLately}
+              />
+            ) : null}
+
+            {profile.id === user.id ? (
+              <Link
+                href="/earnings"
+                className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 p-3 text-sm transition-colors hover:bg-[#D4AF37]/15"
+              >
+                <span>
+                  <span className="block text-xs uppercase tracking-[0.2em] text-[#E8C46A]">
+                    Weekly recap ready
+                  </span>
+                  <span className="mt-1 block font-black text-white">
+                    View creator progress
+                  </span>
+                </span>
+                <span className="text-[#E8C46A]">&gt;</span>
+              </Link>
             ) : null}
 
             {creatorNudges.length ? (

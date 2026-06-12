@@ -9,6 +9,7 @@ import {
   getEconomyConfig,
   getGiftCatalog,
 } from "@/lib/economy";
+import { getUserEliteStatus } from "@/lib/elite-status";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import { getActiveGiftStreakDays } from "@/lib/retention";
@@ -85,6 +86,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
     { data: premiumSubscriptions },
     { data: receiverPreviewVideo },
     { data: activeGiftStreak },
+    eliteStatus,
     giftCatalog,
     messageRules,
     creatorSplit,
@@ -123,6 +125,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
           .eq("sender_id", user.id)
           .eq("receiver_id", receiverId)
           .maybeSingle(),
+        getUserEliteStatus(supabase, user.id),
         getGiftCatalog(supabase),
         getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(
           supabase,
@@ -169,6 +172,8 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps) 
           currentUserGender={currentProfile.gender}
           currentUserGenderIdentity={currentProfile.gender_identity}
           creatorSplit={creatorSplit}
+          currentEliteLevel={eliteStatus.currentLevel}
+          eliteGoldRemainingByLevel={eliteStatus.remainingByLevel}
           giftCatalog={giftCatalog}
           goldBalance={wallet?.gold_balance ?? 0}
           hasPremium={Boolean(activePremium)}

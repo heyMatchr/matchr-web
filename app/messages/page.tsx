@@ -70,7 +70,7 @@ export default async function MessagesPage() {
       matchedUserIds.length
         ? supabase
             .from("profiles")
-            .select("id, display_name, age, avatar_url, verified")
+            .select("id, display_name, age, avatar_url, last_seen_at, verified")
             .in("id", matchedUserIds)
         : Promise.resolve({ data: [], error: null }),
       matchIds.length

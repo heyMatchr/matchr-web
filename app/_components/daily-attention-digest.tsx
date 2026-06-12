@@ -1,13 +1,17 @@
+import Link from "next/link";
+import type { CreatorHabitAction } from "@/lib/creator-habits";
 import type { DailyAttentionDigestCounts } from "@/lib/retention";
 
 type DailyAttentionDigestProps = {
   counts: DailyAttentionDigestCounts;
   className?: string;
+  nextAction?: CreatorHabitAction;
 };
 
 export function DailyAttentionDigest({
   className = "",
   counts,
+  nextAction,
 }: DailyAttentionDigestProps) {
   const items = [
     { label: "Views", value: counts.profileViews },
@@ -49,7 +53,20 @@ export function DailyAttentionDigest({
           </div>
         ))}
       </div>
+      {nextAction ? (
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+          <p className="min-w-0 truncate text-xs text-neutral-400">
+            Next:{" "}
+            <span className="font-black text-white">{nextAction.label}</span>
+          </p>
+          <Link
+            href={nextAction.href}
+            className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-xs font-black text-white transition-colors hover:bg-white/10"
+          >
+            Go
+          </Link>
+        </div>
+      ) : null}
     </section>
   );
 }
-

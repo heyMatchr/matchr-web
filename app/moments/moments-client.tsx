@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   getGiftCategory,
+  getGiftEliteLockLabel,
   getGiftRarityLabel,
   isGiftLocked,
   shouldShowGiftRarity,
@@ -78,6 +79,8 @@ export type MomentCard = {
 type MomentsClientProps = {
   anonKey: string;
   currentUserId: string;
+  currentEliteLevel: number;
+  eliteGoldRemainingByLevel: Record<number, number>;
   giftCatalog: GiftOption[];
   goldBalance: number;
   moments: MomentCard[];
@@ -104,6 +107,8 @@ function timeAgo(timestamp: string) {
 export function MomentsClient({
   anonKey,
   currentUserId,
+  currentEliteLevel,
+  eliteGoldRemainingByLevel,
   giftCatalog,
   goldBalance,
   moments,
@@ -472,6 +477,8 @@ export function MomentsClient({
 
       {activeGifts ? (
         <GiftsSheet
+          currentEliteLevel={currentEliteLevel}
+          eliteGoldRemainingByLevel={eliteGoldRemainingByLevel}
           giftCatalog={giftCatalog}
           goldBalance={goldBalance}
           moment={activeGifts}
@@ -872,11 +879,15 @@ function LikesSheet({
 }
 
 function GiftsSheet({
+  currentEliteLevel,
+  eliteGoldRemainingByLevel,
   giftCatalog,
   goldBalance,
   moment,
   onClose,
 }: {
+  currentEliteLevel: number;
+  eliteGoldRemainingByLevel: Record<number, number>;
   giftCatalog: GiftOption[];
   goldBalance: number;
   moment: MomentCard;
@@ -895,7 +906,7 @@ function GiftsSheet({
   }, [giftCatalog]);
 
   async function sendMomentGift(gift: GiftOption) {
-    if (sendingGiftType || isGiftLocked(gift)) {
+    if (sendingGiftType || isGiftLocked(gift, currentEliteLevel)) {
       return;
     }
 
@@ -995,7 +1006,7 @@ function GiftsSheet({
                 </p>
                 <div className="grid grid-cols-2 gap-2">
                   {gifts.map((gift) => {
-                    const locked = isGiftLocked(gift);
+                    const locked = isGiftLocked(gift, currentEliteLevel);
                     const showRarity = shouldShowGiftRarity(gift);
                     const signature = gift.signature || gift.rarity === "signature";
 
@@ -1033,7 +1044,11 @@ function GiftsSheet({
                               }`}
                             >
                               {locked
-                                ? `Elite ${gift.requiresEliteLevel} required`
+                                ? getGiftEliteLockLabel({
+                                    currentEliteLevel,
+                                    gift,
+                                    remainingByLevel: eliteGoldRemainingByLevel,
+                                  })
                                 : getGiftRarityLabel(gift)}
                             </span>
                           ) : null}

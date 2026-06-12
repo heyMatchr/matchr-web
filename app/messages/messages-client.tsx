@@ -16,6 +16,7 @@ type ConversationProfile = {
   age: number;
   avatar_url: string | null;
   has_premium: boolean;
+  last_seen_at?: string | null;
   preview_video_url: string | null;
   verified: boolean | null;
 };
@@ -64,6 +65,25 @@ type MatchrNewMessageEventDetail = {
 };
 
 const MESSAGE_PREVIEW_STORAGE_PREFIX = "matchr_latest_message_preview_";
+const DORMANT_AFTER_MS = 1000 * 60 * 60 * 24 * 3;
+const RECENTLY_ACTIVE_MS = 1000 * 60 * 10;
+
+type ConversationStatus =
+  | "Unread"
+  | "Your Turn"
+  | "New Match"
+  | "Active Now"
+  | "Waiting"
+  | "Dormant";
+
+const conversationStatusRank: Record<ConversationStatus, number> = {
+  Unread: 0,
+  "Your Turn": 1,
+  "New Match": 2,
+  "Active Now": 3,
+  Waiting: 4,
+  Dormant: 5,
+};
 
 function formatMessageTime(timestamp?: string) {
   if (!timestamp) {
@@ -76,12 +96,119 @@ function formatMessageTime(timestamp?: string) {
   });
 }
 
-function sortConversations(conversations: Conversation[]) {
+function getConversationActivityTime(conversation: Conversation) {
+  return new Date(
+    conversation.latestMessage?.created_at ?? conversation.created_at,
+  ).getTime();
+}
+
+function isRecentlyActive(lastSeenAt?: string | null, now = Date.now()) {
+  if (!lastSeenAt) {
+    return false;
+  }
+
+  const lastSeenTime = new Date(lastSeenAt).getTime();
+
+  return Number.isFinite(lastSeenTime) && now - lastSeenTime <= RECENTLY_ACTIVE_MS;
+}
+
+function isConversationActiveNow(
+  conversation: Conversation,
+  isUserOnline: (userId: string) => boolean,
+  now = Date.now(),
+) {
+  return (
+    isUserOnline(conversation.profile.id) ||
+    isRecentlyActive(conversation.profile.last_seen_at, now)
+  );
+}
+
+function getConversationStatus({
+  conversation,
+  currentUserId,
+  isOnline,
+  now = Date.now(),
+}: {
+  conversation: Conversation;
+  currentUserId: string;
+  isOnline: boolean;
+  now?: number;
+}): ConversationStatus {
+  if (conversation.unreadCount > 0) {
+    return "Unread";
+  }
+
+  if (!conversation.latestMessage) {
+    return "New Match";
+  }
+
+  const lastActivityAt = getConversationActivityTime(conversation);
+
+  if (now - lastActivityAt >= DORMANT_AFTER_MS) {
+    return "Dormant";
+  }
+
+  if (conversation.latestMessage.sender_id !== currentUserId) {
+    return "Your Turn";
+  }
+
+  if (isOnline) {
+    return "Active Now";
+  }
+
+  return "Waiting";
+}
+
+function sortConversations(
+  conversations: Conversation[],
+  currentUserId: string,
+  isUserOnline: (userId: string) => boolean = () => false,
+  now = Date.now(),
+) {
   return [...conversations].sort((a, b) => {
-    const aTime = new Date(a.latestMessage?.created_at ?? a.created_at).getTime();
-    const bTime = new Date(b.latestMessage?.created_at ?? b.created_at).getTime();
+    const aStatus = getConversationStatus({
+      conversation: a,
+      currentUserId,
+      isOnline: isConversationActiveNow(a, isUserOnline, now),
+      now,
+    });
+    const bStatus = getConversationStatus({
+      conversation: b,
+      currentUserId,
+      isOnline: isConversationActiveNow(b, isUserOnline, now),
+      now,
+    });
+    const statusDiff =
+      conversationStatusRank[aStatus] - conversationStatusRank[bStatus];
+
+    if (statusDiff !== 0) {
+      return statusDiff;
+    }
+
+    const aTime = getConversationActivityTime(a);
+    const bTime = getConversationActivityTime(b);
     return bTime - aTime;
   });
+}
+
+function statusTone(status: ConversationStatus) {
+  if (status === "Unread" || status === "Your Turn") {
+    return "border-emerald-300/25 bg-emerald-300/10 text-emerald-100";
+  }
+
+  if (status === "New Match") {
+    return "border-white/15 bg-white/10 text-white";
+  }
+
+  if (status === "Active Now") {
+    return "border-emerald-300/20 bg-black/30 text-emerald-100";
+  }
+
+  if (status === "Dormant") {
+    return "border-amber-300/20 bg-amber-300/10 text-amber-100";
+  }
+
+  return "border-neutral-800 bg-white/[0.03] text-neutral-400";
 }
 
 function messageTypeChip(message: ConversationMessage | null) {
@@ -120,9 +247,10 @@ export function MessagesClient({
   supabaseUrl,
 }: MessagesClientProps) {
   const [conversations, setConversations] = useState(
-    sortConversations(initialConversations),
+    sortConversations(initialConversations, currentUserId, () => false, 0),
   );
   const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const router = useRouter();
   const supabase = useMemo(
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
@@ -152,9 +280,11 @@ export function MessagesClient({
                 }
             : conversation,
         ),
+        currentUserId,
+        isUserOnline,
       ),
     );
-  }, [currentUserId]);
+  }, [currentUserId, isUserOnline]);
 
   const applyMessagePreview = useCallback(
     (detail: MatchrNewMessageEventDetail) => {
@@ -249,7 +379,7 @@ export function MessagesClient({
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, display_name, age, avatar_url, verified")
+        .select("id, display_name, age, avatar_url, last_seen_at, verified")
         .eq("id", matchedUserId)
         .maybeSingle();
 
@@ -309,7 +439,7 @@ export function MessagesClient({
             unreadCount: 0,
           },
           ...current,
-        ]);
+        ], currentUserId, isUserOnline);
       });
     }
 
@@ -396,7 +526,18 @@ export function MessagesClient({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [blockedUserIdSet, currentUserId, supabase, updateLatestMessage]);
+  }, [blockedUserIdSet, currentUserId, isUserOnline, supabase, updateLatestMessage]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const sortedConversations = useMemo(
+    () => sortConversations(conversations, currentUserId, isUserOnline, now),
+    [conversations, currentUserId, isUserOnline, now],
+  );
 
   return (
     <>
@@ -408,7 +549,15 @@ export function MessagesClient({
 
       {conversations.length > 0 ? (
         <div className="mt-6 grid gap-3 md:mt-10">
-          {conversations.map((conversation) => (
+          {sortedConversations.map((conversation) => {
+            const status = getConversationStatus({
+              conversation,
+              currentUserId,
+              isOnline: isConversationActiveNow(conversation, isUserOnline, now),
+              now,
+            });
+
+            return (
             <Link
               key={conversation.id}
               href={`/chat/${conversation.id}`}
@@ -429,7 +578,7 @@ export function MessagesClient({
                     {conversation.profile.display_name.charAt(0)}
                   </div>
                 )}
-                {isUserOnline(conversation.profile.id) ? (
+                {isConversationActiveNow(conversation, isUserOnline, now) ? (
                   <span className="absolute bottom-1 right-1 h-3.5 w-3.5 rounded-full border-2 border-black bg-emerald-300 shadow-[0_0_14px_rgba(74,222,128,0.45)]" />
                 ) : null}
                 {conversation.profile.preview_video_url ? (
@@ -450,13 +599,13 @@ export function MessagesClient({
                           New
                         </span>
                       ) : null}
-                      {conversation.latestMessage ? (
-                        <span className="rounded-full border border-neutral-800 px-2 py-0.5 text-[10px] text-neutral-400">
-                          {conversation.latestMessage.sender_id === currentUserId
-                            ? "Waiting"
-                            : "Your turn"}
-                        </span>
-                      ) : null}
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${statusTone(
+                          status,
+                        )}`}
+                      >
+                        {status}
+                      </span>
                       {messageTypeChip(conversation.latestMessage) ? (
                         <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-100">
                           {messageTypeChip(conversation.latestMessage)}
@@ -500,9 +649,31 @@ export function MessagesClient({
                       })
                     : "No messages yet"}
                 </p>
+                {status === "New Match" || status === "Dormant" ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {status === "New Match" ? (
+                      <>
+                        <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-100">
+                          Say Hi
+                        </span>
+                        <span className="rounded-full border border-neutral-700 px-3 py-1 text-xs text-neutral-300">
+                          Use Opener
+                        </span>
+                        <span className="rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-3 py-1 text-xs text-[#E8C46A]">
+                          Send Gift
+                        </span>
+                      </>
+                    ) : (
+                      <span className="rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-100">
+                        Revive
+                      </span>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </Link>
-          ))}
+          );
+          })}
         </div>
       ) : (
         <div className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-6 md:mt-10 md:p-8">

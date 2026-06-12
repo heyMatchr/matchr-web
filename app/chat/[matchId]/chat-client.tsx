@@ -26,6 +26,7 @@ import {
 } from "@/lib/conversation-assist";
 import {
   getGiftCategory,
+  getGiftEliteLockLabel,
   getGiftOption,
   getGiftRarityLabel,
   isGiftLocked,
@@ -75,6 +76,8 @@ type ChatClientProps = {
   currentUserGender: string;
   currentUserGenderIdentity: string | null;
   creatorSplit: CreatorSplit;
+  currentEliteLevel: number;
+  eliteGoldRemainingByLevel: Record<number, number>;
   giftCatalog: GiftOption[];
   goldBalance: number;
   hasPremium: boolean;
@@ -117,6 +120,39 @@ const conversationTones: ConversationTone[] = [
   "Funny",
 ];
 
+const CONVERSATION_DORMANT_AFTER_MS = 1000 * 60 * 60 * 24 * 3;
+
+function formatCompactAge(timestamp?: string | null, now = Date.now()) {
+  if (!timestamp) {
+    return "";
+  }
+
+  const value = new Date(timestamp).getTime();
+
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
+  const elapsed = Math.max(0, now - value);
+  const minutes = Math.floor(elapsed / (1000 * 60));
+
+  if (minutes < 1) {
+    return "now";
+  }
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function createGiftRequestId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -136,6 +172,8 @@ export function ChatClient({
   currentUserGender,
   currentUserGenderIdentity,
   creatorSplit,
+  currentEliteLevel,
+  eliteGoldRemainingByLevel,
   giftCatalog,
   goldBalance,
   hasPremium,
@@ -169,7 +207,7 @@ export function ChatClient({
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
-  const [now, setNow] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   const [chatToast, setChatToast] = useState("");
   const [privacyWarning, setPrivacyWarning] = useState("");
   const [privateMediaShielded, setPrivateMediaShielded] = useState(false);
@@ -227,6 +265,32 @@ export function ChatClient({
   const lastOwnMessage = [...nonSystemMessages]
     .reverse()
     .find((message) => message.sender_id === currentUserId);
+  const latestConversationMessage =
+    nonSystemMessages[nonSystemMessages.length - 1] ?? null;
+  const currentTime = now;
+  const latestConversationAt = latestConversationMessage
+    ? new Date(latestConversationMessage.created_at).getTime()
+    : 0;
+  const isDormantConversation =
+    latestConversationMessage &&
+    currentTime - latestConversationAt >= CONVERSATION_DORMANT_AFTER_MS;
+  const chatMomentumStatus = !latestConversationMessage
+    ? "New Match"
+    : isDormantConversation
+      ? "Dormant"
+      : latestConversationMessage.sender_id !== currentUserId
+        ? "Your Turn"
+        : receiverOnlineForDisplay
+          ? "Active Now"
+          : "Waiting";
+  const lastReplyAge = lastReceiverMessage
+    ? formatCompactAge(lastReceiverMessage.created_at, currentTime)
+    : "";
+  const chatMomentumDetail = lastReplyAge
+    ? `Last reply ${lastReplyAge}`
+    : latestConversationMessage
+      ? "Waiting for reply"
+      : "Say hi first";
   const isReviveSuggestion =
     Boolean(lastOwnMessage) &&
     (!lastReceiverMessage ||
@@ -749,7 +813,11 @@ export function ChatClient({
       triggerMatchrHaptic(10);
       if (messageGoldCost > 0) {
         setSpendableGold((current) => Math.max(0, current - messageGoldCost));
-        setChatToast(`Sent • -${messageGoldCost} Gold`);
+        setChatToast(
+          hasPremium
+            ? `Sent • -${messageGoldCost} Gold • Premium discount applied`
+            : `Sent • -${messageGoldCost} Gold`,
+        );
       }
       if (!receiverIsGloballyOnline) {
         await supabase.from("notifications").insert({
@@ -884,7 +952,11 @@ export function ChatClient({
       mergeConfirmedMessage(savedMessage);
       if (messageGoldCost > 0) {
         setSpendableGold((current) => Math.max(0, current - messageGoldCost));
-        setChatToast(`Sent • -${messageGoldCost} Gold`);
+        setChatToast(
+          hasPremium
+            ? `Sent • -${messageGoldCost} Gold • Premium discount applied`
+            : `Sent • -${messageGoldCost} Gold`,
+        );
       }
       await supabase.from("notifications").insert({
         actor_id: currentUserId,
@@ -905,7 +977,7 @@ export function ChatClient({
       return;
     }
 
-    if (isGiftLocked(gift)) {
+    if (isGiftLocked(gift, currentEliteLevel)) {
       return;
     }
 
@@ -940,7 +1012,7 @@ export function ChatClient({
       return;
     }
 
-    if (isGiftLocked(gift)) {
+    if (isGiftLocked(gift, currentEliteLevel)) {
       return;
     }
 
@@ -1283,12 +1355,21 @@ export function ChatClient({
             <p className="max-w-[5.75rem] truncate text-sm font-medium text-white min-[360px]:max-w-[7rem] min-[390px]:max-w-[9rem] sm:max-w-none">
               {receiverName}
             </p>
-              <p className="mt-0.5 min-h-4 truncate text-[11px] text-neutral-500 transition-colors sm:mt-1 sm:min-h-5 sm:text-sm">
-              {receiverOnlineForDisplay ? (
-                <span className="text-emerald-200">Online now</span>
-              ) : (
-                "Last seen recently"
-              )}
+            <p className="mt-0.5 flex min-h-4 max-w-[9rem] items-center gap-1.5 truncate text-[11px] text-neutral-500 transition-colors min-[390px]:max-w-[11rem] sm:mt-1 sm:min-h-5 sm:max-w-none sm:text-sm">
+              <span
+                className={
+                  chatMomentumStatus === "Active Now" ||
+                  chatMomentumStatus === "Your Turn"
+                    ? "font-medium text-emerald-200"
+                    : chatMomentumStatus === "Dormant"
+                      ? "font-medium text-amber-100"
+                      : "font-medium text-neutral-300"
+                }
+              >
+                {chatMomentumStatus}
+              </span>
+              <span className="text-neutral-700">·</span>
+              <span className="truncate">{chatMomentumDetail}</span>
             </p>
           </div>
         </Link>
@@ -1764,7 +1845,7 @@ export function ChatClient({
                         </p>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         {gifts.map((gift) => {
-                          const locked = isGiftLocked(gift);
+                          const locked = isGiftLocked(gift, currentEliteLevel);
                           const showRarity = shouldShowGiftRarity(gift);
                           const signature = gift.signature || gift.rarity === "signature";
 
@@ -1798,7 +1879,11 @@ export function ChatClient({
                                   }`}
                                 >
                                   {locked
-                                    ? `Elite ${gift.requiresEliteLevel} required`
+                                    ? getGiftEliteLockLabel({
+                                        currentEliteLevel,
+                                        gift,
+                                        remainingByLevel: eliteGoldRemainingByLevel,
+                                      })
                                     : getGiftRarityLabel(gift)}
                                 </span>
                               ) : null}
