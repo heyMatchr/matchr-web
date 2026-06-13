@@ -165,6 +165,26 @@ function formatCompactAge(timestamp?: string | null, now = Date.now()) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function parseCallMessage(content?: string | null) {
+  const normalizedContent = (content ?? "").toLowerCase();
+  const callType = normalizedContent.includes("video") ? "video" : "audio";
+  const status = normalizedContent.includes("missed")
+    ? "Missed"
+    : normalizedContent.includes("not answered")
+      ? "No answer"
+      : normalizedContent.includes("ended")
+        ? "Ended"
+        : normalizedContent.includes("started")
+          ? "Started"
+          : "Call";
+
+  return {
+    callType,
+    status,
+    title: `${callType === "video" ? "Video" : "Audio"} call`,
+  };
+}
+
 function createGiftRequestId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -1241,6 +1261,42 @@ export function ChatClient({
       message.expires_at &&
       new Date(message.expires_at).getTime() <= now;
 
+    if (message.message_type === "call_event") {
+      const callMessage = parseCallMessage(message.content);
+      const isVideoCall = callMessage.callType === "video";
+
+      return (
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
+              isVideoCall
+                ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+                : "border-neutral-700 bg-black/25 text-neutral-200"
+            }`}
+          >
+            {isVideoCall ? <VideoCallBubbleIcon /> : <AudioCallBubbleIcon />}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-xs font-semibold sm:text-sm">
+              {callMessage.status === "Missed"
+                ? `Missed ${callMessage.callType} call`
+                : callMessage.title}
+            </span>
+            <span className="block text-[10px] leading-4 text-neutral-500 sm:text-[11px]">
+              {callMessage.status === "Missed"
+                ? "0 Gold"
+                : callMessage.status}
+              <span
+                className={`ml-2 inline-block whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass}`}
+              >
+                {timestamp}
+              </span>
+            </span>
+          </span>
+        </div>
+      );
+    }
+
     if (SYSTEM_MESSAGE_TYPES.has(message.message_type)) {
       const gift = message.message_type === "story_gift"
         ? getGiftOption(message.gift_type, giftCatalog)
@@ -2312,6 +2368,37 @@ function PhotoIcon() {
 function VideoIcon() {
   return (
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">
+      <path d="M4.5 7h9A2.5 2.5 0 0 1 16 9.5v5A2.5 2.5 0 0 1 13.5 17h-9A2.5 2.5 0 0 1 2 14.5v-5A2.5 2.5 0 0 1 4.5 7Z" />
+      <path d="m16 10 5-3v10l-5-3" />
+    </svg>
+  );
+}
+
+function AudioCallBubbleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
+      <path d="M22 16.9v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07A19.5 19.5 0 0 1 5.17 12.8 19.8 19.8 0 0 1 2.1 4.18 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.72c.12.92.33 1.82.63 2.68a2 2 0 0 1-.45 2.11L8 9.79a16 16 0 0 0 6.21 6.21l1.28-1.28a2 2 0 0 1 2.11-.45c.86.3 1.76.51 2.68.63A2 2 0 0 1 22 16.9Z" />
+    </svg>
+  );
+}
+
+function VideoCallBubbleIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="1.9"
+    >
       <path d="M4.5 7h9A2.5 2.5 0 0 1 16 9.5v5A2.5 2.5 0 0 1 13.5 17h-9A2.5 2.5 0 0 1 2 14.5v-5A2.5 2.5 0 0 1 4.5 7Z" />
       <path d="m16 10 5-3v10l-5-3" />
     </svg>
