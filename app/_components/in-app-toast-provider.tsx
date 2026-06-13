@@ -16,6 +16,7 @@ import {
 import type { ReactNode } from "react";
 import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
 import { triggerMatchrHaptic } from "@/lib/haptics";
+import { getNotificationPriority } from "@/lib/notification-priority";
 import type {
   Database,
   MessageRow,
@@ -55,47 +56,6 @@ const MAX_VISIBLE_TOASTS = 3;
 const POLL_INTERVAL_MS = 5000;
 const SHOWN_TOAST_IDS_KEY = "matchr_shown_toast_ids";
 const TOAST_LIFETIME_MS = 4000;
-
-function getStringMetadata(metadata: Record<string, unknown>, key: string) {
-  const value = metadata[key];
-
-  return typeof value === "string" ? value : null;
-}
-
-function getNotificationHref(notification: NotificationRow) {
-  const matchId = getStringMetadata(notification.metadata, "match_id");
-  const profileId =
-    getStringMetadata(notification.metadata, "profile_id") ??
-    notification.actor_id;
-  const momentId = getStringMetadata(notification.metadata, "moment_id");
-
-  if (matchId) {
-    return `/chat/${matchId}`;
-  }
-
-  if (profileId) {
-    return `/profile/${profileId}`;
-  }
-
-  if (momentId) {
-    return "/moments";
-  }
-
-  return "/notifications";
-}
-
-function notificationShouldToast(notification: NotificationRow) {
-  return (
-    notification.type === "gift_received" ||
-    notification.type === "story_reply" ||
-    notification.type === "story_reaction" ||
-    notification.type === "story_gift" ||
-    notification.type === "missed_call" ||
-    notification.type === "profile_view" ||
-    notification.type === "mutual_attraction" ||
-    notification.type === "new_match"
-  );
-}
 
 export function InAppToastProvider({
   anonKey,
@@ -194,10 +154,11 @@ export function InAppToastProvider({
 
     async function showNotificationToast(notification: NotificationRow) {
       const toastId = `notification-${notification.id}`;
+      const priority = getNotificationPriority(notification);
 
       if (
         shownIdsRef.current.has(toastId) ||
-        !notificationShouldToast(notification)
+        !priority.shouldToast
       ) {
         return;
       }
@@ -211,7 +172,7 @@ export function InAppToastProvider({
       pushToast({
         avatarUrl: actor?.avatar_url,
         body: notification.body || notification.title,
-        href: getNotificationHref(notification),
+        href: priority.href,
         id: toastId,
         timestamp: notification.created_at,
         title: notification.title,

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/app/_components/app-shell";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
+import { sortNotificationsByPriority } from "@/lib/notification-priority";
 import {
   getTodayStartIso,
   type DailyAttentionDigestCounts,
@@ -113,6 +114,7 @@ export default async function NotificationsPage() {
         ? actorsById.get(notification.actor_id) ?? null
         : null,
     })) ?? [];
+  const sortedNotifications = sortNotificationsByPriority(enrichedNotifications);
 
   return (
     <AppShell
@@ -125,7 +127,7 @@ export default async function NotificationsPage() {
       <NotificationsClient
         anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
         currentUserId={user.id}
-        initialNotifications={enrichedNotifications}
+        initialNotifications={sortedNotifications}
         supabaseUrl={requiredSupabaseEnv("SUPABASE_URL")}
       />
     </AppShell>

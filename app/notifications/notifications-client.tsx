@@ -3,7 +3,11 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getProfileHref } from "@/lib/profile-public-id";
+import {
+  getNotificationPriority,
+  sortNotificationsByPriority,
+  type NotificationTone,
+} from "@/lib/notification-priority";
 import type { Database, NotificationRow } from "@/lib/supabase/types";
 
 type NotificationActor = {
@@ -33,56 +37,29 @@ function formatTime(timestamp: string) {
   });
 }
 
-function toneForType(type: string) {
-  const isMatchType = type.includes("match") || type === "mutual_attraction";
-
-  if (type.includes("gift")) {
-    return "border-amber-300/35 bg-amber-300/10";
+function toneClass(tone: NotificationTone) {
+  switch (tone) {
+    case "gift":
+      return "border-[#C8A24A]/35 bg-[#C8A24A]/10";
+    case "message":
+      return "border-[#8B2FC9]/30 bg-[#8B2FC9]/10";
+    case "match":
+      return "border-emerald-300/30 bg-emerald-300/10";
+    case "reply":
+      return "border-[#B06EEE]/25 bg-[#B06EEE]/10";
+    case "visitor":
+      return "border-[#8B2FC9]/20 bg-[#8B2FC9]/10";
+    case "creator":
+      return "border-[#C8A24A]/25 bg-[#C8A24A]/10";
+    case "premium":
+      return "border-[#C8A24A]/30 bg-[#C8A24A]/10";
+    case "elite":
+      return "border-[#C8A24A]/40 bg-[#C8A24A]/10";
+    case "referral":
+      return "border-emerald-300/25 bg-emerald-300/10";
+    default:
+      return "border-neutral-800 bg-black/50";
   }
-
-  if (type.includes("message") || type.includes("private_media")) {
-    return "border-sky-300/25 bg-sky-300/10";
-  }
-
-  if (isMatchType) {
-    return "border-emerald-300/30 bg-emerald-300/10";
-  }
-
-  if (type.includes("story")) {
-    return "border-pink-300/25 bg-pink-300/10";
-  }
-
-  if (type.includes("view")) {
-    return "border-violet-300/20 bg-violet-300/10";
-  }
-
-  if (type.includes("follow")) {
-    return "border-teal-300/20 bg-teal-300/10";
-  }
-
-  return "border-neutral-800 bg-black/50";
-}
-
-function typeLabel(type: string) {
-  if (type.includes("gift")) return "Gift";
-  if (type.includes("message") || type.includes("private_media")) return "Message";
-  if (type.includes("match") || type === "mutual_attraction") return "Match";
-  if (type.includes("story")) return "Story";
-  if (type.includes("view")) return "View";
-  if (type.includes("follow")) return "Follow";
-
-  return "Activity";
-}
-
-function priorityLabel(type: string) {
-  if (type.includes("gift")) return "Top";
-  if (type.includes("message") || type.includes("private_media")) return "Hot";
-  if (type.includes("match") || type === "mutual_attraction") return "New";
-  if (type.includes("story")) return "Live";
-  if (type.includes("view")) return "Seen";
-  if (type.includes("follow")) return "Social";
-
-  return "";
 }
 
 export function NotificationsClient({
@@ -169,6 +146,10 @@ export function NotificationsClient({
   const unreadCount = notifications.filter(
     (notification) => !notification.read_at,
   ).length;
+  const sortedNotifications = useMemo(
+    () => sortNotificationsByPriority(notifications),
+    [notifications],
+  );
 
   return (
     <>
@@ -176,32 +157,31 @@ export function NotificationsClient({
         <p className="text-sm text-neutral-400">
           {unreadCount > 0
             ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"}`
-            : "Notification history, newest first."}
+            : "Notification history, prioritized for you."}
         </p>
       </div>
 
       {notifications.length > 0 ? (
         <div className="mt-6 grid gap-3">
-          {notifications.map((notification) => (
-            <article
-              key={notification.id}
-              className={`rounded-lg border p-4 transition-all duration-300 ${toneForType(
-                notification.type,
-              )} ${
-                notification.read_at
-                  ? "opacity-70"
-                  : "shadow-[0_0_28px_rgba(74,222,128,0.08)]"
-              }`}
-            >
-              <div className="flex items-start gap-4">
-                <Link
-                  href={
-                    notification.actor
-                      ? getProfileHref(notification.actor)
-                      : "/notifications"
-                  }
-                  className="flex min-w-0 flex-1 items-start gap-4"
-                >
+          {sortedNotifications.map((notification) => {
+            const priority = getNotificationPriority(notification);
+
+            return (
+              <article
+                key={notification.id}
+                className={`rounded-lg border p-3 transition-all duration-300 sm:p-4 ${toneClass(
+                  priority.tone,
+                )} ${
+                  notification.read_at
+                    ? "opacity-70"
+                    : "shadow-[0_0_28px_rgba(74,222,128,0.08)]"
+                }`}
+              >
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <Link
+                    href={priority.href}
+                    className="flex min-w-0 flex-1 items-start gap-3 sm:gap-4"
+                  >
                   <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-neutral-950">
                     {notification.actor?.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -224,14 +204,9 @@ export function NotificationsClient({
                       <h2 className="truncate font-black tracking-tight text-white">
                         {notification.actor?.display_name ?? "Matchr"}
                       </h2>
-                      <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-neutral-400">
-                        {typeLabel(notification.type)}
+                      <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-neutral-300">
+                        {priority.priorityLabel}
                       </span>
-                      {priorityLabel(notification.type) ? (
-                        <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] text-neutral-300">
-                          {priorityLabel(notification.type)}
-                        </span>
-                      ) : null}
                     </div>
                     <p className="mt-2 text-sm leading-6 text-neutral-300">
                       {notification.body || notification.title}
@@ -240,10 +215,11 @@ export function NotificationsClient({
                       {formatTime(notification.created_at)}
                     </p>
                   </div>
-                </Link>
-              </div>
-            </article>
-          ))}
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
         </div>
       ) : (
         <div className="mt-6 rounded-lg border border-neutral-800 bg-black/40 p-6 md:p-8">
