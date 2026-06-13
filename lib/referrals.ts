@@ -36,6 +36,21 @@ export type ReferralSummary = {
 };
 
 const referralMilestones = [1, 5, 10, 25];
+const currentProductionFallback = "https://matchr-web-ecru.vercel.app";
+
+function normalizeBaseUrl(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+
+  const trimmed = value.trim().replace(/\/+$/, "");
+
+  if (!trimmed) {
+    return "";
+  }
+
+  return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+}
 
 export async function ensureReferralCode(
   supabaseClient: unknown,
@@ -94,8 +109,44 @@ export async function getReferralSummary(
   };
 }
 
-export function getReferralInviteUrl(origin: string, code: string) {
-  const url = new URL("/signup", origin);
+export function getReferralBaseUrl({
+  host,
+  origin,
+  proto,
+}: {
+  host?: string | null;
+  origin?: string | null;
+  proto?: string | null;
+}) {
+  const configuredUrl = normalizeBaseUrl(
+    process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL,
+  );
+
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  const requestOrigin = normalizeBaseUrl(origin);
+
+  if (requestOrigin) {
+    return requestOrigin;
+  }
+
+  const requestHost = host?.trim();
+
+  if (requestHost) {
+    const protocol = proto?.split(",")[0]?.trim() || "https";
+
+    return `${protocol}://${requestHost}`.replace(/\/+$/, "");
+  }
+
+  const vercelUrl = normalizeBaseUrl(process.env.VERCEL_URL);
+
+  return vercelUrl || currentProductionFallback;
+}
+
+export function getReferralInviteUrl(baseUrl: string, code: string) {
+  const url = new URL("/signup", baseUrl);
   url.searchParams.set("ref", code);
   return url.toString();
 }

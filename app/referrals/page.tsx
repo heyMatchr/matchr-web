@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { AppShell } from "@/app/_components/app-shell";
 import {
+  getReferralBaseUrl,
   getReferralInviteUrl,
   getReferralSummary,
 } from "@/lib/referrals";
@@ -39,8 +40,15 @@ export default async function ReferralsPage() {
   }
 
   const summary = await getReferralSummary(supabase, user.id);
-  const origin = (await headers()).get("origin") ?? "https://matchr.app";
-  const inviteUrl = getReferralInviteUrl(origin, summary.code);
+  const requestHeaders = await headers();
+  const baseUrl = getReferralBaseUrl({
+    host:
+      requestHeaders.get("x-forwarded-host") ??
+      requestHeaders.get("host"),
+    origin: requestHeaders.get("origin"),
+    proto: requestHeaders.get("x-forwarded-proto"),
+  });
+  const inviteUrl = getReferralInviteUrl(baseUrl, summary.code);
 
   return (
     <AppShell
