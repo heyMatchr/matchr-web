@@ -61,12 +61,16 @@ export function getNotificationPriority(
     };
   }
 
-  if (type === "new_message" || type === "private_media_received") {
+  if (
+    type === "new_message" ||
+    type === "private_media_received" ||
+    type === "your_turn_reminder"
+  ) {
     return {
       href: matchId ? `/chat/${matchId}` : "/messages",
       priorityLabel: "Message",
       priorityRank: 3,
-      shouldToast: true,
+      shouldToast: type !== "your_turn_reminder",
       tone: "message",
     };
   }

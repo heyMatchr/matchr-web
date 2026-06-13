@@ -1,4 +1,5 @@
 import { AppShell } from "@/app/_components/app-shell";
+import { createDedupedNotification } from "@/lib/notification-events";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
@@ -8,6 +9,9 @@ import {
   MessagesClient,
   type Conversation,
 } from "./messages-client";
+
+const YOUR_TURN_REMINDER_AFTER_MS = 6 * 60 * 60 * 1000;
+const YOUR_TURN_DEDUPE_SECONDS = 24 * 60 * 60;
 
 export default async function MessagesPage() {
   const perfStartedAt = startPerfTimer();
@@ -249,6 +253,45 @@ export default async function MessagesPage() {
       unreadCount: unreadCountByMatchId.get(match.id) ?? 0,
     });
   }
+
+  const nowMs = new Date().getTime();
+  await Promise.all(
+    conversations.slice(0, 20).map(async (conversation) => {
+      const latestMessage = conversation.latestMessage;
+
+      if (
+        !latestMessage ||
+        latestMessage.sender_id === user.id ||
+        latestMessage.receiver_id !== user.id ||
+        !latestMessage.read_at
+      ) {
+        return;
+      }
+
+      const latestMessageAt = new Date(latestMessage.created_at).getTime();
+
+      if (
+        !Number.isFinite(latestMessageAt) ||
+        nowMs - latestMessageAt < YOUR_TURN_REMINDER_AFTER_MS
+      ) {
+        return;
+      }
+
+      await createDedupedNotification(supabase, {
+        actorId: conversation.profile.id,
+        body: "Reply when you're ready.",
+        dedupeMetadataKey: "match_id",
+        dedupeWindowSeconds: YOUR_TURN_DEDUPE_SECONDS,
+        metadata: {
+          match_id: conversation.id,
+          profile_id: conversation.profile.id,
+        },
+        title: "Your turn",
+        type: "your_turn_reminder",
+        userId: user.id,
+      });
+    }),
+  );
 
   finishPerfTimer("[Perf] Messages queries", perfStartedAt);
 

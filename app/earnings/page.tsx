@@ -14,6 +14,7 @@ import {
 } from "@/lib/creator-habits";
 import { getEconomyConfig, getGiftCatalog } from "@/lib/economy";
 import { calculateEliteStatusesForUsers } from "@/lib/elite-status";
+import { createDedupedNotification } from "@/lib/notification-events";
 import { getProfileHref } from "@/lib/profile-public-id";
 import {
   getTodayStartIso,
@@ -156,6 +157,15 @@ function formatRecapChange(current: number, previous: number) {
   }
 
   return `${change > 0 ? "+" : ""}${change}%`;
+}
+
+function getWeekStartIso(value = new Date()) {
+  const weekStart = new Date(value);
+  const day = weekStart.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  weekStart.setDate(weekStart.getDate() + diff);
+  weekStart.setHours(0, 0, 0, 0);
+  return weekStart.toISOString();
 }
 
 function RecapMetric({
@@ -912,6 +922,24 @@ export default async function EarningsPage() {
     weeklyFollowers +
     weeklyStories +
     weeklyMoments;
+  const weekStartIso = getWeekStartIso();
+
+  if (weeklyRecapTotal > 0) {
+    await createDedupedNotification(supabase, {
+      body: "Your weekly creator recap is ready.",
+      dedupeMetadataKey: "week_start",
+      dedupeWindowSeconds: 8 * 24 * 60 * 60,
+      metadata: {
+        diamonds: weeklyDiamonds,
+        gifts: weeklyGiftRows.length,
+        profile_views: weeklyProfileViews,
+        week_start: weekStartIso,
+      },
+      title: "Weekly recap ready",
+      type: "weekly_recap_ready",
+      userId: user.id,
+    });
+  }
   const momentumCta =
     weeklyStories === 0
       ? {
