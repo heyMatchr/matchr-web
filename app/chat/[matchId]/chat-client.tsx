@@ -1223,9 +1223,10 @@ export function ChatClient({
     }
   }
 
-  function renderMessageContent(message: LocalMessage) {
+  function renderMessageContent(message: LocalMessage, timestamp: string) {
     const isMine = message.sender_id === currentUserId;
     const isPrivate = message.message_type === "private_media";
+    const mutedTimestampClass = isMine ? "text-neutral-600" : "text-neutral-500";
     const privateMediaKind = message.media_type === "video" ? "Video" : "Photo";
     const secondsRemaining =
       isPrivate && message.expires_at
@@ -1257,14 +1258,19 @@ export function ChatClient({
                 : "Activity";
 
       return (
-        <div className="rounded-lg border border-neutral-800 bg-black/25 px-2 py-1 text-center sm:rounded-xl sm:px-2.5 sm:py-1.5">
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500 sm:text-xs">
+        <div className="min-w-0">
+          <p className="text-[9px] font-medium uppercase tracking-[0.16em] text-neutral-500 sm:text-[10px]">
             {label}
           </p>
-          <p className="mt-0.5 text-xs text-neutral-300 sm:text-sm">
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-4 text-neutral-300 sm:text-sm sm:leading-5">
             {gift
               ? `${gift.name} · ${gift.coinPrice} Gold`
               : message.content}
+            <span
+              className={`ml-2 inline-block translate-y-[1px] whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass}`}
+            >
+              {timestamp}
+            </span>
           </p>
         </div>
       );
@@ -1274,17 +1280,24 @@ export function ChatClient({
       const gift = getGiftOption(message.gift_type, giftCatalog);
 
       return (
-        <div className="min-w-24 rounded-lg border border-emerald-300/20 bg-emerald-300/10 px-2 py-1.5 text-center shadow-[0_0_14px_rgba(16,185,129,0.08)] sm:min-w-32 sm:rounded-xl sm:px-2.5 sm:py-2">
+        <div className="flex min-w-0 items-center gap-2">
           <GiftVisual
-            className="mx-auto h-7 w-7 rounded-lg border border-emerald-300/20 bg-black/30 p-1.5 text-emerald-100 sm:h-8 sm:w-8 sm:rounded-xl"
+            className="h-7 w-7 shrink-0 rounded-lg border border-emerald-300/20 bg-black/30 p-1.5 text-emerald-100 sm:h-8 sm:w-8 sm:rounded-xl"
             type={gift?.type ?? message.gift_type}
           />
-          <p className="mt-1 text-[11px] font-black sm:text-xs">
-            {gift?.name ?? message.gift_type ?? "Gift"}
-          </p>
-          <p className="text-[10px] text-neutral-500 sm:text-[11px]">
-            {gift ? `${gift.coinPrice} Gold` : "Gift"}
-          </p>
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-black sm:text-xs">
+              {gift?.name ?? message.gift_type ?? "Gift"}
+            </p>
+            <p className="text-[10px] leading-4 text-neutral-500 sm:text-[11px]">
+              {gift ? `${gift.coinPrice} Gold` : "Gift"}
+              <span
+                className={`ml-2 inline-block whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass}`}
+              >
+                {timestamp}
+              </span>
+            </p>
+          </div>
         </div>
       );
     }
@@ -1298,7 +1311,7 @@ export function ChatClient({
             : "Opened";
 
         return (
-          <div className="flex min-h-10 w-32 max-w-full items-center gap-2 rounded-lg border border-emerald-300/15 bg-black/25 px-2 py-1.5 text-left sm:w-40 sm:rounded-xl sm:px-2.5 sm:py-2">
+          <div className="flex w-36 max-w-full items-center gap-2 text-left sm:w-44">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-300/25 bg-emerald-300/10 text-xs text-emerald-100 sm:h-8 sm:w-8 sm:text-sm">
               ◇
             </div>
@@ -1308,6 +1321,11 @@ export function ChatClient({
               </p>
               <p className="mt-0.5 text-[11px] text-neutral-500">
                 View once private media
+                <span
+                  className={`ml-2 inline-block whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass}`}
+                >
+                  {timestamp}
+                </span>
               </p>
             </div>
           </div>
@@ -1329,7 +1347,7 @@ export function ChatClient({
             event.preventDefault();
             showPrivacyWarning();
           }}
-          className="group relative h-28 w-32 max-w-full overflow-hidden rounded-xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_20px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48 sm:rounded-2xl"
+          className="group relative h-24 w-32 max-w-full overflow-hidden rounded-xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_20px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-36 sm:w-44 sm:rounded-2xl"
         >
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.22),_rgba(0,0,0,0.88)_62%)]" />
           <span className="absolute inset-0 bg-black/30" />
@@ -1354,6 +1372,9 @@ export function ChatClient({
             <span className="mt-2 text-[10px] uppercase tracking-[0.18em] text-emerald-100/70">
               Protected
             </span>
+            <span className="absolute bottom-1.5 right-2 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] leading-none text-white/70 backdrop-blur">
+              {timestamp}
+            </span>
           </span>
         </button>
       );
@@ -1361,30 +1382,45 @@ export function ChatClient({
 
     if (message.media_url && (message.media_type === "image" || message.media_type === "video")) {
       return message.media_type === "video" ? (
-        <video
-          src={message.media_url}
-          controls
-          playsInline
-          preload="metadata"
-          className="max-h-[38dvh] max-w-full rounded-xl object-contain sm:max-h-72 sm:rounded-2xl"
-        />
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl">
+          <video
+            src={message.media_url}
+            controls
+            playsInline
+            preload="metadata"
+            className="max-h-[38dvh] max-w-full object-contain sm:max-h-72"
+          />
+          <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] leading-none text-white/80 backdrop-blur">
+            {timestamp}
+          </span>
+        </div>
       ) : (
-        <Image
-          src={message.media_url}
-          alt=""
-          width={640}
-          height={640}
-          loading="lazy"
-          quality={72}
-          sizes="(min-width: 640px) 70vw, 82vw"
-          className="h-auto max-h-[38dvh] max-w-full rounded-xl object-contain sm:max-h-72 sm:rounded-2xl"
-        />
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl">
+          <Image
+            src={message.media_url}
+            alt=""
+            width={640}
+            height={640}
+            loading="lazy"
+            quality={72}
+            sizes="(min-width: 640px) 70vw, 82vw"
+            className="h-auto max-h-[38dvh] max-w-full object-contain sm:max-h-72"
+          />
+          <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[10px] leading-none text-white/80 backdrop-blur">
+            {timestamp}
+          </span>
+        </div>
       );
     }
 
     return (
       <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.35rem] sm:text-sm sm:leading-6">
         {message.content}
+        <span
+          className={`ml-2 inline-block translate-y-[1px] whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass}`}
+        >
+          {timestamp}
+        </span>
       </p>
     );
   }
@@ -1518,8 +1554,8 @@ export function ChatClient({
               >
                 <div
                   onClick={
-                    isTextMessage &&
                     !isMine &&
+                    !isMediaMessage &&
                     activeReportMessageId !== message.id
                       ? () => setActiveReportMessageId(message.id)
                       : undefined
@@ -1542,19 +1578,10 @@ export function ChatClient({
                 >
                   {isTextMessage
                     ? renderTextMessageContent(message, messageTime)
-                    : renderMessageContent(message)}
-                  {!isTextMessage ? (
-                    <p
-                      className={`mt-1 text-[10px] sm:mt-2 sm:text-[11px] ${
-                        isMine ? "text-neutral-600" : "text-neutral-500"
-                      }`}
-                    >
-                      {message.optimistic ? "Sending..." : messageTime}
-                    </p>
-                  ) : null}
+                    : renderMessageContent(message, messageTime)}
                   {!isMine &&
                   !message.optimistic &&
-                  (!isTextMessage || activeReportMessageId === message.id) ? (
+                  activeReportMessageId === message.id ? (
                     <div className="mt-0.5 flex justify-end sm:mt-1">
                       {activeReportMessageId === message.id ? (
                         <div className="flex items-center gap-2 rounded-full border border-neutral-800 bg-black/35 px-2 py-1">
