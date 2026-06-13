@@ -1257,11 +1257,11 @@ export function ChatClient({
                 : "Activity";
 
       return (
-        <div className="rounded-2xl border border-neutral-800 bg-black/25 px-3 py-2.5 text-center sm:px-4 sm:py-3">
-          <p className="text-xs font-medium uppercase tracking-[0.22em] text-neutral-500">
+        <div className="rounded-xl border border-neutral-800 bg-black/25 px-2.5 py-1.5 text-center sm:rounded-2xl sm:px-3 sm:py-2">
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500 sm:text-xs">
             {label}
           </p>
-          <p className="mt-1 text-sm text-neutral-300">
+          <p className="mt-0.5 text-xs text-neutral-300 sm:text-sm">
             {gift
               ? `${gift.name} · ${gift.coinPrice} Gold`
               : message.content}
@@ -1274,15 +1274,15 @@ export function ChatClient({
       const gift = getGiftOption(message.gift_type, giftCatalog);
 
       return (
-        <div className="min-w-36 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2.5 text-center shadow-[0_0_26px_rgba(16,185,129,0.08)] sm:min-w-40 sm:px-4 sm:py-3">
+        <div className="min-w-28 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-2 text-center shadow-[0_0_18px_rgba(16,185,129,0.08)] sm:min-w-36 sm:rounded-2xl sm:px-3 sm:py-2.5">
           <GiftVisual
-            className="mx-auto h-10 w-10 rounded-2xl border border-emerald-300/20 bg-black/30 p-2 text-emerald-100"
+            className="mx-auto h-8 w-8 rounded-xl border border-emerald-300/20 bg-black/30 p-1.5 text-emerald-100 sm:h-9 sm:w-9 sm:rounded-2xl sm:p-2"
             type={gift?.type ?? message.gift_type}
           />
-          <p className="mt-2 text-sm font-black">
+          <p className="mt-1.5 text-xs font-black sm:text-sm">
             {gift?.name ?? message.gift_type ?? "Gift"}
           </p>
-          <p className="mt-1 text-xs text-neutral-500">
+          <p className="mt-0.5 text-[11px] text-neutral-500 sm:text-xs">
             {gift ? `${gift.coinPrice} Gold` : "Gift"}
           </p>
         </div>
@@ -1298,12 +1298,12 @@ export function ChatClient({
             : "Opened";
 
         return (
-          <div className="flex min-h-12 w-40 max-w-full items-center gap-3 rounded-2xl border border-emerald-300/15 bg-black/25 px-3 py-2 text-left sm:w-48">
-            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-300/25 bg-emerald-300/10 text-sm text-emerald-100">
+          <div className="flex min-h-10 w-36 max-w-full items-center gap-2 rounded-xl border border-emerald-300/15 bg-black/25 px-2.5 py-1.5 text-left sm:w-44 sm:rounded-2xl sm:px-3 sm:py-2">
+            <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-300/25 bg-emerald-300/10 text-xs text-emerald-100 sm:h-8 sm:w-8 sm:text-sm">
               ◇
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-neutral-200">
+              <p className="truncate text-xs font-medium text-neutral-200 sm:text-sm">
                 {privateMediaKind} · {status}
               </p>
               <p className="mt-0.5 text-[11px] text-neutral-500">
@@ -1329,15 +1329,15 @@ export function ChatClient({
             event.preventDefault();
             showPrivacyWarning();
           }}
-          className="group relative h-32 w-36 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_30px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
+          className="group relative h-28 w-32 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_24px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
         >
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.22),_rgba(0,0,0,0.88)_62%)]" />
           <span className="absolute inset-0 bg-black/30" />
           <span className="relative flex h-full flex-col items-center justify-center px-4 text-white">
-            <span className="grid h-10 w-10 place-items-center rounded-full border border-white/20 bg-black/45 text-lg backdrop-blur">
+            <span className="grid h-8 w-8 place-items-center rounded-full border border-white/20 bg-black/45 text-base backdrop-blur sm:h-10 sm:w-10 sm:text-lg">
               ◇
             </span>
-            <span className="mt-2 text-sm font-black">Private media</span>
+            <span className="mt-1.5 text-xs font-black sm:text-sm">Private media</span>
             <span className="mt-1 text-xs text-neutral-300">
               {canReveal
                 ? "Tap to reveal"
@@ -1366,7 +1366,7 @@ export function ChatClient({
           controls
           playsInline
           preload="metadata"
-          className="max-h-[42dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
+          className="max-h-[38dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
         />
       ) : (
         <Image
@@ -1377,13 +1377,13 @@ export function ChatClient({
           loading="lazy"
           quality={72}
           sizes="(min-width: 640px) 70vw, 82vw"
-          className="h-auto max-h-[42dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
+          className="h-auto max-h-[38dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
         />
       );
     }
 
     return (
-      <p className="whitespace-pre-wrap break-words text-sm leading-5 sm:leading-6">
+      <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.35rem] sm:text-sm sm:leading-6">
         {message.content}
       </p>
     );
@@ -1472,7 +1472,7 @@ export function ChatClient({
 
       <div
         ref={messagesViewportRef}
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden overscroll-y-auto p-2.5 pb-3 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
+        className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overflow-x-hidden overscroll-y-auto p-2 pb-3 scroll-pb-24 sm:space-y-3 sm:p-6 sm:pb-8"
       >
         {messages.length > 0 ? (
           messages.map((message) => {
@@ -1484,7 +1484,7 @@ export function ChatClient({
                 className={`flex ${isMine ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[88%] overflow-hidden rounded-3xl px-3 py-2.5 sm:max-w-[70%] sm:px-4 sm:py-3 ${
+                  className={`max-w-[76%] overflow-hidden rounded-2xl px-2.5 py-1.5 sm:max-w-[70%] sm:rounded-3xl sm:px-4 sm:py-3 ${
                     isMine
                       ? "bg-white text-black"
                       : "border border-neutral-800 bg-neutral-950 text-white"
@@ -1492,7 +1492,7 @@ export function ChatClient({
                 >
                   {renderMessageContent(message)}
                   <p
-                    className={`mt-2 text-[11px] ${
+                    className={`mt-1 text-[10px] sm:mt-2 sm:text-[11px] ${
                       isMine ? "text-neutral-600" : "text-neutral-500"
                     }`}
                   >
@@ -1504,7 +1504,7 @@ export function ChatClient({
                         })}
                   </p>
                   {!isMine && !message.optimistic ? (
-                    <div className="mt-1 flex justify-end">
+                    <div className="mt-0.5 flex justify-end sm:mt-1">
                       {activeReportMessageId === message.id ? (
                         <div className="flex items-center gap-2 rounded-full border border-neutral-800 bg-black/35 px-2 py-1">
                           <ReportButton
@@ -1527,7 +1527,7 @@ export function ChatClient({
                           type="button"
                           aria-label="Message options"
                           onClick={() => setActiveReportMessageId(message.id)}
-                          className="grid h-7 w-7 place-items-center rounded-full text-base leading-none text-neutral-600 transition-colors hover:bg-black/20 hover:text-neutral-300"
+                          className="grid h-6 w-6 place-items-center rounded-full text-sm leading-none text-neutral-600 transition-colors hover:bg-black/20 hover:text-neutral-300 sm:h-7 sm:w-7 sm:text-base"
                         >
                           ...
                         </button>
@@ -1985,14 +1985,14 @@ export function ChatClient({
       ) : null}
 
       {giftMomentum ? (
-        <div className="fixed left-1/2 top-36 z-[80] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-emerald-200/20 bg-black/95 p-4 shadow-[0_0_48px_rgba(16,185,129,0.16)] backdrop-blur-xl">
+        <div className="fixed left-1/2 top-28 z-[80] w-[calc(100%-1.5rem)] max-w-xs -translate-x-1/2 rounded-2xl border border-emerald-200/20 bg-black/95 p-3 shadow-[0_0_32px_rgba(16,185,129,0.14)] backdrop-blur-xl sm:top-36 sm:max-w-sm sm:p-4">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">
                 {giftMomentum.gift.name} sent.
               </p>
               {giftMomentum.streakDays && giftMomentum.streakDays > 1 ? (
-                <p className="mt-1 text-xs text-emerald-100/75">
+                <p className="mt-0.5 text-[11px] text-emerald-100/75 sm:text-xs">
                   Streak: {giftMomentum.streakDays} days
                 </p>
               ) : null}
@@ -2000,27 +2000,27 @@ export function ChatClient({
             <button
               type="button"
               onClick={() => setGiftMomentum(null)}
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-neutral-300"
+              className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-neutral-300 sm:px-3 sm:py-1.5 sm:text-xs"
             >
               Close
             </button>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-1.5 sm:mt-3 sm:gap-2">
             <button
               type="button"
               onClick={() => setGiftMomentum(null)}
-              className="rounded-full border border-emerald-200/25 px-3 py-2 text-xs font-black text-emerald-50"
+              className="rounded-full border border-emerald-200/25 px-2 py-1.5 text-[11px] font-black text-emerald-50 sm:px-3 sm:py-2 sm:text-xs"
             >
-              Continue Chat
+              Continue
             </button>
             <Link
               href={getProfileHref({
                 id: receiverId,
                 public_id: receiverPublicId,
               })}
-              className="rounded-full border border-emerald-200/25 px-3 py-2 text-center text-xs font-black text-emerald-50"
+              className="rounded-full border border-emerald-200/25 px-2 py-1.5 text-center text-[11px] font-black text-emerald-50 sm:px-3 sm:py-2 sm:text-xs"
             >
-              View Profile
+              Profile
             </Link>
             <button
               type="button"
@@ -2032,7 +2032,7 @@ export function ChatClient({
                 );
                 void confirmGift(giftMomentum.gift);
               }}
-              className="rounded-full bg-white px-3 py-2 text-xs font-black text-black disabled:opacity-60"
+              className="rounded-full bg-white px-2 py-1.5 text-[11px] font-black text-black disabled:opacity-60 sm:px-3 sm:py-2 sm:text-xs"
             >
               {sending ? "Sending" : "Send Again"}
             </button>
