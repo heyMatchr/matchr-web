@@ -115,7 +115,7 @@ export function getNotificationPriority(
     };
   }
 
-  if (type === "weekly_recap_ready") {
+  if (type === "weekly_recap_ready" || type === "creator_goal_progress") {
     return {
       href: "/earnings",
       priorityLabel: "Creator",

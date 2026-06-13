@@ -10,6 +10,7 @@ import {
 } from "@/lib/economy";
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { isActivePremiumSubscription } from "@/lib/premium";
+import { createDedupedNotification } from "@/lib/notification-events";
 import {
   calculatePremiumValueRecap,
   getPremiumRenewalCopy,
@@ -301,6 +302,22 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     lifetimeContributionGold,
     eliteLevelsResult.data ?? [],
   );
+
+  if (eliteProgress.isNearNextLevel && eliteProgress.nextLevelNumber) {
+    await createDedupedNotification(supabase, {
+      body: `${eliteProgress.remainingGold.toLocaleString()} Gold to Elite ${eliteProgress.nextLevelNumber}.`,
+      dedupeMetadataKey: "next_level",
+      dedupeWindowSeconds: 7 * 24 * 60 * 60,
+      metadata: {
+        lifetime_contribution_gold: lifetimeContributionGold,
+        next_level: String(eliteProgress.nextLevelNumber),
+        remaining_gold: eliteProgress.remainingGold,
+      },
+      title: "Elite is close",
+      type: "elite_near_level",
+      userId: user.id,
+    });
+  }
   const milestones = getSpendingMilestones({
     hasGifted: lifetimeGiftGold > 0,
     lifetimeContributionGold,
@@ -1027,6 +1044,7 @@ function getEliteProgress(
   const currentLevelText = reachedLevel ? `L${reachedLevel.level}` : "Base";
   const currentBadge = reachedLevel?.badge ?? "Private";
   const nextLevelText = nextLevel ? `L${nextLevel.level}` : "Max";
+  const nextLevelNumber = nextLevel?.level ?? null;
   const remainingGold = nextLevel
     ? Math.max(0, nextLevel.monthly_gold_requirement - lifetimeContributionGold)
     : 0;
@@ -1044,6 +1062,7 @@ function getEliteProgress(
     currentLabel,
     currentLevelText,
     nextLevelText,
+    nextLevelNumber,
     isNearNextLevel,
     progressCopy,
     progressPercent,

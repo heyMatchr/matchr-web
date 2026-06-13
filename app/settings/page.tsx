@@ -17,6 +17,7 @@ import {
   getPremiumRenewalCopy,
   getPremiumRenewalState,
 } from "@/lib/premium-retention";
+import { createDedupedNotification } from "@/lib/notification-events";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
@@ -150,6 +151,27 @@ export default async function SettingsPage() {
   const premiumRenewalCopy = getPremiumRenewalCopy(
     activePremium || latestPremiumWindow ? premiumRenewalState : "active",
   );
+  const premiumNotificationExpiresAt =
+    activePremium?.expires_at ?? latestPremiumWindow?.expires_at ?? null;
+
+  if (
+    (activePremium || latestPremiumWindow) &&
+    premiumRenewalState !== "active"
+  ) {
+    await createDedupedNotification(supabase, {
+      body: premiumRenewalCopy.body,
+      dedupeMetadataKey: "dedupe_key",
+      dedupeWindowSeconds: 365 * 24 * 60 * 60,
+      metadata: {
+        dedupe_key: `${premiumNotificationExpiresAt ?? "no-expiry"}:${premiumRenewalState}`,
+        expires_at: premiumNotificationExpiresAt,
+        state: premiumRenewalState,
+      },
+      title: premiumRenewalCopy.title,
+      type: "premium_expiring",
+      userId: user.id,
+    });
+  }
   const relatedIds = [
     ...(blocksResult.data?.map((row) => row.blocked_user_id) ?? []),
     ...(mutedResult.data?.map((row) => row.muted_user_id) ?? []),

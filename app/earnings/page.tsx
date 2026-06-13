@@ -53,6 +53,10 @@ function formatDate(value?: string | null) {
   });
 }
 
+function getCreatorGoalThreshold(percent: number) {
+  return [100, 75, 50, 25].find((threshold) => percent >= threshold) ?? null;
+}
+
 function formatGiftName(giftType?: string | null) {
   if (!giftType) {
     return "Gift";
@@ -937,6 +941,24 @@ export default async function EarningsPage() {
       },
       title: "Weekly recap ready",
       type: "weekly_recap_ready",
+      userId: user.id,
+    });
+  }
+
+  const creatorGoalThreshold = getCreatorGoalThreshold(goalPercent);
+
+  if (creatorGoalThreshold) {
+    await createDedupedNotification(supabase, {
+      body: `${creatorGoalThreshold}% of your Diamond goal reached.`,
+      dedupeMetadataKey: "dedupe_key",
+      dedupeWindowSeconds: 30 * 24 * 60 * 60,
+      metadata: {
+        dedupe_key: `${creatorGoalDiamonds}:${creatorGoalThreshold}`,
+        goal_diamonds: creatorGoalDiamonds,
+        percent: creatorGoalThreshold,
+      },
+      title: "Creator goal moved",
+      type: "creator_goal_progress",
       userId: user.id,
     });
   }
