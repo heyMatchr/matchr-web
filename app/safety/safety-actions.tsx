@@ -70,7 +70,7 @@ export function SafetyActions({
           aria-expanded={isMenuOpen}
           aria-label="Open profile actions"
           onClick={() => setIsMenuOpen((current) => !current)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-black/50 text-xl leading-none text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900 sm:h-11 sm:w-11 sm:text-2xl"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-black/50 text-lg leading-none text-neutral-200 transition-colors hover:border-neutral-500 hover:bg-neutral-900 sm:h-10 sm:w-10 sm:text-xl"
         >
           ⋮
         </button>

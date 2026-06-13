@@ -1389,17 +1389,34 @@ export function ChatClient({
     );
   }
 
+  function renderTextMessageContent(message: LocalMessage, timestamp: string) {
+    const isMine = message.sender_id === currentUserId;
+
+    return (
+      <p className="whitespace-pre-wrap break-words text-[13px] leading-[1.25rem] sm:text-sm sm:leading-5">
+        {message.content}
+        <span
+          className={`ml-2 inline-block translate-y-[1px] whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${
+            isMine ? "text-neutral-600" : "text-neutral-500"
+          }`}
+        >
+          {message.optimistic ? "Sending..." : timestamp}
+        </span>
+      </p>
+    );
+  }
+
   return (
     <div
       className="relative mt-1 flex h-[calc(100dvh_-_var(--matchr-page-top-padding)_-_var(--matchr-page-bottom-padding)_-_0.25rem)] min-h-0 w-full max-w-full flex-col rounded-lg border border-neutral-800 bg-black/50 md:mt-0 md:h-[calc(100dvh-3rem)] md:min-h-[720px]"
       style={mobileChatHeightStyle}
     >
-      <div className="relative z-10 flex min-h-14 shrink-0 items-center justify-between gap-2 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-2 sm:min-h-16 sm:px-6 sm:py-3">
+      <div className="relative z-10 flex min-h-12 shrink-0 items-center justify-between gap-1.5 overflow-visible border-b border-neutral-800 bg-black/80 px-2.5 py-1.5 sm:min-h-16 sm:gap-2 sm:px-6 sm:py-3">
         <Link
           href={getProfileHref({ id: receiverId, public_id: receiverPublicId })}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-full pr-1 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:pr-2"
+          className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full pr-1 transition-colors hover:bg-white/[0.03] sm:gap-3 sm:pr-2"
         >
-          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-10 sm:w-10">
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-neutral-950 sm:h-10 sm:w-10">
             {receiverAvatarUrl ? (
               <Image
                 src={receiverAvatarUrl}
@@ -1419,7 +1436,7 @@ export function ChatClient({
             <p className="max-w-[5.75rem] truncate text-sm font-medium text-white min-[360px]:max-w-[7rem] min-[390px]:max-w-[9rem] sm:max-w-none">
               {receiverName}
             </p>
-            <p className="mt-0.5 flex min-h-4 max-w-[9rem] items-center gap-1.5 truncate text-[11px] text-neutral-500 transition-colors min-[390px]:max-w-[11rem] sm:mt-1 sm:min-h-5 sm:max-w-none sm:text-sm">
+            <p className="mt-0.5 flex max-w-[9rem] items-center gap-1 truncate text-[11px] text-neutral-500 transition-colors min-[390px]:max-w-[11rem] sm:mt-1 sm:max-w-none sm:gap-1.5 sm:text-sm">
               <span
                 className={
                   chatMomentumStatus === "Active Now" ||
@@ -1437,7 +1454,7 @@ export function ChatClient({
             </p>
           </div>
         </Link>
-        <div className="flex min-w-fit shrink-0 items-center gap-2 overflow-visible">
+        <div className="flex min-w-fit shrink-0 items-center gap-1 overflow-visible sm:gap-2">
           <div
             aria-hidden="true"
             className={`hidden h-2.5 w-2.5 rounded-full transition-colors min-[360px]:block ${
@@ -1453,7 +1470,7 @@ export function ChatClient({
           type="button"
           aria-label="Open profile preview video"
           onClick={() => setIsPreviewVideoOpen(true)}
-          className="absolute right-2 top-[4.5rem] z-30 h-28 w-20 overflow-hidden rounded-2xl border border-emerald-300/25 bg-neutral-950 shadow-[0_16px_45px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-emerald-300/50 sm:right-4 sm:top-20 sm:h-36 sm:w-24 md:h-40 md:w-28"
+          className="absolute right-2 top-[4rem] z-30 h-24 w-16 overflow-hidden rounded-2xl border border-emerald-300/25 bg-neutral-950 shadow-[0_16px_45px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-emerald-300/50 sm:right-4 sm:top-20 sm:h-36 sm:w-24 md:h-40 md:w-28"
         >
           <video
             src={receiverPreviewVideo.media_url}
@@ -1482,6 +1499,17 @@ export function ChatClient({
               (message.media_type === "image" ||
                 message.media_type === "video" ||
                 message.message_type === "private_media");
+            const isTextMessage =
+              !SYSTEM_MESSAGE_TYPES.has(message.message_type) &&
+              message.message_type !== "gift" &&
+              !isMediaMessage;
+            const messageTime = new Date(message.created_at).toLocaleTimeString(
+              [],
+              {
+                hour: "numeric",
+                minute: "2-digit",
+              },
+            );
 
             return (
               <div
@@ -1489,30 +1517,44 @@ export function ChatClient({
                 className={`flex ${isMine ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`w-fit overflow-hidden rounded-2xl px-2.5 py-1.5 sm:rounded-3xl sm:px-4 sm:py-3 ${
-                    isMediaMessage
-                      ? "max-w-[78%] sm:max-w-[70%]"
-                      : "max-w-[50%] sm:max-w-[65%]"
+                  onClick={
+                    isTextMessage &&
+                    !isMine &&
+                    activeReportMessageId !== message.id
+                      ? () => setActiveReportMessageId(message.id)
+                      : undefined
+                  }
+                  className={`w-fit overflow-hidden ${
+                    isTextMessage
+                      ? `max-w-[50%] rounded-[1.05rem] px-2.5 py-1 sm:max-w-[65%] sm:rounded-2xl sm:px-3 sm:py-1.5 ${
+                          !isMine ? "cursor-pointer" : ""
+                        }`
+                      : `rounded-2xl px-2.5 py-1.5 sm:rounded-3xl sm:px-4 sm:py-3 ${
+                          isMediaMessage
+                            ? "max-w-[78%] sm:max-w-[70%]"
+                            : "max-w-[50%] sm:max-w-[65%]"
+                        }`
                   } ${
                     isMine
                       ? "bg-white text-black"
                       : "border border-neutral-800 bg-neutral-950 text-white"
                   }`}
                 >
-                  {renderMessageContent(message)}
-                  <p
-                    className={`mt-1 text-[10px] sm:mt-2 sm:text-[11px] ${
-                      isMine ? "text-neutral-600" : "text-neutral-500"
-                    }`}
-                  >
-                    {message.optimistic
-                      ? "Sending..."
-                      : new Date(message.created_at).toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                  </p>
-                  {!isMine && !message.optimistic ? (
+                  {isTextMessage
+                    ? renderTextMessageContent(message, messageTime)
+                    : renderMessageContent(message)}
+                  {!isTextMessage ? (
+                    <p
+                      className={`mt-1 text-[10px] sm:mt-2 sm:text-[11px] ${
+                        isMine ? "text-neutral-600" : "text-neutral-500"
+                      }`}
+                    >
+                      {message.optimistic ? "Sending..." : messageTime}
+                    </p>
+                  ) : null}
+                  {!isMine &&
+                  !message.optimistic &&
+                  (!isTextMessage || activeReportMessageId === message.id) ? (
                     <div className="mt-0.5 flex justify-end sm:mt-1">
                       {activeReportMessageId === message.id ? (
                         <div className="flex items-center gap-2 rounded-full border border-neutral-800 bg-black/35 px-2 py-1">
@@ -1557,24 +1599,22 @@ export function ChatClient({
             </div>
           </div>
         )}
-        <div className="min-h-6">
-          {isReceiverTyping ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100 transition-all duration-300">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.2s]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.1s]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300" />
-              Typing...
-            </div>
-          ) : null}
-        </div>
-        <div ref={scrollRef} className="h-2" />
+        {isReceiverTyping ? (
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100 transition-all duration-300">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.2s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300 [animation-delay:-0.1s]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-300" />
+            Typing...
+          </div>
+        ) : null}
+        <div ref={scrollRef} className="h-1" />
       </div>
 
       <form
         onSubmit={sendMessage}
         className="relative z-20 shrink-0 border-t border-neutral-800 bg-black/90 p-2 backdrop-blur-xl sm:p-4"
       >
-        <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+        <div className="mb-1 flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
           <button
             type="button"
             onClick={() => {
@@ -1582,7 +1622,7 @@ export function ChatClient({
               setIsTemplatesOpen(false);
               setIsMediaMenuOpen(false);
             }}
-            className="shrink-0 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-xs font-medium text-emerald-50 transition-colors hover:bg-emerald-300/15"
+            className="shrink-0 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1.5 text-xs font-medium text-emerald-50 transition-colors hover:bg-emerald-300/15"
           >
             {isReviveSuggestion ? "Revive chat" : "Suggest opener"}
           </button>
@@ -1600,7 +1640,7 @@ export function ChatClient({
               setIsAssistOpen(false);
               setIsMediaMenuOpen(false);
             }}
-            className="shrink-0 rounded-full border border-neutral-700 bg-white/[0.03] px-3 py-2 text-xs font-medium text-neutral-100 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
+            className="shrink-0 rounded-full border border-neutral-700 bg-white/[0.03] px-2.5 py-1.5 text-xs font-medium text-neutral-100 transition-colors hover:border-emerald-300/25 hover:bg-emerald-300/10"
           >
             Templates
           </button>
@@ -1725,7 +1765,7 @@ export function ChatClient({
               setIsTemplatesOpen(false);
             }}
             aria-label="Open media options"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-2xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15 sm:h-12 sm:w-12"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-emerald-300/35 bg-emerald-300/10 text-xl font-light text-emerald-50 shadow-[0_0_24px_rgba(16,185,129,0.14)] transition-all hover:border-emerald-200 hover:bg-emerald-300/15 sm:h-12 sm:w-12 sm:text-2xl"
           >
             +
           </button>
@@ -1818,12 +1858,12 @@ export function ChatClient({
             maxLength={1000}
             enterKeyHint="send"
             placeholder="Write a message"
-            className="min-h-10 min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60 sm:px-5 sm:py-3"
+            className="h-9 min-w-0 flex-1 rounded-full border border-neutral-700 bg-black/60 px-4 py-2 text-base text-white placeholder:text-neutral-500 focus:border-emerald-300 focus:outline-none disabled:opacity-60 sm:h-auto sm:px-5 sm:py-3"
           />
           <button
             type="submit"
             disabled={sending}
-            className="min-h-10 shrink-0 rounded-full bg-white px-3.5 py-2.5 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-60 sm:px-6 sm:py-3 sm:text-base"
+            className="h-9 shrink-0 rounded-full bg-white px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-neutral-200 disabled:opacity-60 sm:h-auto sm:px-6 sm:py-3 sm:text-base"
           >
             {sending ? "..." : "Send"}
           </button>
@@ -1994,7 +2034,7 @@ export function ChatClient({
       ) : null}
 
       {giftMomentum ? (
-        <div className="fixed left-1/2 top-28 z-[80] w-[calc(100%-1.5rem)] max-w-xs -translate-x-1/2 rounded-2xl border border-emerald-200/20 bg-black/95 p-3 shadow-[0_0_32px_rgba(16,185,129,0.14)] backdrop-blur-xl sm:top-36 sm:max-w-sm sm:p-4">
+        <div className="fixed left-1/2 top-28 z-[80] w-[calc(100%-1.5rem)] max-w-xs -translate-x-1/2 rounded-2xl border border-emerald-200/20 bg-black/95 p-2.5 shadow-[0_0_32px_rgba(16,185,129,0.14)] backdrop-blur-xl sm:top-36 sm:max-w-sm sm:p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-white">
@@ -2018,7 +2058,7 @@ export function ChatClient({
             <button
               type="button"
               onClick={() => setGiftMomentum(null)}
-              className="rounded-full border border-emerald-200/25 px-2 py-1.5 text-[11px] font-black text-emerald-50 sm:px-3 sm:py-2 sm:text-xs"
+              className="rounded-full border border-emerald-200/25 px-2 py-1 text-[11px] font-black text-emerald-50 sm:px-3 sm:py-2 sm:text-xs"
             >
               Continue
             </button>
@@ -2027,7 +2067,7 @@ export function ChatClient({
                 id: receiverId,
                 public_id: receiverPublicId,
               })}
-              className="rounded-full border border-emerald-200/25 px-2 py-1.5 text-center text-[11px] font-black text-emerald-50 sm:px-3 sm:py-2 sm:text-xs"
+              className="rounded-full border border-emerald-200/25 px-2 py-1 text-center text-[11px] font-black text-emerald-50 sm:px-3 sm:py-2 sm:text-xs"
             >
               Profile
             </Link>
@@ -2041,7 +2081,7 @@ export function ChatClient({
                 );
                 void confirmGift(giftMomentum.gift);
               }}
-              className="rounded-full bg-white px-2 py-1.5 text-[11px] font-black text-black disabled:opacity-60 sm:px-3 sm:py-2 sm:text-xs"
+              className="rounded-full bg-white px-2 py-1 text-[11px] font-black text-black disabled:opacity-60 sm:px-3 sm:py-2 sm:text-xs"
             >
               {sending ? "Sending" : "Send Again"}
             </button>
