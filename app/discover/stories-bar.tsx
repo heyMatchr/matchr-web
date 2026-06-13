@@ -77,7 +77,18 @@ type StoryEngagement = {
 
 type GiftMomentumState = {
   gift: GiftOption;
+  giftTransactionId: string | null;
   streakDays: number | null;
+};
+
+type GiftAnalyticsRpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{
+    data: unknown;
+    error: { message?: string } | null;
+  }>;
 };
 
 const emptyEngagement: StoryEngagement = {
@@ -1030,6 +1041,25 @@ export function StoriesBar({
     return Number.isFinite(currentStreak) ? currentStreak : null;
   }
 
+  async function recordGiftAnalyticsEvent(
+    eventType: "gift_sent" | "gift_sender_returned",
+    giftTransactionId: string | null,
+  ) {
+    const analyticsRpc = supabase as unknown as GiftAnalyticsRpcClient;
+    const { error: analyticsError } = await analyticsRpc.rpc(
+      "record_gift_analytics_event",
+      {
+        event_metadata: { surface: "story" },
+        selected_event_type: eventType,
+        selected_gift_transaction_id: giftTransactionId,
+      },
+    );
+
+    if (analyticsError) {
+      console.error("Story gift analytics event failed", analyticsError.message);
+    }
+  }
+
   async function giftStory(gift: GiftOption) {
     if (
       !activeStory ||
@@ -1097,10 +1127,19 @@ export function StoriesBar({
         });
       }
 
+      const giftTransactionId =
+        typeof giftResult?.gift_transaction_id === "string"
+          ? giftResult.gift_transaction_id
+          : null;
+
+      if (!isDuplicateGift) {
+        await recordGiftAnalyticsEvent("gift_sent", giftTransactionId);
+      }
+
       const streakDays = isDuplicateGift
         ? null
         : await recordGiftStreak(activeStory.user_id);
-      setGiftMomentum({ gift, streakDays });
+      setGiftMomentum({ gift, giftTransactionId, streakDays });
       setIsGiftPickerOpen(false);
       setInteractionMessage("Sent.");
     } finally {
@@ -1565,19 +1604,43 @@ export function StoriesBar({
 
                   {giftMomentum ? (
                     <div className="rounded-2xl border border-emerald-200/20 bg-black/55 p-3 text-center">
+                      <p className="text-sm font-black text-white">
+                        {giftMomentum.gift.name} sent.
+                      </p>
                       {giftMomentum.streakDays && giftMomentum.streakDays > 1 ? (
-                        <p className="text-xs text-emerald-100/75">
+                        <p className="mt-1 text-xs text-emerald-100/75">
                           Streak: {giftMomentum.streakDays} days
                         </p>
                       ) : null}
-                      <button
-                        type="button"
-                        disabled={Boolean(sendingGiftType)}
-                        onClick={() => void giftStory(giftMomentum.gift)}
-                        className="mt-2 w-full rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black disabled:opacity-60"
-                      >
-                        {sendingGiftType ? "Sending" : "Send again"}
-                      </button>
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setGiftMomentum(null)}
+                          className="rounded-full border border-emerald-200/25 px-3 py-2 text-[11px] font-black text-emerald-50"
+                        >
+                          Continue
+                        </button>
+                        <a
+                          href={`/profile/${activeStory.user_id}`}
+                          className="rounded-full border border-emerald-200/25 px-3 py-2 text-[11px] font-black text-emerald-50"
+                        >
+                          Profile
+                        </a>
+                        <button
+                          type="button"
+                          disabled={Boolean(sendingGiftType)}
+                          onClick={() => {
+                            void recordGiftAnalyticsEvent(
+                              "gift_sender_returned",
+                              giftMomentum.giftTransactionId,
+                            );
+                            void giftStory(giftMomentum.gift);
+                          }}
+                          className="rounded-full bg-white px-3 py-2 text-[11px] font-black text-black disabled:opacity-60"
+                        >
+                          {sendingGiftType ? "Sending" : "Send Again"}
+                        </button>
+                      </div>
                     </div>
                   ) : null}
                 </div>

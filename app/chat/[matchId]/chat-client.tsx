@@ -66,6 +66,7 @@ type PresenceMeta = {
 
 type GiftMomentumState = {
   gift: GiftOption;
+  giftTransactionId: string | null;
   streakDays: number | null;
 };
 
@@ -107,6 +108,7 @@ const SYSTEM_MESSAGE_TYPES = new Set([
   "story_reply",
   "story_reaction",
   "story_gift",
+  "gift_reaction",
   "private_media_opened",
   "private_media_expired",
   "call_event",
@@ -121,6 +123,16 @@ const conversationTones: ConversationTone[] = [
 ];
 
 const CONVERSATION_DORMANT_AFTER_MS = 1000 * 60 * 60 * 24 * 3;
+
+type GiftAnalyticsRpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{
+    data: unknown;
+    error: { message?: string } | null;
+  }>;
+};
 
 function formatCompactAge(timestamp?: string | null, now = Date.now()) {
   if (!timestamp) {
@@ -1025,6 +1037,36 @@ export function ChatClient({
     return Number.isFinite(currentStreak) ? currentStreak : null;
   }
 
+  async function recordGiftAnalyticsEvent(
+    eventType: "gift_sent" | "gift_sender_returned",
+    giftTransactionId: string | null,
+  ) {
+    const analyticsRpc = supabase as unknown as GiftAnalyticsRpcClient;
+    const { error: analyticsError } = await analyticsRpc.rpc(
+      "record_gift_analytics_event",
+      {
+        event_metadata: { surface: "chat" },
+        selected_event_type: eventType,
+        selected_gift_transaction_id: giftTransactionId,
+      },
+    );
+
+    if (analyticsError) {
+      console.error("Gift analytics event failed", analyticsError.message);
+    }
+  }
+
+  async function getGiftTransactionId(clientRequestId: string) {
+    const { data } = await supabase
+      .from("gift_transactions")
+      .select("id")
+      .eq("sender_id", currentUserId)
+      .eq("client_request_id", clientRequestId)
+      .maybeSingle();
+
+    return data?.id ?? null;
+  }
+
   async function confirmGift(gift: GiftOption) {
     if (sending) {
       return;
@@ -1060,8 +1102,10 @@ export function ChatClient({
       } else {
         mergeConfirmedMessage(savedMessage);
         setSpendableGold((current) => Math.max(0, current - gift.coinPrice));
+        const giftTransactionId = await getGiftTransactionId(clientRequestId);
+        await recordGiftAnalyticsEvent("gift_sent", giftTransactionId);
         const streakDays = await recordGiftStreak(receiverId);
-        setGiftMomentum({ gift, streakDays });
+        setGiftMomentum({ gift, giftTransactionId, streakDays });
         setChatToast("Sent.");
         await supabase.from("notifications").insert({
           actor_id: currentUserId,
@@ -1206,9 +1250,11 @@ export function ChatClient({
           ? "Story gift"
           : message.message_type === "story_reply"
             ? "Story reply"
-            : message.message_type === "call_event"
-              ? "Call"
-              : "Activity";
+            : message.message_type === "gift_reaction"
+              ? "Gift reaction"
+              : message.message_type === "call_event"
+                ? "Call"
+                : "Activity";
 
       return (
         <div className="rounded-2xl border border-neutral-800 bg-black/25 px-3 py-2.5 text-center sm:px-4 sm:py-3">
@@ -1942,7 +1988,9 @@ export function ChatClient({
         <div className="fixed left-1/2 top-36 z-[80] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl border border-emerald-200/20 bg-black/95 p-4 shadow-[0_0_48px_rgba(16,185,129,0.16)] backdrop-blur-xl">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-white">Sent.</p>
+              <p className="text-sm font-semibold text-white">
+                {giftMomentum.gift.name} sent.
+              </p>
               {giftMomentum.streakDays && giftMomentum.streakDays > 1 ? (
                 <p className="mt-1 text-xs text-emerald-100/75">
                   Streak: {giftMomentum.streakDays} days
@@ -1957,14 +2005,38 @@ export function ChatClient({
               Close
             </button>
           </div>
-          <button
-            type="button"
-            disabled={sending}
-            onClick={() => void confirmGift(giftMomentum.gift)}
-            className="mt-3 w-full rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black disabled:opacity-60"
-          >
-            {sending ? "Sending" : "Send again"}
-          </button>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setGiftMomentum(null)}
+              className="rounded-full border border-emerald-200/25 px-3 py-2 text-xs font-black text-emerald-50"
+            >
+              Continue Chat
+            </button>
+            <Link
+              href={getProfileHref({
+                id: receiverId,
+                public_id: receiverPublicId,
+              })}
+              className="rounded-full border border-emerald-200/25 px-3 py-2 text-center text-xs font-black text-emerald-50"
+            >
+              View Profile
+            </Link>
+            <button
+              type="button"
+              disabled={sending}
+              onClick={() => {
+                void recordGiftAnalyticsEvent(
+                  "gift_sender_returned",
+                  giftMomentum.giftTransactionId,
+                );
+                void confirmGift(giftMomentum.gift);
+              }}
+              className="rounded-full bg-white px-3 py-2 text-xs font-black text-black disabled:opacity-60"
+            >
+              {sending ? "Sending" : "Send Again"}
+            </button>
+          </div>
         </div>
       ) : null}
 

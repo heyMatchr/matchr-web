@@ -38,6 +38,16 @@ import {
 } from "./actions";
 import type { GiftActionState, MomentFormState } from "./types";
 
+type GiftAnalyticsRpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{
+    data: unknown;
+    error: { message?: string } | null;
+  }>;
+};
+
 type MomentProfile = {
   age: number;
   id: string;
@@ -483,6 +493,7 @@ export function MomentsClient({
           goldBalance={goldBalance}
           moment={activeGifts}
           onClose={() => setActiveGifts(null)}
+          supabase={supabase}
         />
       ) : null}
 
@@ -885,6 +896,7 @@ function GiftsSheet({
   goldBalance,
   moment,
   onClose,
+  supabase,
 }: {
   currentEliteLevel: number;
   eliteGoldRemainingByLevel: Record<number, number>;
@@ -892,6 +904,7 @@ function GiftsSheet({
   goldBalance: number;
   moment: MomentCard;
   onClose: () => void;
+  supabase: ReturnType<typeof createBrowserClient<Database>>;
 }) {
   const [giftState, setGiftState] = useState<GiftActionState | null>(null);
   const [sendingGiftType, setSendingGiftType] = useState<string | null>(null);
@@ -927,6 +940,22 @@ function GiftsSheet({
       }
     } finally {
       setSendingGiftType(null);
+    }
+  }
+
+  async function recordGiftSenderReturned(giftTransactionId?: string | null) {
+    const analyticsRpc = supabase as unknown as GiftAnalyticsRpcClient;
+    const { error: analyticsError } = await analyticsRpc.rpc(
+      "record_gift_analytics_event",
+      {
+        event_metadata: { surface: "moment" },
+        selected_event_type: "gift_sender_returned",
+        selected_gift_transaction_id: giftTransactionId ?? null,
+      },
+    );
+
+    if (analyticsError) {
+      console.error("Moment gift return analytics failed", analyticsError.message);
     }
   }
 
@@ -972,27 +1001,38 @@ function GiftsSheet({
         ) : null}
         {giftState?.status === "success" && lastSentGift ? (
           <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-            <p className="font-black text-emerald-50">Sent.</p>
+            <p className="font-black text-emerald-50">
+              {lastSentGift.name} sent.
+            </p>
             {giftState.streakDays && giftState.streakDays > 1 ? (
               <p className="mt-1 text-sm text-emerald-100/75">
                 Streak: {giftState.streakDays} days
               </p>
             ) : null}
-            <div className="mt-3 flex gap-2">
+            <div className="mt-3 grid grid-cols-3 gap-2">
               <button
                 type="button"
                 disabled={Boolean(sendingGiftType)}
-                onClick={() => void sendMomentGift(lastSentGift)}
-                className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black disabled:opacity-60"
+                onClick={() => {
+                  void recordGiftSenderReturned(giftState.giftTransactionId);
+                  void sendMomentGift(lastSentGift);
+                }}
+                className="rounded-full bg-white px-3 py-2 text-xs font-black text-black disabled:opacity-60"
               >
-                {sendingGiftType ? "Sending" : "Send again"}
+                {sendingGiftType ? "Sending" : "Send Again"}
               </button>
+              <Link
+                href={getProfileHref(moment.profile)}
+                className="rounded-full border border-emerald-200/30 px-3 py-2 text-center text-xs font-black text-emerald-100"
+              >
+                Profile
+              </Link>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100"
+                className="rounded-full border border-emerald-200/30 px-3 py-2 text-xs font-black text-emerald-100"
               >
-                Close
+                Continue
               </button>
             </div>
           </div>

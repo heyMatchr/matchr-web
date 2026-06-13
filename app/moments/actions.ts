@@ -17,6 +17,16 @@ import {
 } from "@/lib/supabase/storage";
 import type { GiftActionState, MomentFormState } from "./types";
 
+type GiftAnalyticsRpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{
+    data: unknown;
+    error: { message?: string } | null;
+  }>;
+};
+
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -311,8 +321,26 @@ export async function giftMoment(
   }
 
   let streakDays: number | null = null;
+  const giftTransactionId =
+    typeof giftResult?.gift_transaction_id === "string"
+      ? giftResult.gift_transaction_id
+      : null;
 
   if (giftResult?.idempotent !== true) {
+    const analyticsRpc = supabase as unknown as GiftAnalyticsRpcClient;
+    const { error: analyticsError } = await analyticsRpc.rpc(
+      "record_gift_analytics_event",
+      {
+        event_metadata: { surface: "moment" },
+        selected_event_type: "gift_sent",
+        selected_gift_transaction_id: giftTransactionId,
+      },
+    );
+
+    if (analyticsError) {
+      console.error("Moment gift analytics event failed", analyticsError.message);
+    }
+
     const { data: streakResult, error: streakError } = await supabase.rpc(
       "record_gift_streak",
       {
@@ -351,6 +379,7 @@ export async function giftMoment(
 
   revalidatePath("/moments");
   return {
+    giftTransactionId,
     message: "Sent.",
     status: "success",
     streakDays,

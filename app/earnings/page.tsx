@@ -20,7 +20,7 @@ import {
   type DailyAttentionDigestCounts,
 } from "@/lib/retention";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { requestWithdrawal } from "./actions";
+import { reactToGift, requestWithdrawal } from "./actions";
 
 function formatDiamonds(value: number) {
   return `${Math.round(value).toLocaleString()} Diamonds`;
@@ -64,6 +64,17 @@ function formatGiftName(giftType?: string | null) {
     .join(" ");
 }
 
+function formatGiftReactionLabel(reactionType?: string | null) {
+  const labels: Record<string, string> = {
+    appreciate: "Appreciate",
+    nice: "Nice",
+    thanks: "Thanks",
+    wave: "Wave",
+  };
+
+  return reactionType ? labels[reactionType] ?? "Responded" : "Awaiting response";
+}
+
 function initialFor(name?: string | null) {
   return name?.trim().charAt(0).toUpperCase() || "M";
 }
@@ -93,6 +104,18 @@ function logEarningsQueryError(
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
+
+type GiftReactionQuery<T> = PromiseLike<{
+  data: T | null;
+  error: { message?: string } | null;
+}> & {
+  in: (column: string, values: unknown[]) => GiftReactionQuery<T>;
+  select: (columns: string) => GiftReactionQuery<T>;
+};
+
+type GiftReactionClient = {
+  from: <T>(table: string) => GiftReactionQuery<T>;
+};
 
 function countBy<T>(items: T[], getKey: (item: T) => string | null | undefined) {
   const counts = new Map<string, number>();
@@ -257,7 +280,7 @@ export default async function EarningsPage() {
       .limit(10),
     supabase
       .from("gift_transactions")
-      .select("sender_id, gift_type, gold_cost, created_at")
+      .select("id, sender_id, gift_type, gold_cost, created_at")
       .eq("receiver_id", user.id)
       .order("created_at", { ascending: false })
       .limit(12),
@@ -706,6 +729,29 @@ export default async function EarningsPage() {
         .filter(isNonEmptyString),
     ),
   ];
+  const recentGiftTransactionIds = recentSupportRows
+    .map((gift) => gift.id)
+    .filter(isNonEmptyString);
+  const reactionSupabase = supabase as unknown as GiftReactionClient;
+  const recentGiftReactionsResult = recentGiftTransactionIds.length
+    ? await reactionSupabase
+        .from<
+          Array<{
+            created_at: string;
+            gift_transaction_id: string;
+            reaction_type: string;
+          }>
+        >("gift_reactions")
+        .select("gift_transaction_id, reaction_type, created_at")
+        .in("gift_transaction_id", recentGiftTransactionIds)
+    : { data: [], error: null };
+  logEarningsQueryError("recent gift reactions", recentGiftReactionsResult.error);
+  const giftReactionByTransactionId = new Map(
+    (recentGiftReactionsResult.data ?? []).map((reaction) => [
+      reaction.gift_transaction_id,
+      reaction,
+    ]),
+  );
   const [
     { data: supporterProfiles },
     supporterPremiumResult,
@@ -836,21 +882,24 @@ export default async function EarningsPage() {
     recentSupportRows.map((gift) => {
       const catalogGift = giftByType.get(gift.gift_type);
       const supporter = supporterProfileById.get(gift.sender_id);
+      const reaction = giftReactionByTransactionId.get(gift.id);
 
       return {
         createdAt: gift.created_at,
         diamonds: diamondsFromGold(gift.gold_cost),
         giftName: catalogGift?.name ?? formatGiftName(gift.gift_type),
+        giftTransactionId: gift.id,
         goldCost: gift.gold_cost ?? catalogGift?.coinPrice ?? 0,
-      sender: supporter ?? null,
-      senderEliteLevel: supporter
-        ? supporterEliteStatusByUser.get(supporter.id)?.currentLevel ?? 0
-        : 0,
-      senderHasPremium: supporter
-        ? activePremiumSupporterIds.has(supporter.id)
-        : false,
-    };
-  }) ?? [];
+        reactionType: reaction?.reaction_type ?? null,
+        sender: supporter ?? null,
+        senderEliteLevel: supporter
+          ? supporterEliteStatusByUser.get(supporter.id)?.currentLevel ?? 0
+          : 0,
+        senderHasPremium: supporter
+          ? activePremiumSupporterIds.has(supporter.id)
+          : false,
+      };
+    }) ?? [];
   const categoryBreakdown = [...categoryStats.entries()]
     .map(([category, stats]) => ({
       category,
@@ -1556,6 +1605,45 @@ export default async function EarningsPage() {
                   <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-100">
                     +{gift.diamonds} Diamonds
                   </span>
+                </div>
+                <div className="mt-4 rounded-2xl border border-neutral-800 bg-black/25 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-neutral-500">
+                      {gift.reactionType ? "Responded" : "Awaiting response"}
+                    </p>
+                    <p className="text-xs text-neutral-400">
+                      {formatGiftReactionLabel(gift.reactionType)}
+                    </p>
+                  </div>
+                  {!gift.reactionType ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {[
+                        ["appreciate", "Appreciate"],
+                        ["thanks", "Thanks"],
+                        ["wave", "Wave"],
+                        ["nice", "Nice"],
+                      ].map(([reactionType, label]) => (
+                        <form key={reactionType} action={reactToGift}>
+                          <input
+                            name="gift_transaction_id"
+                            type="hidden"
+                            value={gift.giftTransactionId}
+                          />
+                          <input
+                            name="reaction_type"
+                            type="hidden"
+                            value={reactionType}
+                          />
+                          <button
+                            type="submit"
+                            className="w-full rounded-full border border-emerald-200/20 px-3 py-2 text-xs font-black text-emerald-50 transition-colors hover:bg-emerald-300/10"
+                          >
+                            {label}
+                          </button>
+                        </form>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               );

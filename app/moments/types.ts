@@ -3,6 +3,7 @@ export type MomentFormState = {
 };
 
 export type GiftActionState = {
+  giftTransactionId?: string | null;
   message: string;
   status: "error" | "success";
   streakDays?: number | null;
