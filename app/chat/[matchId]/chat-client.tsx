@@ -1257,7 +1257,7 @@ export function ChatClient({
                 : "Activity";
 
       return (
-        <div className="rounded-xl border border-neutral-800 bg-black/25 px-2.5 py-1.5 text-center sm:rounded-2xl sm:px-3 sm:py-2">
+        <div className="rounded-lg border border-neutral-800 bg-black/25 px-2 py-1 text-center sm:rounded-xl sm:px-2.5 sm:py-1.5">
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-neutral-500 sm:text-xs">
             {label}
           </p>
@@ -1274,15 +1274,15 @@ export function ChatClient({
       const gift = getGiftOption(message.gift_type, giftCatalog);
 
       return (
-        <div className="min-w-28 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-2 text-center shadow-[0_0_18px_rgba(16,185,129,0.08)] sm:min-w-36 sm:rounded-2xl sm:px-3 sm:py-2.5">
+        <div className="min-w-24 rounded-lg border border-emerald-300/20 bg-emerald-300/10 px-2 py-1.5 text-center shadow-[0_0_14px_rgba(16,185,129,0.08)] sm:min-w-32 sm:rounded-xl sm:px-2.5 sm:py-2">
           <GiftVisual
-            className="mx-auto h-8 w-8 rounded-xl border border-emerald-300/20 bg-black/30 p-1.5 text-emerald-100 sm:h-9 sm:w-9 sm:rounded-2xl sm:p-2"
+            className="mx-auto h-7 w-7 rounded-lg border border-emerald-300/20 bg-black/30 p-1.5 text-emerald-100 sm:h-8 sm:w-8 sm:rounded-xl"
             type={gift?.type ?? message.gift_type}
           />
-          <p className="mt-1.5 text-xs font-black sm:text-sm">
+          <p className="mt-1 text-[11px] font-black sm:text-xs">
             {gift?.name ?? message.gift_type ?? "Gift"}
           </p>
-          <p className="mt-0.5 text-[11px] text-neutral-500 sm:text-xs">
+          <p className="text-[10px] text-neutral-500 sm:text-[11px]">
             {gift ? `${gift.coinPrice} Gold` : "Gift"}
           </p>
         </div>
@@ -1298,7 +1298,7 @@ export function ChatClient({
             : "Opened";
 
         return (
-          <div className="flex min-h-10 w-36 max-w-full items-center gap-2 rounded-xl border border-emerald-300/15 bg-black/25 px-2.5 py-1.5 text-left sm:w-44 sm:rounded-2xl sm:px-3 sm:py-2">
+          <div className="flex min-h-10 w-32 max-w-full items-center gap-2 rounded-lg border border-emerald-300/15 bg-black/25 px-2 py-1.5 text-left sm:w-40 sm:rounded-xl sm:px-2.5 sm:py-2">
             <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-emerald-300/25 bg-emerald-300/10 text-xs text-emerald-100 sm:h-8 sm:w-8 sm:text-sm">
               ◇
             </div>
@@ -1329,7 +1329,7 @@ export function ChatClient({
             event.preventDefault();
             showPrivacyWarning();
           }}
-          className="group relative h-28 w-32 max-w-full overflow-hidden rounded-2xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_24px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48"
+          className="group relative h-28 w-32 max-w-full overflow-hidden rounded-xl border border-emerald-300/15 bg-neutral-950 text-center shadow-[0_0_20px_rgba(16,185,129,0.10)] disabled:cursor-default sm:h-40 sm:w-48 sm:rounded-2xl"
         >
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(16,185,129,0.22),_rgba(0,0,0,0.88)_62%)]" />
           <span className="absolute inset-0 bg-black/30" />
@@ -1366,7 +1366,7 @@ export function ChatClient({
           controls
           playsInline
           preload="metadata"
-          className="max-h-[38dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
+          className="max-h-[38dvh] max-w-full rounded-xl object-contain sm:max-h-72 sm:rounded-2xl"
         />
       ) : (
         <Image
@@ -1377,7 +1377,7 @@ export function ChatClient({
           loading="lazy"
           quality={72}
           sizes="(min-width: 640px) 70vw, 82vw"
-          className="h-auto max-h-[38dvh] max-w-full rounded-2xl object-contain sm:max-h-72"
+          className="h-auto max-h-[38dvh] max-w-full rounded-xl object-contain sm:max-h-72 sm:rounded-2xl"
         />
       );
     }
@@ -1477,6 +1477,11 @@ export function ChatClient({
         {messages.length > 0 ? (
           messages.map((message) => {
             const isMine = message.sender_id === currentUserId;
+            const isMediaMessage =
+              Boolean(message.media_url) &&
+              (message.media_type === "image" ||
+                message.media_type === "video" ||
+                message.message_type === "private_media");
 
             return (
               <div
@@ -1484,7 +1489,11 @@ export function ChatClient({
                 className={`flex ${isMine ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[76%] overflow-hidden rounded-2xl px-2.5 py-1.5 sm:max-w-[70%] sm:rounded-3xl sm:px-4 sm:py-3 ${
+                  className={`w-fit overflow-hidden rounded-2xl px-2.5 py-1.5 sm:rounded-3xl sm:px-4 sm:py-3 ${
+                    isMediaMessage
+                      ? "max-w-[78%] sm:max-w-[70%]"
+                      : "max-w-[50%] sm:max-w-[65%]"
+                  } ${
                     isMine
                       ? "bg-white text-black"
                       : "border border-neutral-800 bg-neutral-950 text-white"
