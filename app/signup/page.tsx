@@ -4,6 +4,13 @@ import { AuthForm } from "@/app/auth/auth-form";
 import { signUp } from "@/app/auth/actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
+type ReferralOpenRpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ error: { message?: string } | null }>;
+};
+
 type SignupPageProps = {
   searchParams?: Promise<{
     ref?: string;
@@ -13,6 +20,20 @@ type SignupPageProps = {
 export default async function SignupPage({ searchParams }: SignupPageProps) {
   const params = await searchParams;
   const supabase = await createSupabaseServerClient();
+  const referralCode = params?.ref?.trim().toUpperCase();
+
+  if (referralCode) {
+    const referralRpc = supabase as unknown as ReferralOpenRpcClient;
+    const { error } = await referralRpc.rpc("record_referral_invite_open", {
+      invite_code: referralCode,
+      invite_source: "signup",
+    });
+
+    if (error) {
+      console.error("[Referral] invite open failed", error.message);
+    }
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -39,7 +60,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           alternateHref="/login"
           alternateLabel="Login"
           alternatePrompt="Already have an account?"
-          hiddenFields={params?.ref ? { referral_code: params.ref } : undefined}
+          hiddenFields={referralCode ? { referral_code: referralCode } : undefined}
           submitLabel="Sign up"
         />
       </section>

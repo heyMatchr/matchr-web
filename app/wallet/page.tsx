@@ -393,7 +393,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               <p className="text-2xl font-black text-white">
                 {referralSummary.goldEarned.toLocaleString()}
               </p>
-              <p className="mt-1 text-xs text-[#E8C46A]/70">Gold earned</p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">Referral Gold</p>
             </div>
           </div>
         </section>

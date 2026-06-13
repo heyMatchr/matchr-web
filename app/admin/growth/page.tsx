@@ -91,11 +91,12 @@ function ChartPanel({
   title: string;
 }) {
   const max = Math.max(1, ...items.map((item) => item.value));
+  const hasValues = items.some((item) => item.value > 0);
 
   return (
     <section className="rounded-3xl border border-neutral-800 bg-black/50 p-5">
       <h2 className="text-lg font-black text-white">{title}</h2>
-      {items.length ? (
+      {items.length && hasValues ? (
         <div className="mt-5 grid h-56 grid-cols-[repeat(auto-fit,minmax(34px,1fr))] items-end gap-2 border-b border-l border-neutral-800 px-3 pb-3">
           {items.map((item) => (
             <div key={item.label} className="flex min-w-0 flex-col items-center gap-2">
@@ -184,10 +185,14 @@ export default async function AdminGrowthPage() {
   const referralEvents = referralEventsResult.data ?? [];
   const referralRewards = referralRewardsResult.data ?? [];
   const inviteEvents = referralEvents.filter((event) => event.event_type === "invite_sent");
+  const inviteOpenEvents = referralEvents.filter(
+    (event) => event.event_type === "invite_opened",
+  );
   const joinEvents = referralEvents.filter((event) => event.event_type === "join");
-  const goldRewards = referralRewards.filter((reward) =>
+  const recordedRewards = referralRewards.filter((reward) =>
     reward.status === "earned" || reward.status === "paid",
   );
+  const paidRewards = referralRewards.filter((reward) => reward.status === "paid");
   const topInviterStats = new Map<
     string,
     { gold: number; invites: number; joins: number }
@@ -217,7 +222,7 @@ export default async function AdminGrowthPage() {
       joins: current.joins + 1,
     });
   });
-  goldRewards.forEach((reward) => {
+  recordedRewards.forEach((reward) => {
     const current = topInviterStats.get(reward.inviter_user_id) ?? {
       gold: 0,
       invites: 0,
@@ -253,7 +258,18 @@ export default async function AdminGrowthPage() {
     { label: "Messages", value: messagesResult.count ?? 0 },
     { label: "Gifts", value: giftsResult.count ?? 0 },
   ];
-  const rewardGold = sum(goldRewards.map((reward) => Number(reward.gold_amount ?? 0)));
+  const recordedRewardGold = sum(
+    recordedRewards.map((reward) => Number(reward.gold_amount ?? 0)),
+  );
+  const paidRewardGold = sum(
+    paidRewards.map((reward) => Number(reward.gold_amount ?? 0)),
+  );
+  const hasReferralData =
+    inviteEvents.length > 0 ||
+    inviteOpenEvents.length > 0 ||
+    joinEvents.length > 0 ||
+    recordedRewardGold > 0 ||
+    paidRewardGold > 0;
 
   return (
     <AppShell
@@ -274,12 +290,22 @@ export default async function AdminGrowthPage() {
             Track invite momentum, joined users, referral reward records, and
             the discovery path from views to gifts.
           </p>
+          {!hasReferralData ? (
+            <p className="mt-4 rounded-2xl border border-neutral-800 bg-white/[0.03] px-4 py-3 text-sm text-neutral-400">
+              No referral data yet
+            </p>
+          ) : null}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-4">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Invites sent" value={inviteEvents.length.toLocaleString()} />
+          <StatCard label="Invite opens" value={inviteOpenEvents.length.toLocaleString()} />
           <StatCard label="Successful joins" value={joinEvents.length.toLocaleString()} />
-          <StatCard label="Gold rewards" value={rewardGold.toLocaleString()} />
+          <StatCard
+            label="Rewards recorded"
+            value={recordedRewardGold.toLocaleString()}
+          />
+          <StatCard label="Rewards paid" value={paidRewardGold.toLocaleString()} />
           <StatCard label="Top inviters" value={topInviters.length.toLocaleString()} />
         </section>
 
@@ -292,6 +318,13 @@ export default async function AdminGrowthPage() {
             title="Invites sent"
           />
           <ChartPanel
+            items={groupCountByDay(inviteOpenEvents).map((item) => ({
+              label: item.label,
+              value: item.value,
+            }))}
+            title="Invite opens"
+          />
+          <ChartPanel
             items={groupCountByDay(joinEvents).map((item) => ({
               label: item.label,
               value: item.value,
@@ -299,15 +332,15 @@ export default async function AdminGrowthPage() {
             title="Successful joins"
           />
           <ChartPanel
-            items={groupCountByDay(goldRewards).map((item) => ({
+            items={groupCountByDay(recordedRewards).map((item) => ({
               label: item.label,
               value: sum(
-                goldRewards
+                recordedRewards
                   .filter((reward) => dayKey(reward.created_at) === item.date)
                   .map((reward) => Number(reward.gold_amount ?? 0)),
               ),
             }))}
-            title="Gold rewards paid"
+            title="Gold rewards recorded"
           />
           <ChartPanel items={funnelItems} title="Discovery funnel" />
         </section>
@@ -326,7 +359,7 @@ export default async function AdminGrowthPage() {
                   </p>
                   <p>{inviter.stats.invites.toLocaleString()} invites</p>
                   <p>{inviter.stats.joins.toLocaleString()} joins</p>
-                  <p>{inviter.stats.gold.toLocaleString()} Gold</p>
+                  <p>{inviter.stats.gold.toLocaleString()} Referral Gold</p>
                 </div>
               ))
             ) : (

@@ -57,15 +57,15 @@ export default async function ReferralsPage() {
             Invite privately
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
-            Share Matchr with people who fit the room. Rewards are tracked here
-            before they are applied to Gold balance.
+            Share Matchr with people who fit the room. Referral Gold is tracked
+            here as a private reward ledger.
           </p>
         </section>
 
         <section className="grid gap-3 sm:grid-cols-3">
           <StatCard label="Invites" value={summary.invites.toLocaleString()} />
           <StatCard label="Joins" value={summary.joins.toLocaleString()} />
-          <StatCard label="Gold earned" value={summary.goldEarned.toLocaleString()} />
+          <StatCard label="Referral Gold" value={summary.goldEarned.toLocaleString()} />
         </section>
 
         <ReferralDashboardClient inviteUrl={inviteUrl} />
