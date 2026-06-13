@@ -4,6 +4,8 @@ import type { Database, PaymentProviderRow } from "@/lib/supabase/types";
 
 type Supabase = SupabaseClient<Database>;
 
+const PUBLIC_CHECKOUT_PROVIDER_KEYS = new Set(["paystack"]);
+
 export async function getAvailablePaymentProviders(
   supabase: Supabase,
   _userCountry?: string | null,
@@ -19,13 +21,6 @@ export async function getAvailablePaymentProviders(
     .order("priority", { ascending: true })
     .order("name", { ascending: true });
 
-  console.info("[PaymentProviders] Supabase provider query result", {
-    count: data?.length ?? 0,
-    currency: _currency,
-    keys: data?.map((provider) => provider.provider_key) ?? [],
-    userCountry: _userCountry ?? null,
-  });
-
   if (error) {
     console.error("[PaymentProviders] Supabase provider query error", {
       currency: _currency,
@@ -35,12 +30,9 @@ export async function getAvailablePaymentProviders(
     throw new Error(error.message);
   }
 
-  console.info("[PaymentProviders] providers returned from helper", {
-    count: data?.length ?? 0,
-    keys: data?.map((provider) => provider.provider_key) ?? [],
-  });
-
-  return data ?? [];
+  return (data ?? []).filter((provider) =>
+    PUBLIC_CHECKOUT_PROVIDER_KEYS.has(provider.provider_key),
+  );
 }
 
 export function isProviderAvailable(
