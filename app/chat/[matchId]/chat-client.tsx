@@ -185,6 +185,18 @@ function parseCallMessage(content?: string | null) {
   };
 }
 
+function isCallMessageVariant(message: Pick<MessageRow, "content" | "message_type">) {
+  if (message.message_type === "call_event" || message.message_type === "call") {
+    return true;
+  }
+
+  const normalizedContent = (message.content ?? "").trim().toLowerCase();
+
+  return /^(missed |not answered )?(audio|video) call\b/.test(
+    normalizedContent,
+  );
+}
+
 function createGiftRequestId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID();
@@ -1243,6 +1255,39 @@ export function ChatClient({
     }
   }
 
+  function renderCompactCallBubble(
+    message: LocalMessage,
+    timestamp: string,
+    timestampClassName: string,
+  ) {
+    const callMessage = parseCallMessage(message.content);
+    const isVideoCall = callMessage.callType === "video";
+    const title =
+      callMessage.status === "Missed" || callMessage.status === "No answer"
+        ? `Missed ${callMessage.callType} call`
+        : callMessage.title;
+
+    return (
+      <div className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap leading-none sm:gap-2">
+        <span
+          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border sm:h-6 sm:w-6 ${
+            isVideoCall
+              ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+              : "border-neutral-700 bg-black/20 text-neutral-200"
+          }`}
+        >
+          {isVideoCall ? <VideoCallBubbleIcon /> : <AudioCallBubbleIcon />}
+        </span>
+        <span className="truncate text-xs font-medium sm:text-sm">{title}</span>
+        <span
+          className={`shrink-0 text-[10px] leading-none sm:text-[11px] ${timestampClassName}`}
+        >
+          {timestamp}
+        </span>
+      </div>
+    );
+  }
+
   function renderMessageContent(message: LocalMessage, timestamp: string) {
     const isMine = message.sender_id === currentUserId;
     const isPrivate = message.message_type === "private_media";
@@ -1261,47 +1306,8 @@ export function ChatClient({
       message.expires_at &&
       new Date(message.expires_at).getTime() <= now;
 
-    if (message.message_type === "call_event") {
-      const callMessage = parseCallMessage(message.content);
-      const isVideoCall = callMessage.callType === "video";
-
-      return (
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
-              isVideoCall
-                ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
-                : "border-neutral-700 bg-black/25 text-neutral-200"
-            }`}
-          >
-            {isVideoCall ? <VideoCallBubbleIcon /> : <AudioCallBubbleIcon />}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate text-xs font-semibold sm:text-sm">
-              {callMessage.status === "Missed" ||
-              callMessage.status === "No answer"
-                ? `Missed ${callMessage.callType} call`
-                : callMessage.title}
-            </span>
-            <span className="block text-[10px] leading-4 text-neutral-500 sm:text-[11px]">
-              {callMessage.status === "Missed" ||
-              callMessage.status === "No answer"
-                ? "0 Gold"
-                : null}
-              <span
-                className={`inline-block whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass} ${
-                  callMessage.status === "Missed" ||
-                  callMessage.status === "No answer"
-                    ? "ml-2"
-                    : ""
-                }`}
-              >
-                {timestamp}
-              </span>
-            </span>
-          </span>
-        </div>
-      );
+    if (isCallMessageVariant(message)) {
+      return renderCompactCallBubble(message, timestamp, mutedTimestampClass);
     }
 
     if (SYSTEM_MESSAGE_TYPES.has(message.message_type)) {
@@ -1316,9 +1322,7 @@ export function ChatClient({
             ? "Story reply"
             : message.message_type === "gift_reaction"
               ? "Gift reaction"
-              : message.message_type === "call_event"
-                ? "Call"
-                : "Activity";
+              : "Activity";
 
       return (
         <div className="min-w-0">
@@ -1598,7 +1602,9 @@ export function ChatClient({
               (message.media_type === "image" ||
                 message.media_type === "video" ||
                 message.message_type === "private_media");
+            const isCallMessage = isCallMessageVariant(message);
             const isTextMessage =
+              !isCallMessage &&
               !SYSTEM_MESSAGE_TYPES.has(message.message_type) &&
               message.message_type !== "gift" &&
               !isMediaMessage;
@@ -1618,6 +1624,7 @@ export function ChatClient({
                 <div
                   onClick={
                     !isMine &&
+                    !isCallMessage &&
                     !isMediaMessage &&
                     activeReportMessageId !== message.id
                       ? () => setActiveReportMessageId(message.id)
@@ -1628,6 +1635,8 @@ export function ChatClient({
                       ? `max-w-[50%] rounded-[1.05rem] px-2.5 py-1 sm:max-w-[65%] sm:rounded-2xl sm:px-3 sm:py-1.5 ${
                           !isMine ? "cursor-pointer" : ""
                         }`
+                      : isCallMessage
+                        ? "max-w-[50%] rounded-full px-2 py-1 sm:max-w-[65%] sm:px-2.5 sm:py-1.5"
                       : `rounded-2xl px-2.5 py-1.5 sm:rounded-3xl sm:px-4 sm:py-3 ${
                           isMediaMessage
                             ? "max-w-[78%] sm:max-w-[70%]"
