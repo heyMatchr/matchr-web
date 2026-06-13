@@ -2,10 +2,21 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppShell } from "@/app/_components/app-shell";
+import { StatusBadge } from "@/app/_components/status-badge";
+import {
+  DEFAULT_MESSAGE_RULES,
+  getEconomyConfig,
+} from "@/lib/economy";
 import {
   GENDER_IDENTITY_OPTIONS,
   SEXUAL_ORIENTATION_OPTIONS,
 } from "@/lib/identity";
+import { isActivePremiumSubscription } from "@/lib/premium";
+import {
+  calculatePremiumValueRecap,
+  getPremiumRenewalCopy,
+  getPremiumRenewalState,
+} from "@/lib/premium-retention";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { saveSettings, unblockUser } from "./actions";
@@ -65,24 +76,80 @@ export default async function SettingsPage() {
     redirect("/onboarding");
   }
 
+  const now = new Date();
+  const nowMs = now.getTime();
+  const sevenDaysAgo = new Date(now);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const [
     settingsResult,
     blocksResult,
     reportsResult,
     mutedResult,
     hiddenResult,
-    walletResult,
-    premiumResult,
+    premiumSubscriptionsResult,
+    premiumSubscriptionsHistoryResult,
+    messageChargesResult,
+    messageRules,
   ] = await Promise.all([
     supabase.from("user_settings").select("*").eq("user_id", user.id).maybeSingle(),
     supabase.from("blocks").select("blocked_user_id, created_at").eq("blocker_id", user.id),
     supabase.from("user_reports").select("reported_user_id, category, status, created_at").eq("reporter_id", user.id).order("created_at", { ascending: false }),
     supabase.from("muted_users").select("muted_user_id, created_at").eq("muter_id", user.id),
     supabase.from("hidden_users").select("hidden_user_id, created_at").eq("hider_id", user.id),
-    supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
-    supabase.from("premium_subscriptions").select("plan_name, status, price_usd, interval, expires_at").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("premium_subscriptions")
+      .select("plan_name, status, price_usd, interval, expires_at")
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .order("expires_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("premium_subscriptions")
+      .select("plan_name, status, created_at, expires_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("message_charges")
+      .select("gold_cost, created_at")
+      .eq("sender_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(supabase, "message_rules"),
   ]);
   const settings = { ...defaults, ...(settingsResult.data ?? {}) };
+  const normalizedMessageRules = { ...DEFAULT_MESSAGE_RULES, ...messageRules };
+  const standardMessageCost = Math.max(
+    0,
+    Number(
+      normalizedMessageRules.male_message_cost ??
+        normalizedMessageRules.male_to_female ??
+        5,
+    ),
+  );
+  const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
+    isActivePremiumSubscription(subscription),
+  );
+  const premiumWindows = (premiumSubscriptionsHistoryResult.data ?? []).filter(
+    (subscription) => subscription.status === "active",
+  );
+  const latestPremiumWindow = premiumWindows[0] ?? null;
+  const premiumValueRecap = calculatePremiumValueRecap({
+    charges: messageChargesResult.data ?? [],
+    monthStartMs: monthStart.getTime(),
+    nowMs,
+    premiumWindows,
+    recentStartMs: sevenDaysAgo.getTime(),
+    standardMessageCost,
+  });
+  const premiumRenewalState = getPremiumRenewalState(
+    activePremium?.expires_at ?? latestPremiumWindow?.expires_at,
+    nowMs,
+  );
+  const premiumRenewalCopy = getPremiumRenewalCopy(
+    activePremium || latestPremiumWindow ? premiumRenewalState : "active",
+  );
   const relatedIds = [
     ...(blocksResult.data?.map((row) => row.blocked_user_id) ?? []),
     ...(mutedResult.data?.map((row) => row.muted_user_id) ?? []),
@@ -217,14 +284,50 @@ export default async function SettingsPage() {
         </SettingsSection>
 
         <SettingsSection title="Premium">
-          <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-4">
-            <p className="text-[15px] leading-6 text-neutral-300">Current plan</p>
-            <p className="mt-1 text-2xl font-black">{premiumResult.data?.plan_name ?? "Free"}</p>
-            <p className="mt-1 text-[15px] leading-6 text-neutral-300">{walletResult.data?.gold_balance ?? 0} gold</p>
+          <div className="rounded-2xl border border-[#C8A24A]/25 bg-[#C8A24A]/10 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+                  Subscription center
+                </p>
+                <p className="mt-2 text-2xl font-black">
+                  {activePremium?.plan_name ?? premiumRenewalCopy.title}
+                </p>
+                <p className="mt-1 text-[15px] leading-6 text-[#E8C46A]/75">
+                  {activePremium?.expires_at
+                    ? formatSettingsPremiumExpiry(activePremium.expires_at, nowMs)
+                    : premiumRenewalCopy.body}
+                </p>
+              </div>
+              {activePremium ? <StatusBadge type="premium" /> : null}
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl border border-[#C8A24A]/20 bg-black/25 p-3">
+                <p className="text-xl font-black text-white">
+                  {premiumValueRecap.goldSavedThisMonth.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[#E8C46A]/70">Gold saved this month</p>
+              </div>
+              <div className="rounded-2xl border border-[#C8A24A]/20 bg-black/25 p-3">
+                <p className="text-xl font-black text-white">
+                  {premiumValueRecap.discountedMessagesThisMonth.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[#E8C46A]/70">Discounted messages</p>
+              </div>
+              <div className="rounded-2xl border border-[#C8A24A]/20 bg-black/25 p-3">
+                <p className="text-xl font-black text-white">
+                  {premiumValueRecap.daysActiveThisMonth.toLocaleString()}
+                </p>
+                <p className="mt-1 text-xs text-[#E8C46A]/70">Days active</p>
+              </div>
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Link href="/wallet" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">Wallet</Link>
-              <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Upgrade</button>
-              <button className="rounded-full border border-emerald-200/30 px-4 py-2 text-sm text-emerald-100">Buy Gold</button>
+              <Link href="/wallet#premium" className="rounded-full bg-white px-4 py-2 text-sm font-medium text-black">
+                {activePremium ? premiumRenewalCopy.cta : "Upgrade"}
+              </Link>
+              <Link href="/wallet#gold-packages" className="rounded-full border border-[#C8A24A]/30 px-4 py-2 text-sm text-[#E8C46A]">
+                Buy Gold
+              </Link>
             </div>
           </div>
           {["Cheaper messages", "Profile boost", "Advanced filters", "Unlimited story viewers", "Read insights", "Profile analytics", "Priority discover ranking"].map((perk) => (
@@ -243,6 +346,21 @@ function SettingsSection({ children, title }: { children: ReactNode; title: stri
       <div className="mt-4 grid gap-4">{children}</div>
     </section>
   );
+}
+
+function formatSettingsPremiumExpiry(expiresAt: string | null, nowMs: number) {
+  if (!expiresAt) {
+    return "Premium active";
+  }
+
+  const milliseconds = new Date(expiresAt).getTime() - nowMs;
+
+  if (milliseconds <= 0) {
+    return "Premium ended";
+  }
+
+  const days = Math.ceil(milliseconds / (24 * 60 * 60 * 1000));
+  return `Ends in ${days} day${days === 1 ? "" : "s"}`;
 }
 
 function Toggle({ defaultChecked, name, title }: { defaultChecked: boolean; name: string; title: string }) {

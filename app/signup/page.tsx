@@ -4,7 +4,14 @@ import { AuthForm } from "@/app/auth/auth-form";
 import { signUp } from "@/app/auth/actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function SignupPage() {
+type SignupPageProps = {
+  searchParams?: Promise<{
+    ref?: string;
+  }>;
+};
+
+export default async function SignupPage({ searchParams }: SignupPageProps) {
+  const params = await searchParams;
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -32,6 +39,7 @@ export default async function SignupPage() {
           alternateHref="/login"
           alternateLabel="Login"
           alternatePrompt="Already have an account?"
+          hiddenFields={params?.ref ? { referral_code: params.ref } : undefined}
           submitLabel="Sign up"
         />
       </section>

@@ -5,6 +5,13 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { AuthFormState, LogoutFormState } from "./types";
 
+type ReferralRpcClient = {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ error: { message?: string } | null }>;
+};
+
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -126,6 +133,7 @@ export async function signUp(
 ): Promise<AuthFormState> {
   const email = getFormString(formData, "email").toLowerCase();
   const password = getFormString(formData, "password");
+  const referralCode = getFormString(formData, "referral_code").toUpperCase();
   const validationError = validateCredentials(email, password);
 
   if (validationError) {
@@ -142,6 +150,7 @@ export async function signUp(
     email,
     password,
     options: {
+      data: referralCode ? { referral_code: referralCode } : undefined,
       emailRedirectTo,
     },
   });
@@ -154,6 +163,15 @@ export async function signUp(
   }
 
   if (data.session) {
+    if (referralCode && data.user?.id) {
+      const referralRpc = supabase as unknown as ReferralRpcClient;
+
+      await referralRpc.rpc("record_referral_join", {
+        invite_code: referralCode,
+        joined_user_id: data.user.id,
+      });
+    }
+
     redirect("/onboarding");
   }
 

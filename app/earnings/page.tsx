@@ -223,6 +223,7 @@ export default async function EarningsPage() {
     previousWeeklyStoriesResult,
     weeklyMomentsResult,
     previousWeeklyMomentsResult,
+    weeklyMessagesResult,
     aggregateGiftsResult,
     todayProfileViewsResult,
     todayStoryReactionsResult,
@@ -317,6 +318,11 @@ export default async function EarningsPage() {
       .eq("user_id", user.id)
       .gte("created_at", fourteenDaysAgo.toISOString())
       .lt("created_at", sevenDaysAgo.toISOString()),
+    supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .eq("receiver_id", user.id)
+      .gte("created_at", sevenDaysAgo.toISOString()),
     supabase
       .from("gift_transactions")
       .select("sender_id, gift_type, gold_cost, created_at")
@@ -419,6 +425,7 @@ export default async function EarningsPage() {
   logEarningsQueryError("previous weekly stories", previousWeeklyStoriesResult.error);
   logEarningsQueryError("weekly moments", weeklyMomentsResult.error);
   logEarningsQueryError("previous weekly moments", previousWeeklyMomentsResult.error);
+  logEarningsQueryError("weekly messages", weeklyMessagesResult.error);
   logEarningsQueryError("aggregate gifts", aggregateGiftsResult.error);
   logEarningsQueryError("today profile views", todayProfileViewsResult.error);
   logEarningsQueryError("today story reactions", todayStoryReactionsResult.error);
@@ -502,6 +509,20 @@ export default async function EarningsPage() {
   const previousWeeklyMoments = previousWeeklyMomentsResult.error
     ? 0
     : (previousWeeklyMomentsResult.count ?? 0);
+  const weeklyMessages = weeklyMessagesResult.error
+    ? 0
+    : (weeklyMessagesResult.count ?? 0);
+  const weeklySupportersGained = new Set(
+    weeklyGiftRows.map((gift) => gift.sender_id).filter(isNonEmptyString),
+  ).size;
+  const creatorGrowthSources = [
+    { label: "Profile views", value: weeklyProfileViews },
+    { label: "Followers", value: weeklyFollowers },
+    { label: "Messages", value: weeklyMessages },
+    { label: "Supporters", value: weeklySupportersGained },
+  ].sort((left, right) => right.value - left.value);
+  const strongestAcquisitionSource =
+    creatorGrowthSources.find((source) => source.value > 0)?.label ?? "Building";
   const dailyDigestCounts: DailyAttentionDigestCounts = {
     gifts: todayGiftsResult.error ? 0 : (todayGiftsResult.count ?? 0),
     messages: todayMessagesResult.error ? 0 : (todayMessagesResult.count ?? 0),
@@ -1028,6 +1049,56 @@ export default async function EarningsPage() {
           action={creatorHabitAction}
           quiet={creatorQuietLately}
         />
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-neutral-800 bg-black/50 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+              Growth
+            </p>
+            <h2 className="mt-2 text-xl font-black text-white">
+              Creator Growth
+            </h2>
+          </div>
+          <span className="rounded-full border border-[#C8A24A]/25 bg-[#C8A24A]/10 px-3 py-1 text-xs font-semibold text-[#E8C46A]">
+            {strongestAcquisitionSource}
+          </span>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-3">
+            <p className="text-xs font-medium text-neutral-500">
+              Followers gained
+            </p>
+            <p className="mt-2 text-2xl font-black text-white">
+              {weeklyFollowers.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-3">
+            <p className="text-xs font-medium text-neutral-500">
+              Profile views
+            </p>
+            <p className="mt-2 text-2xl font-black text-white">
+              {weeklyProfileViews.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-3">
+            <p className="text-xs font-medium text-neutral-500">
+              Supporters gained
+            </p>
+            <p className="mt-2 text-2xl font-black text-white">
+              {weeklySupportersGained.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-neutral-800 bg-white/[0.03] p-3">
+            <p className="text-xs font-medium text-neutral-500">
+              Strongest source
+            </p>
+            <p className="mt-2 truncate text-2xl font-black text-white">
+              {strongestAcquisitionSource}
+            </p>
+          </div>
+        </div>
       </section>
 
       <section className="mt-6 rounded-3xl border border-[#8B2FC9]/20 bg-[#8B2FC9]/10 p-4 sm:p-5">

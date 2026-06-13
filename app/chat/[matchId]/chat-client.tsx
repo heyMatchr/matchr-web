@@ -327,6 +327,24 @@ export function ChatClient({
       gender_identity: currentUserGenderIdentity,
     },
   });
+  const standardMessageGoldCost = calculateMessageCost({
+    hasPremium: false,
+    receiver: {
+      gender: receiverGender,
+      gender_identity: receiverGenderIdentity,
+    },
+    rules: { ...DEFAULT_MESSAGE_RULES, ...messageRules },
+    sender: {
+      gender: currentUserGender,
+      gender_identity: currentUserGenderIdentity,
+    },
+  });
+  const premiumGoldSaved = Math.max(0, standardMessageGoldCost - messageGoldCost);
+  const shouldShowPremiumSavings =
+    hasPremium && premiumGoldSaved > 0 && (nonSystemMessages.length + 1) % 3 === 0;
+  const premiumSendToast = shouldShowPremiumSavings
+    ? `Sent • ${premiumGoldSaved} Gold saved with Premium`
+    : `Sent • -${messageGoldCost} Gold • Premium discount applied`;
   const mobileChatHeightStyle = mobileViewportHeight
     ? {
         height: `calc(${mobileViewportHeight}px - var(--matchr-page-top-padding) - var(--matchr-page-bottom-padding) - 0.25rem)`,
@@ -815,7 +833,7 @@ export function ChatClient({
         setSpendableGold((current) => Math.max(0, current - messageGoldCost));
         setChatToast(
           hasPremium
-            ? `Sent • -${messageGoldCost} Gold • Premium discount applied`
+            ? premiumSendToast
             : `Sent • -${messageGoldCost} Gold`,
         );
       }
@@ -954,7 +972,7 @@ export function ChatClient({
         setSpendableGold((current) => Math.max(0, current - messageGoldCost));
         setChatToast(
           hasPremium
-            ? `Sent • -${messageGoldCost} Gold • Premium discount applied`
+            ? premiumSendToast
             : `Sent • -${messageGoldCost} Gold`,
         );
       }

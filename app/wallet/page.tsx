@@ -11,9 +11,15 @@ import {
 import { getAvailablePaymentProviders } from "@/lib/payment-providers";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import {
+  calculatePremiumValueRecap,
+  getPremiumRenewalCopy,
+  getPremiumRenewalState,
+} from "@/lib/premium-retention";
+import {
   getTodayStartIso,
   type DailyAttentionDigestCounts,
 } from "@/lib/retention";
+import { getReferralSummary } from "@/lib/referrals";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { activateProfileBoost, startPremiumCheckout } from "./actions";
 
@@ -65,6 +71,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   const nowMs = now.getTime();
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const [
     walletResult,
     packagesResult,
@@ -90,6 +97,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     storyReactionsTodayResult,
     giftsTodayResult,
     messagesTodayResult,
+    referralSummary,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -180,6 +188,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .select("id", { count: "exact", head: true })
       .eq("receiver_id", user.id)
       .gte("created_at", todayStartIso),
+    getReferralSummary(supabase, user.id),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
@@ -201,37 +210,25 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   const paidPremiumWindows = (premiumSubscriptionsHistoryResult.data ?? []).filter(
     (subscription) => subscription.status === "active",
   );
-  const premiumMessageSavings = (messageChargesSavingsResult.data ?? []).reduce(
-    (totals, charge) => {
-      const chargedAt = new Date(charge.created_at).getTime();
-      const happenedDuringPremium = paidPremiumWindows.some((subscription) => {
-        const startsAt = new Date(subscription.created_at).getTime();
-        const expiresAt = subscription.expires_at
-          ? new Date(subscription.expires_at).getTime()
-          : Number.POSITIVE_INFINITY;
-
-        return chargedAt >= startsAt && chargedAt <= expiresAt;
-      });
-
-      if (!happenedDuringPremium) {
-        return totals;
-      }
-
-      const saved = Math.max(0, standardMessageCost - Number(charge.gold_cost ?? 0));
-
-      return {
-        lifetime: totals.lifetime + saved,
-        recent:
-          chargedAt >= sevenDaysAgo.getTime()
-            ? totals.recent + saved
-            : totals.recent,
-      };
-    },
-    { lifetime: 0, recent: 0 },
+  const premiumValueRecap = calculatePremiumValueRecap({
+    charges: messageChargesSavingsResult.data ?? [],
+    monthStartMs: monthStart.getTime(),
+    nowMs,
+    premiumWindows: paidPremiumWindows,
+    recentStartMs: sevenDaysAgo.getTime(),
+    standardMessageCost,
+  });
+  const latestPremiumWindow = paidPremiumWindows[0] ?? null;
+  const premiumRenewalState = getPremiumRenewalState(
+    activePremium?.expires_at ?? latestPremiumWindow?.expires_at,
+    nowMs,
   );
-  const premiumExpiresSoon =
-    Boolean(activePremium?.expires_at) &&
-    new Date(activePremium?.expires_at ?? 0).getTime() - nowMs <= 3 * 24 * 60 * 60 * 1000;
+  const premiumRenewalCopy = getPremiumRenewalCopy(
+    activePremium || latestPremiumWindow ? premiumRenewalState : "active",
+  );
+  const premiumNeedsRenewal =
+    Boolean(activePremium || latestPremiumWindow) &&
+    premiumRenewalState !== "active";
   const latestPaidPaymentOrder = (paymentOrdersResult.data ?? []).find(
     (order) => order.status === "paid",
   );
@@ -362,6 +359,45 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
 
         <DailyAttentionDigest counts={dailyDigestCounts} />
 
+        <section className="rounded-3xl border border-[#C8A24A]/25 bg-[#C8A24A]/10 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-[#E8C46A]">
+                Referrals
+              </p>
+              <h2 className="mt-2 text-xl font-black text-white">
+                Invite privately
+              </h2>
+            </div>
+            <a
+              href="/referrals"
+              className="rounded-full bg-white px-4 py-2 text-sm font-black text-black"
+            >
+              Open
+            </a>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-2xl border border-[#C8A24A]/20 bg-black/25 p-3">
+              <p className="text-2xl font-black text-white">
+                {referralSummary.invites.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">Invites</p>
+            </div>
+            <div className="rounded-2xl border border-[#C8A24A]/20 bg-black/25 p-3">
+              <p className="text-2xl font-black text-white">
+                {referralSummary.joins.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">Joins</p>
+            </div>
+            <div className="rounded-2xl border border-[#C8A24A]/20 bg-black/25 p-3">
+              <p className="text-2xl font-black text-white">
+                {referralSummary.goldEarned.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">Gold earned</p>
+            </div>
+          </div>
+        </section>
+
         <section className="grid min-w-0 max-w-full gap-3 sm:grid-cols-2">
           <div className="min-w-0 rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 p-4 sm:rounded-3xl sm:p-5">
             <div className="flex min-w-0 items-start justify-between gap-3">
@@ -380,15 +416,35 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
             <div className="mt-4 grid grid-cols-2 gap-2">
               <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
                 <p className="text-2xl font-black text-white">
-                  {premiumMessageSavings.lifetime.toLocaleString()}
+                  {premiumValueRecap.goldSavedLifetime.toLocaleString()}
                 </p>
                 <p className="mt-1 text-xs text-[#E8C46A]/70">Lifetime</p>
               </div>
               <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
                 <p className="text-2xl font-black text-white">
-                  {premiumMessageSavings.recent.toLocaleString()}
+                  {premiumValueRecap.goldSavedRecent.toLocaleString()}
                 </p>
                 <p className="mt-1 text-xs text-[#E8C46A]/70">Last 7 days</p>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-[#D4AF37]/15 bg-black/20 p-3">
+                <p className="text-lg font-black text-white">
+                  {premiumValueRecap.goldSavedThisMonth.toLocaleString()}
+                </p>
+                <p className="mt-1 text-[11px] text-[#E8C46A]/70">This month</p>
+              </div>
+              <div className="rounded-2xl border border-[#D4AF37]/15 bg-black/20 p-3">
+                <p className="text-lg font-black text-white">
+                  {premiumValueRecap.discountedMessagesThisMonth.toLocaleString()}
+                </p>
+                <p className="mt-1 text-[11px] text-[#E8C46A]/70">Discounted</p>
+              </div>
+              <div className="rounded-2xl border border-[#D4AF37]/15 bg-black/20 p-3">
+                <p className="text-lg font-black text-white">
+                  {premiumValueRecap.daysActiveThisMonth.toLocaleString()}
+                </p>
+                <p className="mt-1 text-[11px] text-[#E8C46A]/70">Days active</p>
               </div>
             </div>
           </div>
@@ -400,11 +456,16 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                   Premium value
                 </p>
                 <h2 className="mt-2 text-xl font-black text-white">
-                  {activePremium ? "Premium Active" : "Premium available"}
+                  {activePremium ? premiumRenewalCopy.title : "Premium available"}
                 </h2>
               </div>
               {activePremium ? <PremiumPill /> : null}
             </div>
+            <p className="mt-3 text-sm leading-6 text-neutral-300">
+              {activePremium || latestPremiumWindow
+                ? premiumRenewalCopy.body
+                : "Unlock discounts, status, and priority visibility."}
+            </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {[
                 "Discounted Messages",
@@ -421,12 +482,12 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 </span>
               ))}
             </div>
-            {premiumExpiresSoon ? (
+            {premiumNeedsRenewal ? (
               <a
                 href="#premium"
                 className="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-black text-black"
               >
-                Keep Premium Active
+                {premiumRenewalCopy.cta}
               </a>
             ) : null}
           </div>
@@ -498,6 +559,45 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
                 {eliteProgress.nextLevelText}
               </p>
             ) : null}
+          </div>
+          <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-3">
+            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#E8C46A]/70">
+                Milestone
+              </p>
+              <p className="mt-2 text-sm font-black text-white">
+                Elite level reached
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">
+                {eliteProgress.currentLabel}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#E8C46A]/70">
+                Signature
+              </p>
+              <p className="mt-2 text-sm font-black text-white">
+                Signature gift unlocked
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">
+                {eliteProgress.currentLabel === "Private"
+                  ? "Reach Elite to unlock"
+                  : "Available in gift pickers"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#D4AF37]/20 bg-black/25 p-3">
+              <p className="text-xs uppercase tracking-[0.18em] text-[#E8C46A]/70">
+                Next
+              </p>
+              <p className="mt-2 text-sm font-black text-white">
+                Gold remaining
+              </p>
+              <p className="mt-1 text-xs text-[#E8C46A]/70">
+                {eliteProgress.remainingGold > 0
+                  ? `${eliteProgress.remainingGold.toLocaleString()} to ${eliteProgress.nextLevelText}`
+                  : "Top level reached"}
+              </p>
+            </div>
           </div>
         </section>
 
@@ -691,7 +791,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               </span>
             ))}
           </div>
-          {!activePremium || premiumExpiresSoon ? (
+          {!activePremium || premiumNeedsRenewal ? (
             <details className="mt-4 min-w-0 rounded-2xl border border-neutral-800 bg-white/[0.03] p-3.5 sm:p-4">
               <summary className="cursor-pointer list-none text-sm font-black text-white">
                 Premium plans
