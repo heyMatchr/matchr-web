@@ -1278,16 +1278,23 @@ export function ChatClient({
           </span>
           <span className="min-w-0">
             <span className="block truncate text-xs font-semibold sm:text-sm">
-              {callMessage.status === "Missed"
+              {callMessage.status === "Missed" ||
+              callMessage.status === "No answer"
                 ? `Missed ${callMessage.callType} call`
                 : callMessage.title}
             </span>
             <span className="block text-[10px] leading-4 text-neutral-500 sm:text-[11px]">
-              {callMessage.status === "Missed"
+              {callMessage.status === "Missed" ||
+              callMessage.status === "No answer"
                 ? "0 Gold"
-                : callMessage.status}
+                : null}
               <span
-                className={`ml-2 inline-block whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass}`}
+                className={`inline-block whitespace-nowrap text-[10px] leading-none sm:text-[11px] ${mutedTimestampClass} ${
+                  callMessage.status === "Missed" ||
+                  callMessage.status === "No answer"
+                    ? "ml-2"
+                    : ""
+                }`}
               >
                 {timestamp}
               </span>
