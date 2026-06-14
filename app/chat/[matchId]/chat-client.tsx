@@ -78,6 +78,16 @@ type PrivateMediaWatermark = {
   viewed_at: string;
 };
 
+type PrivateMediaDebugState = {
+  imageLoadStatus: "idle" | "loading" | "loaded" | "error";
+  mediaType: string | null;
+  naturalHeight: number | null;
+  naturalWidth: number | null;
+  signedUrlCheckStatus: number | null;
+  signedUrlExists: boolean;
+  storagePath: string | null;
+};
+
 type ChatClientProps = {
   activeGiftStreakDays: number | null;
   anonKey: string;
@@ -131,6 +141,7 @@ const conversationTones: ConversationTone[] = [
 ];
 
 const CONVERSATION_DORMANT_AFTER_MS = 1000 * 60 * 60 * 24 * 3;
+const SHOW_PRIVATE_MEDIA_DEBUG = process.env.NODE_ENV !== "production";
 
 type GiftAnalyticsRpcClient = {
   rpc: (
@@ -259,6 +270,11 @@ export function ChatClient({
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
+  const [activePrivateMediaError, setActivePrivateMediaError] = useState("");
+  const [activePrivateMediaRetryCount, setActivePrivateMediaRetryCount] =
+    useState(0);
+  const [activePrivateMediaDebug, setActivePrivateMediaDebug] =
+    useState<PrivateMediaDebugState | null>(null);
   const [activePrivateWatermark, setActivePrivateWatermark] =
     useState<PrivateMediaWatermark | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -1188,7 +1204,11 @@ export function ChatClient({
   }
 
   async function getPrivateMediaSignedUrl(messageId: string): Promise<{
+    debug: Omit<PrivateMediaDebugState, "imageLoadStatus" | "naturalHeight" | "naturalWidth"> | null;
     expires_at: string | null;
+    mediaType: string | null;
+    signedUrl: string;
+    storagePath: string | null;
     url: string;
     viewed_at: string | null;
     watermark: PrivateMediaWatermark;
@@ -1207,18 +1227,39 @@ export function ChatClient({
 
     const result = (await response.json()) as {
       expires_at?: string | null;
+      mediaType?: string | null;
+      signedUrl?: string;
+      storagePath?: string | null;
       url?: string;
       viewed_at?: string | null;
       watermark?: Partial<PrivateMediaWatermark> | null;
+      debug?: {
+        mediaType?: string | null;
+        signedUrlCheckStatus?: number | null;
+        signedUrlExists?: boolean;
+        storagePath?: string | null;
+      } | null;
     };
+    const signedUrl = result.signedUrl ?? result.url;
 
-    if (!result.url || !result.watermark?.text) {
+    if (!signedUrl || !result.watermark?.text) {
       throw new Error("Private media could not be opened.");
     }
 
     return {
+      debug: result.debug
+        ? {
+            mediaType: result.debug.mediaType ?? result.mediaType ?? null,
+            signedUrlCheckStatus: result.debug.signedUrlCheckStatus ?? null,
+            signedUrlExists: Boolean(result.debug.signedUrlExists),
+            storagePath: result.debug.storagePath ?? result.storagePath ?? null,
+          }
+        : null,
       expires_at: result.expires_at ?? null,
-      url: result.url,
+      mediaType: result.mediaType ?? null,
+      signedUrl,
+      storagePath: result.storagePath ?? null,
+      url: signedUrl,
       viewed_at: result.viewed_at ?? null,
       watermark: {
         display_name: result.watermark.display_name ?? "Matchr member",
@@ -1251,7 +1292,18 @@ export function ChatClient({
         viewed_at: signedMedia.viewed_at ?? openedAt.toISOString(),
       };
 
-      setActivePrivateMediaUrl(signedMedia.url);
+      setActivePrivateMediaUrl(signedMedia.signedUrl);
+      setActivePrivateMediaError("");
+      setActivePrivateMediaRetryCount(0);
+      setActivePrivateMediaDebug({
+        imageLoadStatus: "loading",
+        mediaType: signedMedia.debug?.mediaType ?? signedMedia.mediaType,
+        naturalHeight: null,
+        naturalWidth: null,
+        signedUrlCheckStatus: signedMedia.debug?.signedUrlCheckStatus ?? null,
+        signedUrlExists: Boolean(signedMedia.signedUrl),
+        storagePath: signedMedia.debug?.storagePath ?? signedMedia.storagePath,
+      });
       setActivePrivateWatermark(signedMedia.watermark);
       updateReadReceipt(updatedMessage);
       setNow(openedAt.getTime());
@@ -1272,6 +1324,9 @@ export function ChatClient({
         );
         setActivePrivateMessage(null);
         setActivePrivateMediaUrl("");
+        setActivePrivateMediaError("");
+        setActivePrivateMediaRetryCount(0);
+        setActivePrivateMediaDebug(null);
         setActivePrivateWatermark(null);
         void insertSystemMessage("private_media_expired", "Private media expired.");
       }, 15500);
@@ -1282,6 +1337,18 @@ export function ChatClient({
           : "Private media could not be opened.",
       );
     }
+  }
+
+  function retryActivePrivateMediaLoad() {
+    if (!activePrivateMediaUrl || activePrivateMediaRetryCount >= 1) {
+      return;
+    }
+
+    setActivePrivateMediaError("");
+    setActivePrivateMediaRetryCount((current) => current + 1);
+    setActivePrivateMediaDebug((current) =>
+      current ? { ...current, imageLoadStatus: "loading" } : current,
+    );
   }
 
   function renderCompactCallBubble(
@@ -2335,11 +2402,8 @@ export function ChatClient({
         <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
           <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
             <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
-              <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs uppercase tracking-[0.24em] text-emerald-100 backdrop-blur">
-                Private
-              </div>
-              <div className="grid h-12 w-12 place-items-center rounded-full border border-emerald-200/30 bg-black/55 text-xl font-black text-white backdrop-blur">
-                {activePrivateSeconds}
+              <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100 backdrop-blur">
+                Private • {activePrivateSeconds}s
               </div>
             </div>
             <div className="absolute left-4 right-4 top-20 z-20 h-1 overflow-hidden rounded-full bg-white/15">
@@ -2351,6 +2415,7 @@ export function ChatClient({
             <div className="flex flex-1 items-center justify-center bg-black">
               {activePrivateMessage.media_type === "video" ? (
                 <video
+                  key={`private-video-${activePrivateMediaRetryCount}`}
                   src={activePrivateMediaUrl}
                   autoPlay
                   muted
@@ -2362,24 +2427,113 @@ export function ChatClient({
                     event.preventDefault();
                     showPrivacyWarning();
                   }}
+                  onError={() => {
+                    setActivePrivateMediaError("Private media could not load.");
+                    setActivePrivateMediaDebug((current) =>
+                      current
+                        ? { ...current, imageLoadStatus: "error" }
+                        : current,
+                    );
+                  }}
+                  onLoadedMetadata={(event) => {
+                    setActivePrivateMediaError("");
+                    setActivePrivateMediaDebug((current) =>
+                      current
+                        ? {
+                            ...current,
+                            imageLoadStatus: "loaded",
+                            naturalHeight: event.currentTarget.videoHeight || null,
+                            naturalWidth: event.currentTarget.videoWidth || null,
+                          }
+                        : current,
+                    );
+                  }}
                   className="max-h-full w-full object-contain"
                 />
               ) : (
-                <Image
+                // Signed private-media URLs use Supabase /object/sign paths, which
+                // must not go through the Next image optimizer.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`private-image-${activePrivateMediaRetryCount}`}
                   src={activePrivateMediaUrl}
                   alt=""
-                  width={900}
-                  height={1200}
-                  sizes="(min-width: 640px) 448px, 100vw"
                   draggable={false}
                   onContextMenu={(event) => {
                     event.preventDefault();
                     showPrivacyWarning();
                   }}
+                  onError={() => {
+                    setActivePrivateMediaError(
+                      "Private media could not load. Try once more.",
+                    );
+                    setActivePrivateMediaDebug((current) =>
+                      current
+                        ? { ...current, imageLoadStatus: "error" }
+                        : current,
+                    );
+                  }}
+                  onLoad={(event) => {
+                    setActivePrivateMediaError("");
+                    setActivePrivateMediaDebug((current) =>
+                      current
+                        ? {
+                            ...current,
+                            imageLoadStatus: "loaded",
+                            naturalHeight:
+                              event.currentTarget.naturalHeight || null,
+                            naturalWidth:
+                              event.currentTarget.naturalWidth || null,
+                          }
+                        : current,
+                    );
+                  }}
                   className="h-auto max-h-full w-full object-contain"
                 />
               )}
             </div>
+            {SHOW_PRIVATE_MEDIA_DEBUG && activePrivateMediaDebug ? (
+              <div className="absolute left-3 top-28 z-40 max-w-[calc(100%-1.5rem)] rounded-2xl border border-white/15 bg-black/80 p-3 text-[11px] text-white/80 shadow-xl backdrop-blur">
+                <p className="font-semibold text-emerald-100">Private media debug</p>
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                  <dt className="text-white/45">signedUrl</dt>
+                  <dd>{activePrivateMediaDebug.signedUrlExists ? "yes" : "no"}</dd>
+                  <dt className="text-white/45">mediaType</dt>
+                  <dd>{activePrivateMediaDebug.mediaType ?? "unknown"}</dd>
+                  <dt className="text-white/45">storagePath</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.storagePath ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">server fetch</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedUrlCheckStatus ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">image</dt>
+                  <dd>{activePrivateMediaDebug.imageLoadStatus}</dd>
+                  <dt className="text-white/45">size</dt>
+                  <dd>
+                    {activePrivateMediaDebug.naturalWidth &&
+                    activePrivateMediaDebug.naturalHeight
+                      ? `${activePrivateMediaDebug.naturalWidth}x${activePrivateMediaDebug.naturalHeight}`
+                      : "unknown"}
+                  </dd>
+                </dl>
+              </div>
+            ) : null}
+            {activePrivateMediaError ? (
+              <div className="absolute inset-x-5 top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-red-400/25 bg-black/80 p-4 text-center text-sm text-red-100 backdrop-blur">
+                <p>{activePrivateMediaError}</p>
+                {activePrivateMediaRetryCount < 1 ? (
+                  <button
+                    type="button"
+                    onClick={retryActivePrivateMediaLoad}
+                    className="mt-3 rounded-full border border-red-200/30 px-3 py-1 text-xs font-semibold text-red-50"
+                  >
+                    Try once more
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {activePrivateWatermark ? (
               <PrivateMediaWatermarkOverlay
                 isVideo={activePrivateMessage.media_type === "video"}
@@ -2396,8 +2550,8 @@ export function ChatClient({
                 </div>
               </div>
             ) : null}
-            <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-white/10 bg-black/50 p-3 text-center text-xs text-neutral-300 backdrop-blur">
-              Visible once. Browser protections are best effort.
+            <div className="absolute bottom-4 left-4 right-4 text-center text-xs font-medium uppercase tracking-[0.18em] text-white/45">
+              View once.
             </div>
           </div>
         </div>
@@ -2414,10 +2568,9 @@ function PrivateMediaWatermarkOverlay({
   watermark: string;
 }) {
   const positions = [
-    "left-[8%] top-[18%]",
-    "right-[6%] top-[34%]",
-    "left-[12%] bottom-[28%]",
-    "right-[12%] bottom-[14%]",
+    "left-[8%] top-[20%]",
+    "right-[8%] top-[48%]",
+    "left-[12%] bottom-[18%]",
   ];
 
   if (isVideo) {
@@ -2433,7 +2586,7 @@ function PrivateMediaWatermarkOverlay({
           }
         `}</style>
         <div
-          className="absolute max-w-[82%] rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45 backdrop-blur-[2px] sm:text-xs"
+          className="absolute max-w-[82%] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/[0.09] sm:text-xs"
           style={{ animation: "matchr-private-watermark-drift 9s linear infinite" }}
         >
           {watermark}
@@ -2447,7 +2600,7 @@ function PrivateMediaWatermarkOverlay({
       {positions.map((position, index) => (
         <div
           key={`${position}-${index}`}
-          className={`absolute ${position} max-w-[76%] -rotate-12 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/35 backdrop-blur-[1px] sm:text-xs`}
+          className={`absolute ${position} max-w-[76%] -rotate-12 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/[0.08] sm:text-xs`}
         >
           {watermark}
         </div>
