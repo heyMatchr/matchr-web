@@ -26,6 +26,17 @@ type WatermarkInsertClient = {
   };
 };
 
+type PrivateMediaApiDebug = {
+  API_ERROR: string | null;
+  API_REACHED: boolean;
+  MEDIA_URL_RAW: string | null;
+  MESSAGE_FOUND: boolean;
+  MESSAGE_ID: string;
+  NORMALIZED_STORAGE_PATH: string | null;
+  SIGNING_ATTEMPTED: boolean;
+  SIGNING_SUCCESS: boolean;
+};
+
 function formatWatermarkTimestamp(value: Date) {
   return value.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
 }
@@ -157,13 +168,37 @@ export async function GET(
   { params }: { params: Promise<{ messageId: string }> },
 ) {
   const { messageId } = await params;
+  const apiDebug: PrivateMediaApiDebug = {
+    API_ERROR: null,
+    API_REACHED: true,
+    MEDIA_URL_RAW: null,
+    MESSAGE_FOUND: false,
+    MESSAGE_ID: messageId,
+    NORMALIZED_STORAGE_PATH: null,
+    SIGNING_ATTEMPTED: false,
+    SIGNING_SUCCESS: false,
+  };
+  const fail = (error: string, status: number, extraDebug = {}) => {
+    apiDebug.API_ERROR = error;
+
+    return Response.json(
+      {
+        debug: {
+          ...apiDebug,
+          ...extraDebug,
+        },
+        error,
+      },
+      { status },
+    );
+  };
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+    return fail("Unauthorized", 401);
   }
 
   const { data: message, error } = await supabase
@@ -175,36 +210,37 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return fail(error.message, 500);
   }
 
   if (!message?.media_url) {
-    return Response.json({ error: "Private media not found." }, { status: 404 });
+    return fail("Private media not found.", 404);
   }
 
+  apiDebug.MESSAGE_FOUND = true;
+  apiDebug.MEDIA_URL_RAW = message.media_url;
+
   if (message.sender_id === user.id) {
-    return Response.json({ error: "Private media can only be opened by the receiver." }, { status: 403 });
+    return fail("Private media can only be opened by the receiver.", 403);
   }
 
   if (message.viewed_at) {
-    return Response.json({ error: "Private media already opened." }, { status: 410 });
+    return fail("Private media already opened.", 410);
   }
 
   if (message.expires_at && new Date(message.expires_at).getTime() <= Date.now()) {
-    return Response.json({ error: "Private media expired." }, { status: 410 });
+    return fail("Private media expired.", 410);
   }
 
   const storagePath = getPrivateMediaStoragePath(message.media_url);
+  apiDebug.NORMALIZED_STORAGE_PATH = storagePath;
 
   if (!storagePath) {
     console.warn("[PrivateMedia] invalid storage path", {
       hasAbsoluteUrl: /^https?:\/\//i.test(message.media_url),
       messageId,
     });
-    return Response.json(
-      { error: "Private media storage path could not be verified." },
-      { status: 422 },
-    );
+    return fail("Private media storage path could not be verified.", 422);
   }
 
   const objectCheck = await checkPrivateMediaObjectExists(storagePath);
@@ -235,10 +271,12 @@ export async function GET(
   const watermarkTimestamp = formatWatermarkTimestamp(openedAt);
   const watermarkText = `${recipientName} · ${recipientPublicId} · ${watermarkTimestamp}`;
   const displayWatermarkText = `${recipientName} · ${recipientPublicId}`;
+  apiDebug.SIGNING_ATTEMPTED = true;
   const { data, error: signedUrlError } = await admin
     .storage
     .from(PRIVATE_MEDIA_BUCKET_NAME)
     .createSignedUrl(storagePath, 60);
+  apiDebug.SIGNING_SUCCESS = Boolean(data?.signedUrl);
 
   console.info("[PrivateMedia] signed URL generation result", {
     bucket: PRIVATE_MEDIA_BUCKET_NAME,
@@ -255,10 +293,14 @@ export async function GET(
       path: storagePath,
       reason: signedUrlError?.message ?? "missing signed URL",
     });
-    return Response.json(
-      { error: signedUrlError?.message ?? "Could not sign private media." },
-      { status: 500 },
-    );
+    return fail(signedUrlError?.message ?? "Could not sign private media.", 500, {
+      mediaType: message.media_type,
+      objectExists: objectCheck.exists,
+      objectExistsReason: objectCheck.reason,
+      signedUrlGenerated: Boolean(data?.signedUrl),
+      signedUrlPresent: Boolean(data?.signedUrl),
+      storagePath,
+    });
   }
 
   const signedUrlCheck = await checkSignedMediaUrl(data.signedUrl);
@@ -273,25 +315,16 @@ export async function GET(
   });
 
   if (!signedUrlCheck.ok) {
-    return Response.json(
-      {
-        error: "Private media file could not be loaded from storage.",
-        debug:
-          process.env.NODE_ENV !== "production"
-            ? {
-                mediaType: message.media_type,
-                objectExists: objectCheck.exists,
-                objectExistsReason: objectCheck.reason,
-                signedUrlGenerated: Boolean(data?.signedUrl),
-                signedUrlCheckStatus: signedUrlCheck.status,
-                signedUrlContentType: signedUrlCheck.contentType,
-                signedUrlExists: Boolean(data.signedUrl),
-                storagePath,
-              }
-            : undefined,
-      },
-      { status: 502 },
-    );
+    return fail("Private media file could not be loaded from storage.", 502, {
+      mediaType: message.media_type,
+      objectExists: objectCheck.exists,
+      objectExistsReason: objectCheck.reason,
+      signedUrlContentType: signedUrlCheck.contentType,
+      signedUrlFetchStatus: signedUrlCheck.status,
+      signedUrlGenerated: Boolean(data?.signedUrl),
+      signedUrlPresent: Boolean(data.signedUrl),
+      storagePath,
+    });
   }
 
   const { data: openedMessage, error: openError } = await admin
@@ -308,15 +341,42 @@ export async function GET(
     .maybeSingle();
 
   if (openError) {
-    return Response.json({ error: openError.message }, { status: 500 });
+    return fail(openError.message, 500, {
+      mediaType: message.media_type,
+      objectExists: objectCheck.exists,
+      objectExistsReason: objectCheck.reason,
+      signedUrlContentType: signedUrlCheck.contentType,
+      signedUrlFetchStatus: signedUrlCheck.status,
+      signedUrlGenerated: Boolean(data.signedUrl),
+      signedUrlPresent: Boolean(data.signedUrl),
+      storagePath,
+    });
   }
 
   if (!openedMessage) {
-    return Response.json({ error: "Private media already opened." }, { status: 410 });
+    return fail("Private media already opened.", 410, {
+      mediaType: message.media_type,
+      objectExists: objectCheck.exists,
+      objectExistsReason: objectCheck.reason,
+      signedUrlContentType: signedUrlCheck.contentType,
+      signedUrlFetchStatus: signedUrlCheck.status,
+      signedUrlGenerated: Boolean(data.signedUrl),
+      signedUrlPresent: Boolean(data.signedUrl),
+      storagePath,
+    });
   }
 
   if (!openedMessage.media_url) {
-    return Response.json({ error: "Private media not found." }, { status: 404 });
+    return fail("Private media not found.", 404, {
+      mediaType: message.media_type,
+      objectExists: objectCheck.exists,
+      objectExistsReason: objectCheck.reason,
+      signedUrlContentType: signedUrlCheck.contentType,
+      signedUrlFetchStatus: signedUrlCheck.status,
+      signedUrlGenerated: Boolean(data.signedUrl),
+      signedUrlPresent: Boolean(data.signedUrl),
+      storagePath,
+    });
   }
 
   await (admin as unknown as WatermarkInsertClient)
@@ -346,6 +406,7 @@ export async function GET(
     },
     debug:
       {
+        ...apiDebug,
         mediaType: openedMessage.media_type,
         objectExists: objectCheck.exists,
         objectExistsReason: objectCheck.reason,

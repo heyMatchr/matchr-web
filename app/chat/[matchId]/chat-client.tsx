@@ -79,18 +79,55 @@ type PrivateMediaWatermark = {
 };
 
 type PrivateMediaDebugState = {
+  apiError: string | null;
+  apiReached: boolean | null;
   imageLoadStatus: "idle" | "loading" | "loaded" | "failed";
   mediaType: string | null;
+  mediaUrlRaw: string | null;
+  messageFound: boolean | null;
+  messageId: string | null;
   naturalHeight: number | null;
   naturalWidth: number | null;
+  normalizedStoragePath: string | null;
   objectExists: boolean | null;
   objectExistsReason: string | null;
+  signingAttempted: boolean | null;
+  signingSuccess: boolean | null;
   signedUrlContentType: string | null;
   signedUrlFetchStatus: number | null;
   signedUrlGenerated: boolean | null;
   signedUrlPresent: boolean;
   storagePath: string | null;
 };
+
+type PrivateMediaApiDebugPayload = {
+  API_ERROR?: string | null;
+  API_REACHED?: boolean;
+  MEDIA_URL_RAW?: string | null;
+  MESSAGE_FOUND?: boolean;
+  MESSAGE_ID?: string;
+  NORMALIZED_STORAGE_PATH?: string | null;
+  SIGNING_ATTEMPTED?: boolean;
+  SIGNING_SUCCESS?: boolean;
+  mediaType?: string | null;
+  objectExists?: boolean | null;
+  objectExistsReason?: string | null;
+  signedUrlContentType?: string | null;
+  signedUrlFetchStatus?: number | null;
+  signedUrlGenerated?: boolean | null;
+  signedUrlPresent?: boolean;
+  storagePath?: string | null;
+};
+
+class PrivateMediaOpenError extends Error {
+  debug: PrivateMediaApiDebugPayload | null;
+
+  constructor(message: string, debug: PrivateMediaApiDebugPayload | null) {
+    super(message);
+    this.name = "PrivateMediaOpenError";
+    this.debug = debug;
+  }
+}
 
 type PrivateMediaViewerBoundaryProps = {
   children: ReactNode;
@@ -199,6 +236,34 @@ const conversationTones: ConversationTone[] = [
 ];
 
 const CONVERSATION_DORMANT_AFTER_MS = 1000 * 60 * 60 * 24 * 3;
+
+function createPrivateMediaDebugState(
+  payload: PrivateMediaApiDebugPayload | null | undefined,
+  fallbackMediaType: string | null,
+  imageLoadStatus: PrivateMediaDebugState["imageLoadStatus"],
+): PrivateMediaDebugState {
+  return {
+    apiError: payload?.API_ERROR ?? null,
+    apiReached: payload?.API_REACHED ?? null,
+    imageLoadStatus,
+    mediaType: payload?.mediaType ?? fallbackMediaType,
+    mediaUrlRaw: payload?.MEDIA_URL_RAW ?? null,
+    messageFound: payload?.MESSAGE_FOUND ?? null,
+    messageId: payload?.MESSAGE_ID ?? null,
+    naturalHeight: null,
+    naturalWidth: null,
+    normalizedStoragePath: payload?.NORMALIZED_STORAGE_PATH ?? null,
+    objectExists: payload?.objectExists ?? null,
+    objectExistsReason: payload?.objectExistsReason ?? null,
+    signingAttempted: payload?.SIGNING_ATTEMPTED ?? null,
+    signingSuccess: payload?.SIGNING_SUCCESS ?? null,
+    signedUrlContentType: payload?.signedUrlContentType ?? null,
+    signedUrlFetchStatus: payload?.signedUrlFetchStatus ?? null,
+    signedUrlGenerated: payload?.signedUrlGenerated ?? null,
+    signedUrlPresent: Boolean(payload?.signedUrlPresent),
+    storagePath: payload?.storagePath ?? payload?.NORMALIZED_STORAGE_PATH ?? null,
+  };
+}
 
 type GiftAnalyticsRpcClient = {
   rpc: (
@@ -1318,7 +1383,7 @@ export function ChatClient({
   }
 
   async function getPrivateMediaSignedUrl(messageId: string): Promise<{
-    debug: Omit<PrivateMediaDebugState, "imageLoadStatus" | "naturalHeight" | "naturalWidth"> | null;
+    debug: PrivateMediaApiDebugPayload | null;
     expires_at: string | null;
     mediaType: string | null;
     signedUrl: string;
@@ -1334,9 +1399,13 @@ export function ChatClient({
 
     if (!response.ok) {
       const result = (await response.json().catch(() => null)) as {
+        debug?: PrivateMediaApiDebugPayload | null;
         error?: string;
       } | null;
-      throw new Error(result?.error ?? "Private media could not be opened.");
+      throw new PrivateMediaOpenError(
+        result?.error ?? "Private media could not be opened.",
+        result?.debug ?? null,
+      );
     }
 
     const result = (await response.json()) as {
@@ -1347,36 +1416,19 @@ export function ChatClient({
       url?: string;
       viewed_at?: string | null;
       watermark?: Partial<PrivateMediaWatermark> | null;
-      debug?: {
-        mediaType?: string | null;
-        objectExists?: boolean | null;
-        objectExistsReason?: string | null;
-        signedUrlContentType?: string | null;
-        signedUrlFetchStatus?: number | null;
-        signedUrlGenerated?: boolean | null;
-        signedUrlPresent?: boolean;
-        storagePath?: string | null;
-      } | null;
+      debug?: PrivateMediaApiDebugPayload | null;
     };
     const signedUrl = result.signedUrl ?? result.url;
 
     if (!signedUrl || !result.watermark?.text) {
-      throw new Error("Private media could not be opened.");
+      throw new PrivateMediaOpenError(
+        "Private media could not be opened.",
+        result.debug ?? null,
+      );
     }
 
     return {
-      debug: result.debug
-        ? {
-            mediaType: result.debug.mediaType ?? result.mediaType ?? null,
-            objectExists: result.debug.objectExists ?? null,
-            objectExistsReason: result.debug.objectExistsReason ?? null,
-            signedUrlContentType: result.debug.signedUrlContentType ?? null,
-            signedUrlFetchStatus: result.debug.signedUrlFetchStatus ?? null,
-            signedUrlGenerated: result.debug.signedUrlGenerated ?? null,
-            signedUrlPresent: Boolean(result.debug.signedUrlPresent),
-            storagePath: result.debug.storagePath ?? result.storagePath ?? null,
-          }
-        : null,
+      debug: result.debug ?? null,
       expires_at: result.expires_at ?? null,
       mediaType: result.mediaType ?? null,
       signedUrl,
@@ -1410,19 +1462,9 @@ export function ChatClient({
       setActivePrivateMediaError("Private media expired.");
       setActivePrivateMediaIsPreparing(false);
       setActivePrivateMediaRetryCount(0);
-      setActivePrivateMediaDebug({
-        imageLoadStatus: "failed",
-        mediaType: message.media_type,
-        naturalHeight: null,
-        naturalWidth: null,
-        objectExists: null,
-        objectExistsReason: null,
-        signedUrlContentType: null,
-        signedUrlFetchStatus: null,
-        signedUrlGenerated: null,
-        signedUrlPresent: false,
-        storagePath: null,
-      });
+      setActivePrivateMediaDebug(
+        createPrivateMediaDebugState(null, message.media_type, "failed"),
+      );
       setActivePrivateWatermark(null);
       return;
     }
@@ -1437,19 +1479,9 @@ export function ChatClient({
     setActivePrivateMediaError("");
     setActivePrivateMediaIsPreparing(true);
     setActivePrivateMediaRetryCount(0);
-    setActivePrivateMediaDebug({
-      imageLoadStatus: "loading",
-      mediaType: message.media_type,
-      naturalHeight: null,
-      naturalWidth: null,
-      objectExists: null,
-      objectExistsReason: null,
-      signedUrlContentType: null,
-      signedUrlFetchStatus: null,
-      signedUrlGenerated: null,
-      signedUrlPresent: false,
-      storagePath: null,
-    });
+    setActivePrivateMediaDebug(
+      createPrivateMediaDebugState(null, message.media_type, "loading"),
+    );
     setActivePrivateWatermark(null);
 
     try {
@@ -1475,21 +1507,13 @@ export function ChatClient({
       setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
       setActivePrivateMediaIsPreparing(false);
       setActivePrivateMediaRetryCount(0);
-      setActivePrivateMediaDebug({
-        imageLoadStatus: "loading",
-        mediaType: signedMedia.debug?.mediaType ?? signedMedia.mediaType,
-        naturalHeight: null,
-        naturalWidth: null,
-        objectExists: signedMedia.debug?.objectExists ?? null,
-        objectExistsReason: signedMedia.debug?.objectExistsReason ?? null,
-        signedUrlContentType: signedMedia.debug?.signedUrlContentType ?? null,
-        signedUrlFetchStatus: signedMedia.debug?.signedUrlFetchStatus ?? null,
-        signedUrlGenerated:
-          signedMedia.debug?.signedUrlGenerated ?? Boolean(signedMedia.signedUrl),
-        signedUrlPresent:
-          signedMedia.debug?.signedUrlPresent ?? Boolean(signedMedia.signedUrl),
-        storagePath: signedMedia.debug?.storagePath ?? signedMedia.storagePath,
-      });
+      setActivePrivateMediaDebug(
+        createPrivateMediaDebugState(
+          signedMedia.debug,
+          signedMedia.mediaType,
+          "loading",
+        ),
+      );
       setActivePrivateWatermark(signedMedia.watermark);
       updateReadReceipt(updatedMessage);
       setMessages((current) =>
@@ -1517,8 +1541,14 @@ export function ChatClient({
             ? "Expired."
             : "Private media could not load.",
       );
-      setActivePrivateMediaDebug((current) =>
-        current ? { ...current, imageLoadStatus: "failed" } : current,
+      setActivePrivateMediaDebug(
+        createPrivateMediaDebugState(
+          signedUrlError instanceof PrivateMediaOpenError
+            ? signedUrlError.debug
+            : null,
+          message.media_type,
+          "failed",
+        ),
       );
     }
   }
@@ -2772,6 +2802,44 @@ export function ChatClient({
                   Private media debug
                 </p>
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                  <dt className="text-white/45">API_REACHED</dt>
+                  <dd>
+                    {activePrivateMediaDebug.apiReached === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.apiReached)}
+                  </dd>
+                  <dt className="text-white/45">MESSAGE_FOUND</dt>
+                  <dd>
+                    {activePrivateMediaDebug.messageFound === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.messageFound)}
+                  </dd>
+                  <dt className="text-white/45">MESSAGE_ID</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.messageId ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">MEDIA_URL_RAW</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.mediaUrlRaw ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">NORMALIZED_STORAGE_PATH</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.normalizedStoragePath ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">SIGNING_ATTEMPTED</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signingAttempted === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.signingAttempted)}
+                  </dd>
+                  <dt className="text-white/45">SIGNING_SUCCESS</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signingSuccess === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.signingSuccess)}
+                  </dd>
+                  <dt className="text-white/45">API_ERROR</dt>
+                  <dd>{activePrivateMediaDebug.apiError ?? "none"}</dd>
                   <dt className="text-white/45">SIGNED_URL_PRESENT</dt>
                   <dd>
                     {activePrivateMediaDebug.signedUrlPresent ? "true" : "false"}
