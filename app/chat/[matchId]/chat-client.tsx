@@ -79,6 +79,8 @@ type PrivateMediaWatermark = {
 };
 
 type PrivateMediaDebugState = {
+  activePrivateMediaUrlPresent: boolean;
+  activePrivateMessageId: string | null;
   apiError: string | null;
   apiReached: boolean | null;
   blobImgComplete: boolean | null;
@@ -113,6 +115,7 @@ type PrivateMediaDebugState = {
   jsImageNaturalWidth: number | null;
   jsImageOnError: boolean;
   jsImageOnLoad: boolean;
+  lifecycleEvents: string[];
   mediaType: string | null;
   mediaUrlRaw: string | null;
   messageFound: boolean | null;
@@ -140,6 +143,9 @@ type PrivateMediaDebugState = {
   signedUrlGenerated: boolean | null;
   signedUrlPresent: boolean;
   storagePath: string | null;
+  componentUnmounted: boolean;
+  modalMountCount: number;
+  renderCount: number;
 };
 
 type PrivateMediaApiDebugPayload = {
@@ -285,6 +291,8 @@ function createPrivateMediaDebugState(
   imageLoadStatus: PrivateMediaDebugState["imageLoadStatus"],
 ): PrivateMediaDebugState {
   return {
+    activePrivateMediaUrlPresent: false,
+    activePrivateMessageId: payload?.MESSAGE_ID ?? null,
     apiError: payload?.API_ERROR ?? null,
     apiReached: payload?.API_REACHED ?? null,
     blobImgComplete: null,
@@ -319,6 +327,7 @@ function createPrivateMediaDebugState(
     jsImageNaturalWidth: null,
     jsImageOnError: false,
     jsImageOnLoad: false,
+    lifecycleEvents: [],
     mediaType: payload?.mediaType ?? fallbackMediaType,
     mediaUrlRaw: payload?.MEDIA_URL_RAW ?? null,
     messageFound: payload?.MESSAGE_FOUND ?? null,
@@ -346,6 +355,9 @@ function createPrivateMediaDebugState(
     signedUrlGenerated: payload?.signedUrlGenerated ?? null,
     signedUrlPresent: Boolean(payload?.signedUrlPresent),
     storagePath: payload?.storagePath ?? payload?.NORMALIZED_STORAGE_PATH ?? null,
+    componentUnmounted: false,
+    modalMountCount: 0,
+    renderCount: 0,
   };
 }
 
@@ -537,8 +549,13 @@ export function ChatClient({
   const privateMediaElementRef = useRef<HTMLImageElement | HTMLVideoElement | null>(
     null,
   );
+  const activePrivateMediaUrlPresentRef = useRef(false);
+  const activePrivateMessageIdRef = useRef<string | null>(null);
   const privateMediaBlobUrlRef = useRef<string | null>(null);
+  const privateMediaLifecycleSeqRef = useRef(0);
+  const privateMediaModalMountCountRef = useRef(0);
   const privateMediaOpenRequestRef = useRef(0);
+  const privateMediaRenderCountRef = useRef(0);
   const privateMediaInputRef = useRef<HTMLInputElement>(null);
   const privatePhotoInputRef = useRef<HTMLInputElement>(null);
   const privateVideoInputRef = useRef<HTMLInputElement>(null);
@@ -549,6 +566,10 @@ export function ChatClient({
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
+  privateMediaRenderCountRef.current += 1;
+  activePrivateMediaUrlPresentRef.current = Boolean(activePrivateMediaUrl);
+  activePrivateMessageIdRef.current = activePrivateMessage?.id ?? null;
+  const isPrivateMediaModalOpen = Boolean(activePrivateMessage);
   const groupedGiftCatalog = useMemo(() => {
     const groups = new Map<string, GiftOption[]>();
     giftCatalog.forEach((gift) => {
@@ -648,7 +669,55 @@ export function ChatClient({
       }
     : undefined;
 
+  const logPrivateMediaTransition = useCallback(
+    (event: string, details?: Record<string, unknown>) => {
+      const nextSequence = privateMediaLifecycleSeqRef.current + 1;
+      const nextEntry = `${nextSequence}:${event}`;
+
+      privateMediaLifecycleSeqRef.current = nextSequence;
+      console.info("[PrivateMediaLifecycle]", {
+        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
+        activePrivateMessageId: activePrivateMessageIdRef.current,
+        event,
+        modalMountCount: privateMediaModalMountCountRef.current,
+        renderCount: privateMediaRenderCountRef.current,
+        ...details,
+      });
+
+      setActivePrivateMediaDebug((current) =>
+        current
+          ? {
+              ...current,
+              activePrivateMediaUrlPresent:
+                activePrivateMediaUrlPresentRef.current,
+              activePrivateMessageId: activePrivateMessageIdRef.current,
+              componentUnmounted: false,
+              lifecycleEvents: [
+                ...current.lifecycleEvents.slice(-11),
+                nextEntry,
+              ],
+              modalMountCount: privateMediaModalMountCountRef.current,
+              renderCount: privateMediaRenderCountRef.current,
+            }
+          : current,
+      );
+    },
+    [],
+  );
+
   const mergeConfirmedMessage = useCallback((nextMessage: MessageRow) => {
+    if (nextMessage.message_type === "private_media") {
+      console.info("[PrivateMediaLifecycle]", {
+        activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+        activePrivateMessageId: activePrivateMessage?.id ?? null,
+        event: "mergeConfirmedMessage.private_media",
+        messageId: nextMessage.id,
+        modalMountCount: privateMediaModalMountCountRef.current,
+        renderCount: privateMediaRenderCountRef.current,
+        viewedAt: nextMessage.viewed_at,
+      });
+    }
+
     setMessages((current) => {
       if (current.some((message) => message.id === nextMessage.id)) {
         return current;
@@ -670,17 +739,52 @@ export function ChatClient({
         index === optimisticIndex ? nextMessage : message,
       );
     });
-  }, []);
+  }, [activePrivateMediaUrl, activePrivateMessage?.id]);
 
   const updateReadReceipt = useCallback((nextMessage: MessageRow) => {
+    if (
+      nextMessage.message_type === "private_media" ||
+      nextMessage.id === activePrivateMessage?.id
+    ) {
+      console.info("[PrivateMediaLifecycle]", {
+        activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+        activePrivateMessageId: activePrivateMessage?.id ?? null,
+        event: "updateReadReceipt",
+        messageId: nextMessage.id,
+        modalMountCount: privateMediaModalMountCountRef.current,
+        readAt: nextMessage.read_at,
+        renderCount: privateMediaRenderCountRef.current,
+        viewedAt: nextMessage.viewed_at,
+      });
+      setActivePrivateMediaDebug((current) =>
+        current
+          ? {
+              ...current,
+              lifecycleEvents: [
+                ...current.lifecycleEvents.slice(-11),
+                `${privateMediaLifecycleSeqRef.current + 1}:updateReadReceipt`,
+              ],
+            }
+          : current,
+      );
+      privateMediaLifecycleSeqRef.current += 1;
+    }
+
     setMessages((current) =>
       current.map((message) =>
         message.id === nextMessage.id ? { ...message, ...nextMessage } : message,
       ),
     );
-  }, []);
+  }, [activePrivateMediaUrl, activePrivateMessage?.id]);
 
   const closePrivateMediaViewer = useCallback(() => {
+    console.info("[PrivateMediaLifecycle]", {
+      activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+      activePrivateMessageId: activePrivateMessage?.id ?? null,
+      event: "closePrivateMediaViewer",
+      modalMountCount: privateMediaModalMountCountRef.current,
+      renderCount: privateMediaRenderCountRef.current,
+    });
     privateMediaOpenRequestRef.current += 1;
     if (privateMediaBlobUrlRef.current) {
       URL.revokeObjectURL(privateMediaBlobUrlRef.current);
@@ -696,7 +800,7 @@ export function ChatClient({
     setActivePrivateMediaRetryCount(0);
     setActivePrivateMediaDebug(null);
     setActivePrivateWatermark(null);
-  }, []);
+  }, [activePrivateMediaUrl, activePrivateMessage?.id]);
 
   const measurePrivateMediaElement = useCallback(() => {
     const element = privateMediaElementRef.current;
@@ -938,6 +1042,74 @@ export function ChatClient({
   }, [chatToast]);
 
   useEffect(() => {
+    logPrivateMediaTransition("state.snapshot", {
+      activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+      activePrivateMessageId: activePrivateMessage?.id ?? null,
+      isCounting: activePrivateMediaIsCounting,
+      isPreparing: activePrivateMediaIsPreparing,
+      secondsLeft: activePrivateMediaSecondsLeft,
+    });
+  }, [
+    activePrivateMediaIsCounting,
+    activePrivateMediaIsPreparing,
+    activePrivateMediaSecondsLeft,
+    activePrivateMediaUrl,
+    activePrivateMessage?.id,
+    logPrivateMediaTransition,
+  ]);
+
+  useEffect(() => {
+    if (!isPrivateMediaModalOpen) {
+      return undefined;
+    }
+
+    privateMediaModalMountCountRef.current += 1;
+    logPrivateMediaTransition("modal.mounted", {
+      activePrivateMessageId: activePrivateMessageIdRef.current,
+    });
+    setActivePrivateMediaDebug((current) =>
+      current
+        ? {
+            ...current,
+            activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
+            activePrivateMessageId: activePrivateMessageIdRef.current,
+            componentUnmounted: false,
+            modalMountCount: privateMediaModalMountCountRef.current,
+            renderCount: privateMediaRenderCountRef.current,
+          }
+        : current,
+    );
+
+    return () => {
+      console.info("[PrivateMediaLifecycle]", {
+        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
+        activePrivateMessageId: activePrivateMessageIdRef.current,
+        event: "modal.unmounted",
+        modalMountCount: privateMediaModalMountCountRef.current,
+        renderCount: privateMediaRenderCountRef.current,
+      });
+      setActivePrivateMediaDebug((current) =>
+        current
+          ? {
+              ...current,
+              activePrivateMediaUrlPresent:
+                activePrivateMediaUrlPresentRef.current,
+              activePrivateMessageId: activePrivateMessageIdRef.current,
+              componentUnmounted: true,
+              lifecycleEvents: [
+                ...current.lifecycleEvents.slice(-11),
+                `${privateMediaLifecycleSeqRef.current + 1}:modal.unmounted`,
+              ],
+              modalMountCount: privateMediaModalMountCountRef.current,
+              renderCount: privateMediaRenderCountRef.current,
+            }
+          : current,
+      );
+      privateMediaLifecycleSeqRef.current += 1;
+    };
+  }, [isPrivateMediaModalOpen, logPrivateMediaTransition]);
+
+  useEffect(() => {
     if (!activePrivateMessage || !activePrivateMediaUrl) {
       return undefined;
     }
@@ -945,6 +1117,10 @@ export function ChatClient({
     const privateMessage = activePrivateMessage;
     let cancelled = false;
     let createdBlobUrl: string | null = null;
+    logPrivateMediaTransition("signed-url-effect.started", {
+      activePrivateMediaUrlPresent: true,
+      activePrivateMessageId: privateMessage.id,
+    });
 
     async function verifyBrowserSignedUrl() {
       try {
@@ -988,6 +1164,13 @@ export function ChatClient({
         }
 
         if (cancelled) {
+          console.info("[PrivateMediaLifecycle]", {
+            activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+            activePrivateMessageId: privateMessage.id,
+            event: "browser-fetch.cancelled-after-response",
+            modalMountCount: privateMediaModalMountCountRef.current,
+            renderCount: privateMediaRenderCountRef.current,
+          });
           if (createdBlobUrl) {
             URL.revokeObjectURL(createdBlobUrl);
           }
@@ -997,6 +1180,10 @@ export function ChatClient({
         if (createdBlobUrl) {
           setActivePrivateBlobUrl(createdBlobUrl);
         }
+        logPrivateMediaTransition("browser-fetch.completed", {
+          activePrivateMessageId: privateMessage.id,
+          status: response.status,
+        });
 
         setActivePrivateMediaDebug((current) =>
           current
@@ -1018,6 +1205,13 @@ export function ChatClient({
         );
       } catch (error) {
         if (cancelled) {
+          console.info("[PrivateMediaLifecycle]", {
+            activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+            activePrivateMessageId: privateMessage.id,
+            event: "browser-fetch.cancelled-after-error",
+            modalMountCount: privateMediaModalMountCountRef.current,
+            renderCount: privateMediaRenderCountRef.current,
+          });
           return;
         }
 
@@ -1087,6 +1281,13 @@ export function ChatClient({
 
     return () => {
       cancelled = true;
+      console.info("[PrivateMediaLifecycle]", {
+        activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
+        activePrivateMessageId: privateMessage.id,
+        event: "signed-url-effect.cleanup",
+        modalMountCount: privateMediaModalMountCountRef.current,
+        renderCount: privateMediaRenderCountRef.current,
+      });
       testImage.onload = null;
       testImage.onerror = null;
       window.cancelAnimationFrame(frame);
@@ -1096,6 +1297,7 @@ export function ChatClient({
     activePrivateMediaRetryCount,
     activePrivateMediaUrl,
     activePrivateMessage,
+    logPrivateMediaTransition,
     measurePrivateMediaElement,
   ]);
 
@@ -1117,12 +1319,21 @@ export function ChatClient({
     }
 
     const messageId = activePrivateMessage.id;
+    logPrivateMediaTransition("countdown.effect-started", {
+      messageId,
+    });
     const countdownTimer = window.setInterval(() => {
       setActivePrivateMediaSecondsLeft((current) => {
         const next = Math.max(0, current - 1);
 
         if (next === 0) {
+          logPrivateMediaTransition("countdown.reached-zero", {
+            messageId,
+          });
           window.setTimeout(() => {
+            logPrivateMediaTransition("countdown.expire-setMessages", {
+              messageId,
+            });
             setMessages((currentMessages) =>
               currentMessages.map((currentMessage) =>
                 currentMessage.id === messageId
@@ -1130,7 +1341,13 @@ export function ChatClient({
                   : currentMessage,
               ),
             );
+            logPrivateMediaTransition("countdown.close-viewer", {
+              messageId,
+            });
             closePrivateMediaViewer();
+            logPrivateMediaTransition("countdown.insert-expired-message", {
+              messageId,
+            });
             void insertSystemMessage(
               "private_media_expired",
               "Private media expired.",
@@ -1142,12 +1359,18 @@ export function ChatClient({
       });
     }, 1000);
 
-    return () => window.clearInterval(countdownTimer);
+    return () => {
+      logPrivateMediaTransition("countdown.effect-cleanup", {
+        messageId,
+      });
+      window.clearInterval(countdownTimer);
+    };
   }, [
     activePrivateMediaIsCounting,
     activePrivateMessage,
     closePrivateMediaViewer,
     insertSystemMessage,
+    logPrivateMediaTransition,
   ]);
 
   useEffect(() => {
@@ -1220,6 +1443,17 @@ export function ChatClient({
         },
         (payload) => {
           const nextMessage = payload.new as MessageRow;
+          if (
+            nextMessage.message_type === "private_media" ||
+            nextMessage.message_type === "private_media_opened" ||
+            nextMessage.message_type === "private_media_expired"
+          ) {
+            logPrivateMediaTransition("realtime.insert", {
+              insertedMessageId: nextMessage.id,
+              insertedMessageType: nextMessage.message_type,
+              viewedAt: nextMessage.viewed_at,
+            });
+          }
           mergeConfirmedMessage(nextMessage);
           void markMessageAsRead(nextMessage);
         },
@@ -1233,7 +1467,18 @@ export function ChatClient({
           filter: `match_id=eq.${matchId}`,
         },
         (payload) => {
-          updateReadReceipt(payload.new as MessageRow);
+          const nextMessage = payload.new as MessageRow;
+          if (
+            nextMessage.message_type === "private_media" ||
+            nextMessage.id === activePrivateMessageIdRef.current
+          ) {
+            logPrivateMediaTransition("realtime.update", {
+              updatedMessageId: nextMessage.id,
+              updatedMessageType: nextMessage.message_type,
+              viewedAt: nextMessage.viewed_at,
+            });
+          }
+          updateReadReceipt(nextMessage);
         },
       )
       .on("presence", { event: "sync" }, () => {
@@ -1276,6 +1521,7 @@ export function ChatClient({
     trackPresence,
     updateReadReceipt,
     updateReceiverPresence,
+    logPrivateMediaTransition,
   ]);
 
   useEffect(() => {
@@ -1821,16 +2067,29 @@ export function ChatClient({
   }
 
   async function openPrivateMedia(message: MessageRow) {
+    logPrivateMediaTransition("openPrivateMedia.called", {
+      messageId: message.id,
+      mediaType: message.media_type,
+      viewedAt: message.viewed_at,
+    });
     const expired =
       message.viewed_at &&
       message.expires_at &&
       new Date(message.expires_at).getTime() <= now;
 
     if (message.sender_id === currentUserId) {
+      logPrivateMediaTransition("openPrivateMedia.ignored-own-message", {
+        messageId: message.id,
+      });
       return;
     }
 
     if (message.viewed_at || expired) {
+      logPrivateMediaTransition("openPrivateMedia.already-expired", {
+        expired,
+        messageId: message.id,
+        viewedAt: message.viewed_at,
+      });
       if (privateMediaBlobUrlRef.current) {
         URL.revokeObjectURL(privateMediaBlobUrlRef.current);
         privateMediaBlobUrlRef.current = null;
@@ -1853,6 +2112,10 @@ export function ChatClient({
     const requestId = privateMediaOpenRequestRef.current + 1;
 
     privateMediaOpenRequestRef.current = requestId;
+    logPrivateMediaTransition("openPrivateMedia.set-active-initial", {
+      messageId: message.id,
+      requestId,
+    });
     if (privateMediaBlobUrlRef.current) {
       URL.revokeObjectURL(privateMediaBlobUrlRef.current);
       privateMediaBlobUrlRef.current = null;
@@ -1874,6 +2137,10 @@ export function ChatClient({
       const signedMedia = await getPrivateMediaSignedUrl(message.id);
 
       if (privateMediaOpenRequestRef.current !== requestId) {
+        logPrivateMediaTransition("openPrivateMedia.stale-signed-response", {
+          messageId: message.id,
+          requestId,
+        });
         return;
       }
 
@@ -1887,6 +2154,11 @@ export function ChatClient({
         viewed_at: signedMedia.viewed_at ?? openedAt.toISOString(),
       };
 
+      logPrivateMediaTransition("openPrivateMedia.signed-url-received", {
+        messageId: message.id,
+        requestId,
+        signedUrlPresent: Boolean(signedMedia.signedUrl),
+      });
       setActivePrivateMediaUrl(signedMedia.signedUrl);
       setActivePrivateMediaError("");
       setActivePrivateMediaIsCounting(false);
@@ -1901,16 +2173,34 @@ export function ChatClient({
         ),
       );
       setActivePrivateWatermark(signedMedia.watermark);
+      logPrivateMediaTransition("openPrivateMedia.updateReadReceipt", {
+        messageId: updatedMessage.id,
+        viewedAt: updatedMessage.viewed_at,
+      });
       updateReadReceipt(updatedMessage);
+      logPrivateMediaTransition("openPrivateMedia.setMessages.updatedMessage", {
+        messageId: updatedMessage.id,
+      });
       setMessages((current) =>
         current.map((currentMessage) =>
           currentMessage.id === message.id ? updatedMessage : currentMessage,
         ),
       );
+      logPrivateMediaTransition("openPrivateMedia.set-active-updated", {
+        messageId: updatedMessage.id,
+        viewedAt: updatedMessage.viewed_at,
+      });
       setActivePrivateMessage(updatedMessage);
+      logPrivateMediaTransition("openPrivateMedia.insert-opened-system-message", {
+        messageId: updatedMessage.id,
+      });
       await insertSystemMessage("private_media_opened", "Private media opened once.");
     } catch (signedUrlError) {
       if (privateMediaOpenRequestRef.current !== requestId) {
+        logPrivateMediaTransition("openPrivateMedia.stale-error", {
+          messageId: message.id,
+          requestId,
+        });
         return;
       }
 
@@ -1920,6 +2210,10 @@ export function ChatClient({
           : "Private media could not be opened.";
 
       setActivePrivateMediaIsPreparing(false);
+      logPrivateMediaTransition("openPrivateMedia.error", {
+        error: messageText,
+        messageId: message.id,
+      });
       setActivePrivateMediaError(
         messageText.includes("already opened")
           ? "Already opened."
@@ -1944,6 +2238,9 @@ export function ChatClient({
       return;
     }
 
+    logPrivateMediaTransition("retryActivePrivateMediaLoad", {
+      retryCount: activePrivateMediaRetryCount + 1,
+    });
     setActivePrivateMediaError("");
     setActivePrivateMediaIsCounting(false);
     setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
@@ -1954,6 +2251,10 @@ export function ChatClient({
   }
 
   function startPrivateMediaCountdown() {
+    logPrivateMediaTransition("startPrivateMediaCountdown", {
+      activePrivateMediaIsCounting,
+      secondsLeft: activePrivateMediaSecondsLeft,
+    });
     setNow(Date.now());
     setActivePrivateMediaSecondsLeft((current) =>
       activePrivateMediaIsCounting ? current : PRIVATE_MEDIA_VIEW_SECONDS,
@@ -3321,6 +3622,26 @@ export function ChatClient({
                   </div>
                 ) : null}
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+                  <dt className="text-white/45">RENDER_COUNT</dt>
+                  <dd>{activePrivateMediaDebug.renderCount}</dd>
+                  <dt className="text-white/45">MODAL_MOUNT_COUNT</dt>
+                  <dd>{activePrivateMediaDebug.modalMountCount}</dd>
+                  <dt className="text-white/45">ACTIVE_PRIVATE_MESSAGE_ID</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.activePrivateMessageId ?? "none"}
+                  </dd>
+                  <dt className="text-white/45">ACTIVE_PRIVATE_MEDIA_URL_PRESENT</dt>
+                  <dd>
+                    {String(activePrivateMediaDebug.activePrivateMediaUrlPresent)}
+                  </dd>
+                  <dt className="text-white/45">COMPONENT_UNMOUNTED</dt>
+                  <dd>{String(activePrivateMediaDebug.componentUnmounted)}</dd>
+                  <dt className="text-white/45">LIFECYCLE_EVENTS</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.lifecycleEvents.length
+                      ? activePrivateMediaDebug.lifecycleEvents.join(" → ")
+                      : "none"}
+                  </dd>
                   <dt className="text-white/45">API_REACHED</dt>
                   <dd>
                     {activePrivateMediaDebug.apiReached === null
