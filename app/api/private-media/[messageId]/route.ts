@@ -284,6 +284,8 @@ export async function GET(
     messageId,
     path: storagePath,
     reason: signedUrlError?.message ?? null,
+    signedUrlLength: data?.signedUrl?.length ?? 0,
+    signedUrlPrefix: data?.signedUrl?.slice(0, 100) ?? null,
   });
 
   if (signedUrlError || !data?.signedUrl) {

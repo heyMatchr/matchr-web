@@ -3251,6 +3251,21 @@ export function ChatClient({
                 <p className="font-semibold text-emerald-100">
                   Private media debug
                 </p>
+                {activePrivateMediaUrl ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(
+                        activePrivateMediaUrl,
+                        "_blank",
+                        "noopener,noreferrer",
+                      );
+                    }}
+                    className="mt-2 rounded-full border border-fuchsia-200/30 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fuchsia-100"
+                  >
+                    Open signed URL
+                  </button>
+                ) : null}
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                   <dt className="text-white/45">ACTIVE_PRIVATE_MEDIA_URL_PRESENT</dt>
                   <dd>
