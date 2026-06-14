@@ -570,6 +570,8 @@ export function ChatClient({
   activePrivateMediaUrlPresentRef.current = Boolean(activePrivateMediaUrl);
   activePrivateMessageIdRef.current = activePrivateMessage?.id ?? null;
   const isPrivateMediaModalOpen = Boolean(activePrivateMessage);
+  const activePrivateMessageId = activePrivateMessage?.id ?? null;
+  const activePrivateMessageMediaType = activePrivateMessage?.media_type ?? null;
   const groupedGiftCatalog = useMemo(() => {
     const groups = new Map<string, GiftOption[]>();
     giftCatalog.forEach((gift) => {
@@ -708,8 +710,8 @@ export function ChatClient({
   const mergeConfirmedMessage = useCallback((nextMessage: MessageRow) => {
     if (nextMessage.message_type === "private_media") {
       console.info("[PrivateMediaLifecycle]", {
-        activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-        activePrivateMessageId: activePrivateMessage?.id ?? null,
+        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
+        activePrivateMessageId: activePrivateMessageIdRef.current,
         event: "mergeConfirmedMessage.private_media",
         messageId: nextMessage.id,
         modalMountCount: privateMediaModalMountCountRef.current,
@@ -739,16 +741,16 @@ export function ChatClient({
         index === optimisticIndex ? nextMessage : message,
       );
     });
-  }, [activePrivateMediaUrl, activePrivateMessage?.id]);
+  }, []);
 
   const updateReadReceipt = useCallback((nextMessage: MessageRow) => {
     if (
       nextMessage.message_type === "private_media" ||
-      nextMessage.id === activePrivateMessage?.id
+      nextMessage.id === activePrivateMessageIdRef.current
     ) {
       console.info("[PrivateMediaLifecycle]", {
-        activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-        activePrivateMessageId: activePrivateMessage?.id ?? null,
+        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
+        activePrivateMessageId: activePrivateMessageIdRef.current,
         event: "updateReadReceipt",
         messageId: nextMessage.id,
         modalMountCount: privateMediaModalMountCountRef.current,
@@ -775,12 +777,12 @@ export function ChatClient({
         message.id === nextMessage.id ? { ...message, ...nextMessage } : message,
       ),
     );
-  }, [activePrivateMediaUrl, activePrivateMessage?.id]);
+  }, []);
 
   const closePrivateMediaViewer = useCallback(() => {
     console.info("[PrivateMediaLifecycle]", {
-      activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-      activePrivateMessageId: activePrivateMessage?.id ?? null,
+      activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
+      activePrivateMessageId: activePrivateMessageIdRef.current,
       event: "closePrivateMediaViewer",
       modalMountCount: privateMediaModalMountCountRef.current,
       renderCount: privateMediaRenderCountRef.current,
@@ -800,7 +802,7 @@ export function ChatClient({
     setActivePrivateMediaRetryCount(0);
     setActivePrivateMediaDebug(null);
     setActivePrivateWatermark(null);
-  }, [activePrivateMediaUrl, activePrivateMessage?.id]);
+  }, []);
 
   const measurePrivateMediaElement = useCallback(() => {
     const element = privateMediaElementRef.current;
@@ -1110,21 +1112,22 @@ export function ChatClient({
   }, [isPrivateMediaModalOpen, logPrivateMediaTransition]);
 
   useEffect(() => {
-    if (!activePrivateMessage || !activePrivateMediaUrl) {
+    if (!activePrivateMessageId || !activePrivateMediaUrl) {
       return undefined;
     }
 
-    const privateMessage = activePrivateMessage;
+    const privateMessageId = activePrivateMessageId;
+    const privateMediaType = activePrivateMessageMediaType;
     let cancelled = false;
     let createdBlobUrl: string | null = null;
     logPrivateMediaTransition("signed-url-effect.started", {
       activePrivateMediaUrlPresent: true,
-      activePrivateMessageId: privateMessage.id,
+      activePrivateMessageId: privateMessageId,
     });
 
     async function verifyBrowserSignedUrl() {
       try {
-        const isImageProbe = privateMessage.media_type !== "video";
+        const isImageProbe = privateMediaType !== "video";
         const response = await fetch(activePrivateMediaUrl, {
           cache: "no-store",
           headers: isImageProbe ? undefined : { Range: "bytes=0-0" },
@@ -1166,7 +1169,7 @@ export function ChatClient({
         if (cancelled) {
           console.info("[PrivateMediaLifecycle]", {
             activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-            activePrivateMessageId: privateMessage.id,
+            activePrivateMessageId: privateMessageId,
             event: "browser-fetch.cancelled-after-response",
             modalMountCount: privateMediaModalMountCountRef.current,
             renderCount: privateMediaRenderCountRef.current,
@@ -1181,7 +1184,7 @@ export function ChatClient({
           setActivePrivateBlobUrl(createdBlobUrl);
         }
         logPrivateMediaTransition("browser-fetch.completed", {
-          activePrivateMessageId: privateMessage.id,
+          activePrivateMessageId: privateMessageId,
           status: response.status,
         });
 
@@ -1207,7 +1210,7 @@ export function ChatClient({
         if (cancelled) {
           console.info("[PrivateMediaLifecycle]", {
             activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-            activePrivateMessageId: privateMessage.id,
+            activePrivateMessageId: privateMessageId,
             event: "browser-fetch.cancelled-after-error",
             modalMountCount: privateMediaModalMountCountRef.current,
             renderCount: privateMediaRenderCountRef.current,
@@ -1283,7 +1286,7 @@ export function ChatClient({
       cancelled = true;
       console.info("[PrivateMediaLifecycle]", {
         activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-        activePrivateMessageId: privateMessage.id,
+        activePrivateMessageId: privateMessageId,
         event: "signed-url-effect.cleanup",
         modalMountCount: privateMediaModalMountCountRef.current,
         renderCount: privateMediaRenderCountRef.current,
@@ -1296,7 +1299,8 @@ export function ChatClient({
   }, [
     activePrivateMediaRetryCount,
     activePrivateMediaUrl,
-    activePrivateMessage,
+    activePrivateMessageId,
+    activePrivateMessageMediaType,
     logPrivateMediaTransition,
     measurePrivateMediaElement,
   ]);
