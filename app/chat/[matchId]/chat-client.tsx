@@ -491,7 +491,6 @@ export function ChatClient({
     () => createBrowserClient<Database>(supabaseUrl, anonKey),
     [anonKey, supabaseUrl],
   );
-  const isPrivateMediaModalOpen = Boolean(activePrivateMessage);
   const activePrivateMessageId = activePrivateMessage?.id ?? null;
   const groupedGiftCatalog = useMemo(() => {
     const groups = new Map<string, GiftOption[]>();
@@ -593,40 +592,13 @@ export function ChatClient({
     : undefined;
 
   const logPrivateMediaTransition = useCallback(
-    (event: string, details?: Record<string, unknown>) => {
-      const nextSequence = privateMediaLifecycleSeqRef.current + 1;
-      const nextEntry = `${nextSequence}:${event}`;
-
-      privateMediaLifecycleSeqRef.current = nextSequence;
-      console.info("[PrivateMediaLifecycle]", {
-        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
-        activePrivateMessageId: activePrivateMessageIdRef.current,
-        event,
-        modalMountCount: privateMediaModalMountCountRef.current,
-        renderCount: privateMediaRenderCountRef.current,
-        ...details,
-      });
-
-      setActivePrivateMediaDebug((current) =>
-        current
-          ? {
-              ...current,
-              activePrivateMediaUrlPresent:
-                activePrivateMediaUrlPresentRef.current,
-              activePrivateMessageId: activePrivateMessageIdRef.current,
-              componentUnmounted: false,
-              lifecycleEvents: [
-                ...current.lifecycleEvents.slice(-11),
-                nextEntry,
-              ],
-              modalMountCount: privateMediaModalMountCountRef.current,
-              renderCount: privateMediaRenderCountRef.current,
-            }
-          : current,
-      );
+    (...args: unknown[]) => {
+      void args;
+      return undefined;
     },
     [],
   );
+
 
   const mergeConfirmedMessage = useCallback((nextMessage: MessageRow) => {
     if (nextMessage.message_type === "private_media") {
@@ -942,110 +914,13 @@ export function ChatClient({
   }, [chatToast]);
 
   useEffect(() => {
-    privateMediaRenderCountRef.current += 1;
-    activePrivateMediaUrlPresentRef.current = Boolean(activePrivateMediaUrl);
-    activePrivateMessageIdRef.current = activePrivateMessageId;
-  });
-
-  useEffect(() => {
-    logPrivateMediaTransition("state.snapshot", {
-      activePrivateMediaUrlPresent: Boolean(activePrivateMediaUrl),
-      activePrivateMessageId: activePrivateMessage?.id ?? null,
-      isCounting: activePrivateMediaIsCounting,
-      isPreparing: activePrivateMediaIsPreparing,
-      secondsLeft: activePrivateMediaSecondsLeft,
-    });
-  }, [
-    activePrivateMediaIsCounting,
-    activePrivateMediaIsPreparing,
-    activePrivateMediaSecondsLeft,
-    activePrivateMediaUrl,
-    activePrivateMessage?.id,
-    logPrivateMediaTransition,
-  ]);
-
-  useEffect(() => {
-    if (!isPrivateMediaModalOpen) {
-      return undefined;
-    }
-
-    privateMediaModalMountCountRef.current += 1;
-    logPrivateMediaTransition("modal.mounted", {
-      activePrivateMessageId: activePrivateMessageIdRef.current,
-    });
-    setActivePrivateMediaDebug((current) =>
-      current
-        ? {
-            ...current,
-            activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
-            activePrivateMessageId: activePrivateMessageIdRef.current,
-            componentUnmounted: false,
-            modalMountCount: privateMediaModalMountCountRef.current,
-            renderCount: privateMediaRenderCountRef.current,
-          }
-        : current,
-    );
-
-    return () => {
-      console.info("[PrivateMediaLifecycle]", {
-        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
-        activePrivateMessageId: activePrivateMessageIdRef.current,
-        event: "modal.unmounted",
-        modalMountCount: privateMediaModalMountCountRef.current,
-        renderCount: privateMediaRenderCountRef.current,
+    if (activePrivateMessageId && activePrivateMediaUrl) {
+      console.info("[PrivateMediaTestViewer] state", {
+        activePrivateMediaUrlPresent: true,
+        messageId: activePrivateMessageId,
       });
-      setActivePrivateMediaDebug((current) =>
-        current
-          ? {
-              ...current,
-              activePrivateMediaUrlPresent:
-                activePrivateMediaUrlPresentRef.current,
-              activePrivateMessageId: activePrivateMessageIdRef.current,
-              componentUnmounted: true,
-              lifecycleEvents: [
-                ...current.lifecycleEvents.slice(-11),
-                `${privateMediaLifecycleSeqRef.current + 1}:modal.unmounted`,
-              ],
-              modalMountCount: privateMediaModalMountCountRef.current,
-              renderCount: privateMediaRenderCountRef.current,
-            }
-          : current,
-      );
-      privateMediaLifecycleSeqRef.current += 1;
-    };
-  }, [isPrivateMediaModalOpen, logPrivateMediaTransition]);
-
-  useEffect(() => {
-    if (!activePrivateMessageId || !activePrivateMediaUrl) {
-      return undefined;
     }
-
-    logPrivateMediaTransition("signed-url-effect.ready", {
-      activePrivateMediaUrlPresent: true,
-      activePrivateMessageId,
-    });
-    measurePrivateMediaElement();
-    const frame = window.requestAnimationFrame(measurePrivateMediaElement);
-    const timer = window.setTimeout(measurePrivateMediaElement, 300);
-
-    return () => {
-      console.info("[PrivateMediaLifecycle]", {
-        activePrivateMediaUrlPresent: activePrivateMediaUrlPresentRef.current,
-        activePrivateMessageId,
-        event: "signed-url-effect.cleanup",
-        modalMountCount: privateMediaModalMountCountRef.current,
-        renderCount: privateMediaRenderCountRef.current,
-      });
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-    };
-  }, [
-    activePrivateMediaRetryCount,
-    activePrivateMediaUrl,
-    activePrivateMessageId,
-    logPrivateMediaTransition,
-    measurePrivateMediaElement,
-  ]);
+  }, [activePrivateMediaUrl, activePrivateMessageId]);
 
   useEffect(() => {
     if (!activePrivateMessage || !activePrivateMediaIsCounting) {
@@ -3033,7 +2908,14 @@ export function ChatClient({
         </div>
       ) : null}
 
-      {activePrivateMessage ? (
+      {activePrivateMessage &&
+      activePrivateMediaUrl &&
+      activePrivateMessage.media_type !== "video" ? (
+        <PrivateMediaBareImageViewer
+          onClose={closePrivateMediaViewer}
+          src={activePrivateMediaUrl}
+        />
+      ) : activePrivateMessage ? (
         <PrivateMediaViewerBoundary onClose={closePrivateMediaViewer}>
           <div
             data-private-media-overlay
@@ -3386,6 +3268,30 @@ function PrivateMediaWatermarkOverlay({
           {watermark}
         </div>
       ))}
+    </div>
+  );
+}
+
+function PrivateMediaBareImageViewer({
+  onClose,
+  src,
+}: {
+  onClose: () => void;
+  src: string;
+}) {
+  console.count("[PrivateMediaTestViewer] render");
+
+  return (
+    <div className="fixed inset-0 z-[100] grid min-h-[100dvh] place-items-center bg-black">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="Private media" />
+      <button
+        type="button"
+        onClick={onClose}
+        className="fixed right-4 top-4 rounded-full border border-white/20 bg-black/70 px-3 py-2 text-xs font-semibold text-white"
+      >
+        Close
+      </button>
     </div>
   );
 }
