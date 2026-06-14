@@ -98,6 +98,8 @@ type PrivateMediaDebugState = {
   objectExists: boolean | null;
   objectExistsReason: string | null;
   overlayZIndex: string | null;
+  parentHeight: number | null;
+  parentWidth: number | null;
   signingAttempted: boolean | null;
   signingSuccess: boolean | null;
   signedUrlContentType: string | null;
@@ -269,6 +271,8 @@ function createPrivateMediaDebugState(
     objectExists: payload?.objectExists ?? null,
     objectExistsReason: payload?.objectExistsReason ?? null,
     overlayZIndex: null,
+    parentHeight: null,
+    parentWidth: null,
     signingAttempted: payload?.SIGNING_ATTEMPTED ?? null,
     signingSuccess: payload?.SIGNING_SUCCESS ?? null,
     signedUrlContentType: payload?.signedUrlContentType ?? null,
@@ -447,6 +451,7 @@ export function ChatClient({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
+  const privateMediaContainerRef = useRef<HTMLDivElement | null>(null);
   const privateMediaElementRef = useRef<HTMLImageElement | HTMLVideoElement | null>(
     null,
   );
@@ -607,6 +612,8 @@ export function ChatClient({
 
   const measurePrivateMediaElement = useCallback(() => {
     const element = privateMediaElementRef.current;
+    const parent = privateMediaContainerRef.current;
+    const parentRect = parent?.getBoundingClientRect();
 
     setActivePrivateMediaDebug((current) => {
       if (!current) {
@@ -623,6 +630,8 @@ export function ChatClient({
           imgVisible: false,
           imgWidth: null,
           overlayZIndex: null,
+          parentHeight: parentRect ? Math.round(parentRect.height) : null,
+          parentWidth: parentRect ? Math.round(parentRect.width) : null,
         };
       }
 
@@ -648,6 +657,8 @@ export function ChatClient({
         overlayZIndex: overlay
           ? window.getComputedStyle(overlay).zIndex || "auto"
           : null,
+        parentHeight: parentRect ? Math.round(parentRect.height) : null,
+        parentWidth: parentRect ? Math.round(parentRect.width) : null,
       };
     });
   }, []);
@@ -2763,7 +2774,10 @@ export function ChatClient({
                 </div>
               </div>
             ) : null}
-            <div className="flex flex-1 items-center justify-center bg-black">
+            <div
+              ref={privateMediaContainerRef}
+              className="flex min-h-[60dvh] flex-1 items-center justify-center bg-black px-0"
+            >
               {!activePrivateMediaUrl ? (
                 <div className="px-8 text-center">
                   <p className="text-sm font-semibold text-white">
@@ -2837,6 +2851,12 @@ export function ChatClient({
                     );
                   }}
                   className="max-h-full w-full object-contain"
+                  style={{
+                    display: "block",
+                    maxHeight: "70vh",
+                    objectFit: "contain",
+                    width: "100%",
+                  }}
                 />
               ) : (
                 // Signed private-media URLs use Supabase /object/sign paths, which
@@ -2899,7 +2919,13 @@ export function ChatClient({
                         : current,
                     );
                   }}
-                  className="h-auto max-h-full w-full object-contain"
+                  className="w-full object-contain"
+                  style={{
+                    display: "block",
+                    maxHeight: "70vh",
+                    objectFit: "contain",
+                    width: "100%",
+                  }}
                 />
               )}
             </div>
@@ -2983,6 +3009,14 @@ export function ChatClient({
                   <dd>{activePrivateMediaDebug.imgClientWidth ?? "unknown"}</dd>
                   <dt className="text-white/45">IMG_CLIENT_HEIGHT</dt>
                   <dd>{activePrivateMediaDebug.imgClientHeight ?? "unknown"}</dd>
+                  <dt className="text-white/45">PARENT_WIDTH</dt>
+                  <dd>{activePrivateMediaDebug.parentWidth ?? "unknown"}</dd>
+                  <dt className="text-white/45">PARENT_HEIGHT</dt>
+                  <dd>{activePrivateMediaDebug.parentHeight ?? "unknown"}</dd>
+                  <dt className="text-white/45">IMAGE_NATURAL_WIDTH</dt>
+                  <dd>{activePrivateMediaDebug.naturalWidth ?? "unknown"}</dd>
+                  <dt className="text-white/45">IMAGE_NATURAL_HEIGHT</dt>
+                  <dd>{activePrivateMediaDebug.naturalHeight ?? "unknown"}</dd>
                   <dt className="text-white/45">OVERLAY_Z_INDEX</dt>
                   <dd>{activePrivateMediaDebug.overlayZIndex ?? "unknown"}</dd>
                   <dt className="text-white/45">OBJECT_EXISTS</dt>
