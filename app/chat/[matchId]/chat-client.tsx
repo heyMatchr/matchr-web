@@ -132,6 +132,7 @@ const SYSTEM_MESSAGE_TYPES = new Set([
   "call_event",
 ]);
 
+const PRIVATE_MEDIA_VIEW_SECONDS = 15;
 const conversationTones: ConversationTone[] = [
   "Playful",
   "Smooth",
@@ -269,8 +270,12 @@ export function ChatClient({
   const [templatesError, setTemplatesError] = useState("");
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
+  const [activePrivateMediaExpiresAt, setActivePrivateMediaExpiresAt] =
+    useState<string | null>(null);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
   const [activePrivateMediaError, setActivePrivateMediaError] = useState("");
+  const [activePrivateMediaIsPreparing, setActivePrivateMediaIsPreparing] =
+    useState(false);
   const [activePrivateMediaRetryCount, setActivePrivateMediaRetryCount] =
     useState(0);
   const [activePrivateMediaDebug, setActivePrivateMediaDebug] =
@@ -305,6 +310,7 @@ export function ChatClient({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
+  const privateMediaOpenRequestRef = useRef(0);
   const privateMediaInputRef = useRef<HTMLInputElement>(null);
   const privatePhotoInputRef = useRef<HTMLInputElement>(null);
   const privateVideoInputRef = useRef<HTMLInputElement>(null);
@@ -377,14 +383,14 @@ export function ChatClient({
     assistTone,
   );
   const activePrivateSeconds =
-    activePrivateMessage?.expires_at
+    activePrivateMediaExpiresAt
       ? Math.max(
           0,
           Math.ceil(
-            (new Date(activePrivateMessage.expires_at).getTime() - now) / 1000,
+            (new Date(activePrivateMediaExpiresAt).getTime() - now) / 1000,
           ),
         )
-      : 0;
+      : PRIVATE_MEDIA_VIEW_SECONDS;
   const messageGoldCost = calculateMessageCost({
     hasPremium,
     receiver: {
@@ -454,6 +460,18 @@ export function ChatClient({
     );
   }, []);
 
+  const closePrivateMediaViewer = useCallback(() => {
+    privateMediaOpenRequestRef.current += 1;
+    setActivePrivateMessage(null);
+    setActivePrivateMediaExpiresAt(null);
+    setActivePrivateMediaUrl("");
+    setActivePrivateMediaError("");
+    setActivePrivateMediaIsPreparing(false);
+    setActivePrivateMediaRetryCount(0);
+    setActivePrivateMediaDebug(null);
+    setActivePrivateWatermark(null);
+  }, []);
+
   const markMessageAsRead = useCallback(
     async (message: MessageRow) => {
       if (message.receiver_id !== currentUserId || message.read_at) {
@@ -468,6 +486,27 @@ export function ChatClient({
         .is("read_at", null);
     },
     [currentUserId, supabase],
+  );
+
+  const insertSystemMessage = useCallback(
+    async (messageType: string, body: string) => {
+      const { data: savedMessage } = await supabase
+        .from("messages")
+        .insert({
+          content: body,
+          match_id: matchId,
+          message_type: messageType,
+          receiver_id: receiverId,
+          sender_id: currentUserId,
+        })
+        .select(MESSAGE_SELECT)
+        .single();
+
+      if (savedMessage) {
+        mergeConfirmedMessage(savedMessage);
+      }
+    },
+    [currentUserId, matchId, mergeConfirmedMessage, receiverId, supabase],
   );
 
   const trackPresence = useCallback(
@@ -579,6 +618,38 @@ export function ChatClient({
     const timer = window.setTimeout(() => setChatToast(""), 1800);
     return () => window.clearTimeout(timer);
   }, [chatToast]);
+
+  useEffect(() => {
+    if (!activePrivateMessage || !activePrivateMediaExpiresAt) {
+      return undefined;
+    }
+
+    if (activePrivateSeconds > 0) {
+      return undefined;
+    }
+
+    const messageId = activePrivateMessage.id;
+
+    const expiryTimer = window.setTimeout(() => {
+      setMessages((current) =>
+        current.map((currentMessage) =>
+          currentMessage.id === messageId
+            ? { ...currentMessage, expires_at: new Date().toISOString() }
+            : currentMessage,
+        ),
+      );
+      closePrivateMediaViewer();
+      void insertSystemMessage("private_media_expired", "Private media expired.");
+    }, 0);
+
+    return () => window.clearTimeout(expiryTimer);
+  }, [
+    activePrivateMediaExpiresAt,
+    activePrivateMessage,
+    activePrivateSeconds,
+    closePrivateMediaViewer,
+    insertSystemMessage,
+  ]);
 
   useEffect(() => {
     if (!isPreviewVideoOpen) return undefined;
@@ -693,6 +764,7 @@ export function ChatClient({
       void channel.untrack();
       void supabase.removeChannel(channel);
       channelRef.current = null;
+      privateMediaOpenRequestRef.current += 1;
     };
   }, [
     currentUserId,
@@ -1185,24 +1257,6 @@ export function ChatClient({
     }
   }
 
-  async function insertSystemMessage(messageType: string, body: string) {
-    const { data: savedMessage } = await supabase
-      .from("messages")
-      .insert({
-        content: body,
-        match_id: matchId,
-        message_type: messageType,
-        receiver_id: receiverId,
-        sender_id: currentUserId,
-      })
-      .select(MESSAGE_SELECT)
-      .single();
-
-    if (savedMessage) {
-      mergeConfirmedMessage(savedMessage);
-    }
-  }
-
   async function getPrivateMediaSignedUrl(messageId: string): Promise<{
     debug: Omit<PrivateMediaDebugState, "imageLoadStatus" | "naturalHeight" | "naturalWidth"> | null;
     expires_at: string | null;
@@ -1280,8 +1334,33 @@ export function ChatClient({
       return;
     }
 
+    const requestId = privateMediaOpenRequestRef.current + 1;
+
+    privateMediaOpenRequestRef.current = requestId;
+    setActivePrivateMessage(message);
+    setActivePrivateMediaExpiresAt(null);
+    setActivePrivateMediaUrl("");
+    setActivePrivateMediaError("");
+    setActivePrivateMediaIsPreparing(true);
+    setActivePrivateMediaRetryCount(0);
+    setActivePrivateMediaDebug({
+      imageLoadStatus: "loading",
+      mediaType: message.media_type,
+      naturalHeight: null,
+      naturalWidth: null,
+      signedUrlCheckStatus: null,
+      signedUrlExists: false,
+      storagePath: null,
+    });
+    setActivePrivateWatermark(null);
+
     try {
       const signedMedia = await getPrivateMediaSignedUrl(message.id);
+
+      if (privateMediaOpenRequestRef.current !== requestId) {
+        return;
+      }
+
       const openedAt = signedMedia.viewed_at
         ? new Date(signedMedia.viewed_at)
         : new Date();
@@ -1294,6 +1373,8 @@ export function ChatClient({
 
       setActivePrivateMediaUrl(signedMedia.signedUrl);
       setActivePrivateMediaError("");
+      setActivePrivateMediaExpiresAt(null);
+      setActivePrivateMediaIsPreparing(false);
       setActivePrivateMediaRetryCount(0);
       setActivePrivateMediaDebug({
         imageLoadStatus: "loading",
@@ -1306,7 +1387,6 @@ export function ChatClient({
       });
       setActivePrivateWatermark(signedMedia.watermark);
       updateReadReceipt(updatedMessage);
-      setNow(openedAt.getTime());
       setMessages((current) =>
         current.map((currentMessage) =>
           currentMessage.id === message.id ? updatedMessage : currentMessage,
@@ -1314,27 +1394,26 @@ export function ChatClient({
       );
       setActivePrivateMessage(updatedMessage);
       await insertSystemMessage("private_media_opened", "Private media opened once.");
-      setTimeout(() => {
-        setMessages((current) =>
-          current.map((currentMessage) =>
-            currentMessage.id === message.id
-              ? { ...currentMessage, expires_at: new Date().toISOString() }
-              : currentMessage,
-          ),
-        );
-        setActivePrivateMessage(null);
-        setActivePrivateMediaUrl("");
-        setActivePrivateMediaError("");
-        setActivePrivateMediaRetryCount(0);
-        setActivePrivateMediaDebug(null);
-        setActivePrivateWatermark(null);
-        void insertSystemMessage("private_media_expired", "Private media expired.");
-      }, 15500);
     } catch (signedUrlError) {
-      setError(
+      if (privateMediaOpenRequestRef.current !== requestId) {
+        return;
+      }
+
+      const messageText =
         signedUrlError instanceof Error
           ? signedUrlError.message
-          : "Private media could not be opened.",
+          : "Private media could not be opened.";
+
+      setActivePrivateMediaIsPreparing(false);
+      setActivePrivateMediaError(
+        messageText.includes("already opened")
+          ? "Already opened."
+          : messageText.includes("expired")
+            ? "Expired."
+            : "Private media could not load.",
+      );
+      setActivePrivateMediaDebug((current) =>
+        current ? { ...current, imageLoadStatus: "error" } : current,
       );
     }
   }
@@ -1345,9 +1424,21 @@ export function ChatClient({
     }
 
     setActivePrivateMediaError("");
+    setActivePrivateMediaExpiresAt(null);
     setActivePrivateMediaRetryCount((current) => current + 1);
     setActivePrivateMediaDebug((current) =>
       current ? { ...current, imageLoadStatus: "loading" } : current,
+    );
+  }
+
+  function startPrivateMediaCountdown() {
+    const startedAt = Date.now();
+
+    setNow(startedAt);
+    setActivePrivateMediaExpiresAt(
+      (current) =>
+        current ??
+        new Date(startedAt + PRIVATE_MEDIA_VIEW_SECONDS * 1000).toISOString(),
     );
   }
 
@@ -2398,22 +2489,50 @@ export function ChatClient({
         </div>
       ) : null}
 
-      {activePrivateMessage && activePrivateMediaUrl && activePrivateSeconds > 0 ? (
+      {activePrivateMessage ? (
         <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
           <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
             <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
               <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100 backdrop-blur">
-                Private • {activePrivateSeconds}s
+                {activePrivateMediaExpiresAt
+                  ? `Private • ${activePrivateSeconds}s`
+                  : "Private"}
               </div>
+              <button
+                type="button"
+                onClick={closePrivateMediaViewer}
+                className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/45 text-xs font-semibold uppercase text-white/70 backdrop-blur"
+                aria-label="Close private media"
+              >
+                Close
+              </button>
             </div>
-            <div className="absolute left-4 right-4 top-20 z-20 h-1 overflow-hidden rounded-full bg-white/15">
-              <div
-                className="h-full rounded-full bg-emerald-200 transition-all duration-1000"
-                style={{ width: `${(activePrivateSeconds / 15) * 100}%` }}
-              />
-            </div>
+            {activePrivateMediaExpiresAt ? (
+              <div className="absolute left-4 right-4 top-20 z-20 h-1 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full bg-emerald-200 transition-all duration-1000"
+                  style={{
+                    width: `${(activePrivateSeconds / PRIVATE_MEDIA_VIEW_SECONDS) * 100}%`,
+                  }}
+                />
+              </div>
+            ) : null}
             <div className="flex flex-1 items-center justify-center bg-black">
-              {activePrivateMessage.media_type === "video" ? (
+              {!activePrivateMediaUrl ? (
+                <div className="px-8 text-center">
+                  <p className="text-sm font-semibold text-white">
+                    {activePrivateMediaError ||
+                      (activePrivateMediaIsPreparing
+                        ? "Preparing private media..."
+                        : "Private media could not load.")}
+                  </p>
+                  {!activePrivateMediaError ? (
+                    <p className="mt-2 text-xs text-white/45">
+                      Your view starts after the media loads.
+                    </p>
+                  ) : null}
+                </div>
+              ) : activePrivateMessage.media_type === "video" ? (
                 <video
                   key={`private-video-${activePrivateMediaRetryCount}`}
                   src={activePrivateMediaUrl}
@@ -2429,6 +2548,7 @@ export function ChatClient({
                   }}
                   onError={() => {
                     setActivePrivateMediaError("Private media could not load.");
+                    setActivePrivateMediaExpiresAt(null);
                     setActivePrivateMediaDebug((current) =>
                       current
                         ? { ...current, imageLoadStatus: "error" }
@@ -2437,6 +2557,7 @@ export function ChatClient({
                   }}
                   onLoadedMetadata={(event) => {
                     setActivePrivateMediaError("");
+                    startPrivateMediaCountdown();
                     setActivePrivateMediaDebug((current) =>
                       current
                         ? {
@@ -2467,6 +2588,7 @@ export function ChatClient({
                     setActivePrivateMediaError(
                       "Private media could not load. Try once more.",
                     );
+                    setActivePrivateMediaExpiresAt(null);
                     setActivePrivateMediaDebug((current) =>
                       current
                         ? { ...current, imageLoadStatus: "error" }
@@ -2475,6 +2597,7 @@ export function ChatClient({
                   }}
                   onLoad={(event) => {
                     setActivePrivateMediaError("");
+                    startPrivateMediaCountdown();
                     setActivePrivateMediaDebug((current) =>
                       current
                         ? {
@@ -2520,10 +2643,10 @@ export function ChatClient({
                 </dl>
               </div>
             ) : null}
-            {activePrivateMediaError ? (
+            {activePrivateMediaError && activePrivateMediaUrl ? (
               <div className="absolute inset-x-5 top-1/2 z-30 -translate-y-1/2 rounded-2xl border border-red-400/25 bg-black/80 p-4 text-center text-sm text-red-100 backdrop-blur">
                 <p>{activePrivateMediaError}</p>
-                {activePrivateMediaRetryCount < 1 ? (
+                {activePrivateMediaRetryCount < 1 && activePrivateMediaUrl ? (
                   <button
                     type="button"
                     onClick={retryActivePrivateMediaLoad}
@@ -2586,8 +2709,12 @@ function PrivateMediaWatermarkOverlay({
           }
         `}</style>
         <div
-          className="absolute max-w-[82%] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/[0.09] sm:text-xs"
-          style={{ animation: "matchr-private-watermark-drift 9s linear infinite" }}
+          className="absolute max-w-[82%] text-[10px] font-semibold uppercase tracking-[0.22em] text-white/10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)] sm:text-xs"
+          style={{
+            animation: "matchr-private-watermark-drift 9s linear infinite",
+            textShadow:
+              "0 1px 2px rgba(0,0,0,0.55), 0 0 1px rgba(255,255,255,0.24)",
+          }}
         >
           {watermark}
         </div>
@@ -2600,7 +2727,11 @@ function PrivateMediaWatermarkOverlay({
       {positions.map((position, index) => (
         <div
           key={`${position}-${index}`}
-          className={`absolute ${position} max-w-[76%] -rotate-12 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/[0.08] sm:text-xs`}
+          className={`absolute ${position} max-w-[76%] -rotate-12 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/[0.09] drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)] sm:text-xs`}
+          style={{
+            textShadow:
+              "0 1px 2px rgba(0,0,0,0.55), 0 0 1px rgba(255,255,255,0.24)",
+          }}
         >
           {watermark}
         </div>
