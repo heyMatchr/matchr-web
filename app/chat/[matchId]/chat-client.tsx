@@ -624,12 +624,8 @@ export function ChatClient({
       return undefined;
     }
 
-    if (activePrivateSeconds > 0) {
-      return undefined;
-    }
-
     const messageId = activePrivateMessage.id;
-
+    const expiresAtMs = new Date(activePrivateMediaExpiresAt).getTime();
     const expiryTimer = window.setTimeout(() => {
       setMessages((current) =>
         current.map((currentMessage) =>
@@ -640,13 +636,12 @@ export function ChatClient({
       );
       closePrivateMediaViewer();
       void insertSystemMessage("private_media_expired", "Private media expired.");
-    }, 0);
+    }, Math.max(0, expiresAtMs - Date.now()));
 
     return () => window.clearTimeout(expiryTimer);
   }, [
     activePrivateMediaExpiresAt,
     activePrivateMessage,
-    activePrivateSeconds,
     closePrivateMediaViewer,
     insertSystemMessage,
   ]);
@@ -696,7 +691,9 @@ export function ChatClient({
   }, []);
 
   function showPrivacyWarning() {
-    setPrivacyWarning("Private media is protected.");
+    // Browser screenshot detection is best-effort only. Web apps cannot
+    // reliably detect or block OS screenshots.
+    setPrivacyWarning("Private media is view once.");
     window.setTimeout(() => setPrivacyWarning(""), 2200);
   }
 
@@ -1330,7 +1327,27 @@ export function ChatClient({
       message.expires_at &&
       new Date(message.expires_at).getTime() <= now;
 
-    if (message.sender_id === currentUserId || message.viewed_at || expired) {
+    if (message.sender_id === currentUserId) {
+      return;
+    }
+
+    if (message.viewed_at || expired) {
+      setActivePrivateMessage(message);
+      setActivePrivateMediaExpiresAt(null);
+      setActivePrivateMediaUrl("");
+      setActivePrivateMediaError("Private media expired.");
+      setActivePrivateMediaIsPreparing(false);
+      setActivePrivateMediaRetryCount(0);
+      setActivePrivateMediaDebug({
+        imageLoadStatus: "error",
+        mediaType: message.media_type,
+        naturalHeight: null,
+        naturalWidth: null,
+        signedUrlCheckStatus: null,
+        signedUrlExists: false,
+        storagePath: null,
+      });
+      setActivePrivateWatermark(null);
       return;
     }
 
@@ -2498,23 +2515,31 @@ export function ChatClient({
                   ? `Private • ${activePrivateSeconds}s`
                   : "Private"}
               </div>
-              <button
-                type="button"
-                onClick={closePrivateMediaViewer}
-                className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/45 text-xs font-semibold uppercase text-white/70 backdrop-blur"
-                aria-label="Close private media"
-              >
-                Close
-              </button>
+              {!activePrivateMediaExpiresAt ? (
+                <button
+                  type="button"
+                  onClick={closePrivateMediaViewer}
+                  className="grid h-9 min-w-16 place-items-center rounded-full border border-white/10 bg-black/45 px-3 text-xs font-semibold uppercase text-white/70 backdrop-blur"
+                  aria-label="Close private media"
+                >
+                  Close
+                </button>
+              ) : null}
             </div>
             {activePrivateMediaExpiresAt ? (
-              <div className="absolute left-4 right-4 top-20 z-20 h-1 overflow-hidden rounded-full bg-white/15">
-                <div
-                  className="h-full rounded-full bg-emerald-200 transition-all duration-1000"
-                  style={{
-                    width: `${(activePrivateSeconds / PRIVATE_MEDIA_VIEW_SECONDS) * 100}%`,
-                  }}
-                />
+              <div className="absolute left-4 right-4 top-16 z-20">
+                <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
+                  <span>View once</span>
+                  <span>{activePrivateSeconds}s</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
+                  <div
+                    className="h-full rounded-full bg-emerald-200 transition-all duration-1000"
+                    style={{
+                      width: `${(activePrivateSeconds / PRIVATE_MEDIA_VIEW_SECONDS) * 100}%`,
+                    }}
+                  />
+                </div>
               </div>
             ) : null}
             <div className="flex flex-1 items-center justify-center bg-black">
