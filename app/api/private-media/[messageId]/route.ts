@@ -118,6 +118,40 @@ async function checkSignedMediaUrl(signedUrl: string) {
   }
 }
 
+async function checkPrivateMediaObjectExists(storagePath: string) {
+  const segments = storagePath.split("/").filter(Boolean);
+  const fileName = segments.pop();
+  const folder = segments.join("/");
+
+  if (!fileName || !folder) {
+    return {
+      exists: false,
+      reason: "invalid path",
+    };
+  }
+
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin
+    .storage
+    .from(PRIVATE_MEDIA_BUCKET_NAME)
+    .list(folder, {
+      limit: 100,
+      search: fileName,
+    });
+
+  if (error) {
+    return {
+      exists: false,
+      reason: error.message,
+    };
+  }
+
+  return {
+    exists: Boolean(data?.some((object) => object.name === fileName)),
+    reason: null,
+  };
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ messageId: string }> },
@@ -173,6 +207,21 @@ export async function GET(
     );
   }
 
+  const objectCheck = await checkPrivateMediaObjectExists(storagePath);
+
+  console.info("[PrivateMedia] storage object check", {
+    bucket: PRIVATE_MEDIA_BUCKET_NAME,
+    exists: objectCheck.exists,
+    messageId,
+    originalMediaUrlShape: /^https?:\/\//i.test(message.media_url)
+      ? "absolute_url"
+      : message.media_url.startsWith(`${PRIVATE_MEDIA_BUCKET_NAME}/`)
+        ? "bucket_prefixed_path"
+        : "raw_path",
+    path: storagePath,
+    reason: objectCheck.reason,
+  });
+
   const openedAt = new Date();
   const expiresAt = new Date(openedAt.getTime() + 15000).toISOString();
   const admin = createSupabaseAdminClient();
@@ -190,6 +239,14 @@ export async function GET(
     .storage
     .from(PRIVATE_MEDIA_BUCKET_NAME)
     .createSignedUrl(storagePath, 60);
+
+  console.info("[PrivateMedia] signed URL generation result", {
+    bucket: PRIVATE_MEDIA_BUCKET_NAME,
+    generated: Boolean(data?.signedUrl),
+    messageId,
+    path: storagePath,
+    reason: signedUrlError?.message ?? null,
+  });
 
   if (signedUrlError || !data?.signedUrl) {
     console.warn("[PrivateMedia] signed URL creation failed", {
@@ -223,7 +280,11 @@ export async function GET(
           process.env.NODE_ENV !== "production"
             ? {
                 mediaType: message.media_type,
+                objectExists: objectCheck.exists,
+                objectExistsReason: objectCheck.reason,
+                signedUrlGenerated: Boolean(data?.signedUrl),
                 signedUrlCheckStatus: signedUrlCheck.status,
+                signedUrlContentType: signedUrlCheck.contentType,
                 signedUrlExists: Boolean(data.signedUrl),
                 storagePath,
               }
@@ -284,13 +345,15 @@ export async function GET(
       viewed_at: openedAt.toISOString(),
     },
     debug:
-      process.env.NODE_ENV !== "production"
-        ? {
-            mediaType: openedMessage.media_type,
-            signedUrlCheckStatus: signedUrlCheck.status,
-            signedUrlExists: Boolean(data.signedUrl),
-            storagePath,
-          }
-        : undefined,
+      {
+        mediaType: openedMessage.media_type,
+        objectExists: objectCheck.exists,
+        objectExistsReason: objectCheck.reason,
+        signedUrlContentType: signedUrlCheck.contentType,
+        signedUrlFetchStatus: signedUrlCheck.status,
+        signedUrlGenerated: Boolean(data.signedUrl),
+        signedUrlPresent: Boolean(data.signedUrl),
+        storagePath,
+      },
   });
 }

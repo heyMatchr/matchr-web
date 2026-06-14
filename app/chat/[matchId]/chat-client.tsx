@@ -79,12 +79,16 @@ type PrivateMediaWatermark = {
 };
 
 type PrivateMediaDebugState = {
-  imageLoadStatus: "idle" | "loading" | "loaded" | "error";
+  imageLoadStatus: "idle" | "loading" | "loaded" | "failed";
   mediaType: string | null;
   naturalHeight: number | null;
   naturalWidth: number | null;
-  signedUrlCheckStatus: number | null;
-  signedUrlExists: boolean;
+  objectExists: boolean | null;
+  objectExistsReason: string | null;
+  signedUrlContentType: string | null;
+  signedUrlFetchStatus: number | null;
+  signedUrlGenerated: boolean | null;
+  signedUrlPresent: boolean;
   storagePath: string | null;
 };
 
@@ -195,7 +199,6 @@ const conversationTones: ConversationTone[] = [
 ];
 
 const CONVERSATION_DORMANT_AFTER_MS = 1000 * 60 * 60 * 24 * 3;
-const SHOW_PRIVATE_MEDIA_DEBUG = process.env.NODE_ENV !== "production";
 
 type GiftAnalyticsRpcClient = {
   rpc: (
@@ -1346,8 +1349,12 @@ export function ChatClient({
       watermark?: Partial<PrivateMediaWatermark> | null;
       debug?: {
         mediaType?: string | null;
-        signedUrlCheckStatus?: number | null;
-        signedUrlExists?: boolean;
+        objectExists?: boolean | null;
+        objectExistsReason?: string | null;
+        signedUrlContentType?: string | null;
+        signedUrlFetchStatus?: number | null;
+        signedUrlGenerated?: boolean | null;
+        signedUrlPresent?: boolean;
         storagePath?: string | null;
       } | null;
     };
@@ -1361,8 +1368,12 @@ export function ChatClient({
       debug: result.debug
         ? {
             mediaType: result.debug.mediaType ?? result.mediaType ?? null,
-            signedUrlCheckStatus: result.debug.signedUrlCheckStatus ?? null,
-            signedUrlExists: Boolean(result.debug.signedUrlExists),
+            objectExists: result.debug.objectExists ?? null,
+            objectExistsReason: result.debug.objectExistsReason ?? null,
+            signedUrlContentType: result.debug.signedUrlContentType ?? null,
+            signedUrlFetchStatus: result.debug.signedUrlFetchStatus ?? null,
+            signedUrlGenerated: result.debug.signedUrlGenerated ?? null,
+            signedUrlPresent: Boolean(result.debug.signedUrlPresent),
             storagePath: result.debug.storagePath ?? result.storagePath ?? null,
           }
         : null,
@@ -1400,12 +1411,16 @@ export function ChatClient({
       setActivePrivateMediaIsPreparing(false);
       setActivePrivateMediaRetryCount(0);
       setActivePrivateMediaDebug({
-        imageLoadStatus: "error",
+        imageLoadStatus: "failed",
         mediaType: message.media_type,
         naturalHeight: null,
         naturalWidth: null,
-        signedUrlCheckStatus: null,
-        signedUrlExists: false,
+        objectExists: null,
+        objectExistsReason: null,
+        signedUrlContentType: null,
+        signedUrlFetchStatus: null,
+        signedUrlGenerated: null,
+        signedUrlPresent: false,
         storagePath: null,
       });
       setActivePrivateWatermark(null);
@@ -1427,8 +1442,12 @@ export function ChatClient({
       mediaType: message.media_type,
       naturalHeight: null,
       naturalWidth: null,
-      signedUrlCheckStatus: null,
-      signedUrlExists: false,
+      objectExists: null,
+      objectExistsReason: null,
+      signedUrlContentType: null,
+      signedUrlFetchStatus: null,
+      signedUrlGenerated: null,
+      signedUrlPresent: false,
       storagePath: null,
     });
     setActivePrivateWatermark(null);
@@ -1461,8 +1480,14 @@ export function ChatClient({
         mediaType: signedMedia.debug?.mediaType ?? signedMedia.mediaType,
         naturalHeight: null,
         naturalWidth: null,
-        signedUrlCheckStatus: signedMedia.debug?.signedUrlCheckStatus ?? null,
-        signedUrlExists: Boolean(signedMedia.signedUrl),
+        objectExists: signedMedia.debug?.objectExists ?? null,
+        objectExistsReason: signedMedia.debug?.objectExistsReason ?? null,
+        signedUrlContentType: signedMedia.debug?.signedUrlContentType ?? null,
+        signedUrlFetchStatus: signedMedia.debug?.signedUrlFetchStatus ?? null,
+        signedUrlGenerated:
+          signedMedia.debug?.signedUrlGenerated ?? Boolean(signedMedia.signedUrl),
+        signedUrlPresent:
+          signedMedia.debug?.signedUrlPresent ?? Boolean(signedMedia.signedUrl),
         storagePath: signedMedia.debug?.storagePath ?? signedMedia.storagePath,
       });
       setActivePrivateWatermark(signedMedia.watermark);
@@ -1493,7 +1518,7 @@ export function ChatClient({
             : "Private media could not load.",
       );
       setActivePrivateMediaDebug((current) =>
-        current ? { ...current, imageLoadStatus: "error" } : current,
+        current ? { ...current, imageLoadStatus: "failed" } : current,
       );
     }
   }
@@ -2637,15 +2662,33 @@ export function ChatClient({
                     showPrivacyWarning();
                   }}
                   onError={() => {
+                    console.error("[PrivateMediaViewer] video onError", {
+                      mediaType: activePrivateMediaDebug?.mediaType ?? null,
+                      signedUrlFetchStatus:
+                        activePrivateMediaDebug?.signedUrlFetchStatus ?? null,
+                      signedUrlPresent:
+                        activePrivateMediaDebug?.signedUrlPresent ?? false,
+                      storagePath: activePrivateMediaDebug?.storagePath ?? null,
+                    });
                     setActivePrivateMediaError("Private media could not load.");
                     setActivePrivateMediaIsCounting(false);
                     setActivePrivateMediaDebug((current) =>
                       current
-                        ? { ...current, imageLoadStatus: "error" }
+                        ? { ...current, imageLoadStatus: "failed" }
                         : current,
                     );
                   }}
                   onLoadedMetadata={(event) => {
+                    console.info("[PrivateMediaViewer] video onLoadedMetadata", {
+                      mediaType: activePrivateMediaDebug?.mediaType ?? null,
+                      signedUrlFetchStatus:
+                        activePrivateMediaDebug?.signedUrlFetchStatus ?? null,
+                      signedUrlPresent:
+                        activePrivateMediaDebug?.signedUrlPresent ?? false,
+                      storagePath: activePrivateMediaDebug?.storagePath ?? null,
+                      videoHeight: event.currentTarget.videoHeight,
+                      videoWidth: event.currentTarget.videoWidth,
+                    });
                     setActivePrivateMediaError("");
                     startPrivateMediaCountdown();
                     setActivePrivateMediaDebug((current) =>
@@ -2675,17 +2718,35 @@ export function ChatClient({
                     showPrivacyWarning();
                   }}
                   onError={() => {
+                    console.error("[PrivateMediaViewer] image onError", {
+                      mediaType: activePrivateMediaDebug?.mediaType ?? null,
+                      signedUrlFetchStatus:
+                        activePrivateMediaDebug?.signedUrlFetchStatus ?? null,
+                      signedUrlPresent:
+                        activePrivateMediaDebug?.signedUrlPresent ?? false,
+                      storagePath: activePrivateMediaDebug?.storagePath ?? null,
+                    });
                     setActivePrivateMediaError(
                       "Private media could not load. Try once more.",
                     );
                     setActivePrivateMediaIsCounting(false);
                     setActivePrivateMediaDebug((current) =>
                       current
-                        ? { ...current, imageLoadStatus: "error" }
+                        ? { ...current, imageLoadStatus: "failed" }
                         : current,
                     );
                   }}
                   onLoad={(event) => {
+                    console.info("[PrivateMediaViewer] image onLoad", {
+                      mediaType: activePrivateMediaDebug?.mediaType ?? null,
+                      naturalHeight: event.currentTarget.naturalHeight,
+                      naturalWidth: event.currentTarget.naturalWidth,
+                      signedUrlFetchStatus:
+                        activePrivateMediaDebug?.signedUrlFetchStatus ?? null,
+                      signedUrlPresent:
+                        activePrivateMediaDebug?.signedUrlPresent ?? false,
+                      storagePath: activePrivateMediaDebug?.storagePath ?? null,
+                    });
                     setActivePrivateMediaError("");
                     startPrivateMediaCountdown();
                     setActivePrivateMediaDebug((current) =>
@@ -2705,24 +2766,42 @@ export function ChatClient({
                 />
               )}
             </div>
-            {SHOW_PRIVATE_MEDIA_DEBUG && activePrivateMediaDebug ? (
+            {activePrivateMediaDebug ? (
               <div className="absolute left-3 top-28 z-40 max-w-[calc(100%-1.5rem)] rounded-2xl border border-white/15 bg-black/80 p-3 text-[11px] text-white/80 shadow-xl backdrop-blur">
-                <p className="font-semibold text-emerald-100">Private media debug</p>
+                <p className="font-semibold text-emerald-100">
+                  Private media debug
+                </p>
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-                  <dt className="text-white/45">signedUrl</dt>
-                  <dd>{activePrivateMediaDebug.signedUrlExists ? "yes" : "no"}</dd>
-                  <dt className="text-white/45">mediaType</dt>
+                  <dt className="text-white/45">SIGNED_URL_PRESENT</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedUrlPresent ? "true" : "false"}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_URL_GENERATED</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedUrlGenerated === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.signedUrlGenerated)}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_URL_FETCH_STATUS</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedUrlFetchStatus ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">CONTENT_TYPE</dt>
+                  <dd>{activePrivateMediaDebug.signedUrlContentType ?? "unknown"}</dd>
+                  <dt className="text-white/45">MEDIA_TYPE</dt>
                   <dd>{activePrivateMediaDebug.mediaType ?? "unknown"}</dd>
-                  <dt className="text-white/45">storagePath</dt>
+                  <dt className="text-white/45">IMAGE_LOAD_STATE</dt>
+                  <dd>{activePrivateMediaDebug.imageLoadStatus}</dd>
+                  <dt className="text-white/45">OBJECT_EXISTS</dt>
+                  <dd>
+                    {activePrivateMediaDebug.objectExists === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.objectExists)}
+                  </dd>
+                  <dt className="text-white/45">STORAGE_PATH</dt>
                   <dd className="break-all">
                     {activePrivateMediaDebug.storagePath ?? "unknown"}
                   </dd>
-                  <dt className="text-white/45">server fetch</dt>
-                  <dd>
-                    {activePrivateMediaDebug.signedUrlCheckStatus ?? "unknown"}
-                  </dd>
-                  <dt className="text-white/45">image</dt>
-                  <dd>{activePrivateMediaDebug.imageLoadStatus}</dd>
                   <dt className="text-white/45">size</dt>
                   <dd>
                     {activePrivateMediaDebug.naturalWidth &&
