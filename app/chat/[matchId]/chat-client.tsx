@@ -35,6 +35,7 @@ import {
   type GiftOption,
 } from "@/lib/gifts";
 import { MODERATION_UNAVAILABLE_MESSAGE, canUserMessage } from "@/lib/moderation";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import { getProfileHref } from "@/lib/profile-public-id";
 import {
   createMediaModerationPlaceholder,
@@ -68,6 +69,13 @@ type GiftMomentumState = {
   gift: GiftOption;
   giftTransactionId: string | null;
   streakDays: number | null;
+};
+
+type PrivateMediaWatermark = {
+  display_name: string;
+  public_id: string;
+  text: string;
+  viewed_at: string;
 };
 
 type ChatClientProps = {
@@ -251,6 +259,8 @@ export function ChatClient({
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
+  const [activePrivateWatermark, setActivePrivateWatermark] =
+    useState<PrivateMediaWatermark | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [chatToast, setChatToast] = useState("");
   const [privacyWarning, setPrivacyWarning] = useState("");
@@ -882,8 +892,8 @@ export function ChatClient({
         );
       }
       if (!receiverIsGloballyOnline) {
-        await supabase.from("notifications").insert({
-          actor_id: currentUserId,
+        await createSafeNotification(supabase, {
+          actorId: currentUserId,
           body:
             trimmedContent.length > 120
               ? `${trimmedContent.slice(0, 117)}...`
@@ -893,7 +903,7 @@ export function ChatClient({
           },
           title: "New message",
           type: "new_message",
-          user_id: receiverId,
+          userId: receiverId,
         });
       }
     }
@@ -1020,13 +1030,13 @@ export function ChatClient({
             : `Sent • -${messageGoldCost} Gold`,
         );
       }
-      await supabase.from("notifications").insert({
-        actor_id: currentUserId,
+      await createSafeNotification(supabase, {
+        actorId: currentUserId,
         body: isPrivate ? "Sent you private media." : `Sent you a ${mediaType}.`,
         metadata: { match_id: matchId },
         title: isPrivate ? "Private media received" : "New message",
         type: isPrivate ? "private_media_received" : "new_message",
-        user_id: receiverId,
+        userId: receiverId,
       });
     }
 
@@ -1139,8 +1149,8 @@ export function ChatClient({
         const streakDays = await recordGiftStreak(receiverId);
         setGiftMomentum({ gift, giftTransactionId, streakDays });
         setChatToast("Sent.");
-        await supabase.from("notifications").insert({
-          actor_id: currentUserId,
+        await createSafeNotification(supabase, {
+          actorId: currentUserId,
           body: `Sent you ${gift.name}.`,
           metadata: {
             client_request_id: clientRequestId,
@@ -1150,7 +1160,7 @@ export function ChatClient({
           },
           title: "Gift received",
           type: "gift_received",
-          user_id: receiverId,
+          userId: receiverId,
         });
       }
     } finally {
@@ -1177,7 +1187,12 @@ export function ChatClient({
     }
   }
 
-  async function getPrivateMediaSignedUrl(messageId: string) {
+  async function getPrivateMediaSignedUrl(messageId: string): Promise<{
+    expires_at: string | null;
+    url: string;
+    viewed_at: string | null;
+    watermark: PrivateMediaWatermark;
+  }> {
     const response = await fetch(`/api/private-media/${messageId}`, {
       credentials: "include",
       method: "GET",
@@ -1190,13 +1205,28 @@ export function ChatClient({
       throw new Error(result?.error ?? "Private media could not be opened.");
     }
 
-    const result = (await response.json()) as { url?: string };
+    const result = (await response.json()) as {
+      expires_at?: string | null;
+      url?: string;
+      viewed_at?: string | null;
+      watermark?: Partial<PrivateMediaWatermark> | null;
+    };
 
-    if (!result.url) {
+    if (!result.url || !result.watermark?.text) {
       throw new Error("Private media could not be opened.");
     }
 
-    return result.url;
+    return {
+      expires_at: result.expires_at ?? null,
+      url: result.url,
+      viewed_at: result.viewed_at ?? null,
+      watermark: {
+        display_name: result.watermark.display_name ?? "Matchr member",
+        public_id: result.watermark.public_id ?? "Matchr",
+        text: result.watermark.text,
+        viewed_at: result.watermark.viewed_at ?? new Date().toISOString(),
+      },
+    };
   }
 
   async function openPrivateMedia(message: MessageRow) {
@@ -1209,35 +1239,27 @@ export function ChatClient({
       return;
     }
 
-    const openedAt = new Date();
-    const expiresAt = new Date(openedAt.getTime() + 15000).toISOString();
-    const { data: updatedMessage } = await supabase
-      .from("messages")
-      .update({
-        expires_at: expiresAt,
-        viewed_at: openedAt.toISOString(),
-      })
-      .eq("id", message.id)
-      .eq("receiver_id", currentUserId)
-      .is("viewed_at", null)
-      .select(MESSAGE_SELECT)
-      .single();
+    try {
+      const signedMedia = await getPrivateMediaSignedUrl(message.id);
+      const openedAt = signedMedia.viewed_at
+        ? new Date(signedMedia.viewed_at)
+        : new Date();
+      const updatedMessage = {
+        ...message,
+        expires_at:
+          signedMedia.expires_at ?? new Date(openedAt.getTime() + 15000).toISOString(),
+        viewed_at: signedMedia.viewed_at ?? openedAt.toISOString(),
+      };
 
-    if (updatedMessage) {
-      try {
-        const signedUrl = await getPrivateMediaSignedUrl(updatedMessage.id);
-        setActivePrivateMediaUrl(signedUrl);
-      } catch (signedUrlError) {
-        setError(
-          signedUrlError instanceof Error
-            ? signedUrlError.message
-            : "Private media could not be opened.",
-        );
-        return;
-      }
-
+      setActivePrivateMediaUrl(signedMedia.url);
+      setActivePrivateWatermark(signedMedia.watermark);
       updateReadReceipt(updatedMessage);
       setNow(openedAt.getTime());
+      setMessages((current) =>
+        current.map((currentMessage) =>
+          currentMessage.id === message.id ? updatedMessage : currentMessage,
+        ),
+      );
       setActivePrivateMessage(updatedMessage);
       await insertSystemMessage("private_media_opened", "Private media opened once.");
       setTimeout(() => {
@@ -1250,8 +1272,15 @@ export function ChatClient({
         );
         setActivePrivateMessage(null);
         setActivePrivateMediaUrl("");
+        setActivePrivateWatermark(null);
         void insertSystemMessage("private_media_expired", "Private media expired.");
       }, 15500);
+    } catch (signedUrlError) {
+      setError(
+        signedUrlError instanceof Error
+          ? signedUrlError.message
+          : "Private media could not be opened.",
+      );
     }
   }
 
@@ -2351,6 +2380,12 @@ export function ChatClient({
                 />
               )}
             </div>
+            {activePrivateWatermark ? (
+              <PrivateMediaWatermarkOverlay
+                isVideo={activePrivateMessage.media_type === "video"}
+                watermark={activePrivateWatermark.text}
+              />
+            ) : null}
             {privateMediaShielded ? (
               <div className="absolute inset-0 z-30 grid place-items-center bg-black/80 p-8 text-center backdrop-blur-2xl">
                 <div className="rounded-3xl border border-emerald-200/20 bg-black/70 p-6 shadow-[0_0_70px_rgba(16,185,129,0.15)]">
@@ -2367,6 +2402,56 @@ export function ChatClient({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function PrivateMediaWatermarkOverlay({
+  isVideo,
+  watermark,
+}: {
+  isVideo: boolean;
+  watermark: string;
+}) {
+  const positions = [
+    "left-[8%] top-[18%]",
+    "right-[6%] top-[34%]",
+    "left-[12%] bottom-[28%]",
+    "right-[12%] bottom-[14%]",
+  ];
+
+  if (isVideo) {
+    return (
+      <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+        <style>{`
+          @keyframes matchr-private-watermark-drift {
+            0% { transform: translate3d(6%, 14%, 0) rotate(-12deg); }
+            24% { transform: translate3d(58%, 28%, 0) rotate(-12deg); }
+            50% { transform: translate3d(20%, 62%, 0) rotate(-12deg); }
+            76% { transform: translate3d(64%, 74%, 0) rotate(-12deg); }
+            100% { transform: translate3d(6%, 14%, 0) rotate(-12deg); }
+          }
+        `}</style>
+        <div
+          className="absolute max-w-[82%] rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/45 backdrop-blur-[2px] sm:text-xs"
+          style={{ animation: "matchr-private-watermark-drift 9s linear infinite" }}
+        >
+          {watermark}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+      {positions.map((position, index) => (
+        <div
+          key={`${position}-${index}`}
+          className={`absolute ${position} max-w-[76%] -rotate-12 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/35 backdrop-blur-[1px] sm:text-xs`}
+        >
+          {watermark}
+        </div>
+      ))}
     </div>
   );
 }

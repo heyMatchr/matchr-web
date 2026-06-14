@@ -16,6 +16,7 @@ import {
   type GiftOption,
 } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import {
   createMediaModerationPlaceholder,
@@ -967,13 +968,13 @@ export function StoriesBar({
       { reactionType },
     );
 
-    await supabase.from("notifications").insert({
-      actor_id: currentUserId,
+    await createSafeNotification(supabase, {
+      actorId: currentUserId,
       body: `Reacted to your story with ${reaction?.label ?? reactionType}.`,
       metadata: { reaction_type: reactionType, story_id: activeStory.id },
       title: "Story reaction",
       type: "story_reaction",
-      user_id: activeStory.user_id,
+      userId: activeStory.user_id,
     });
 
     setInteractionMessage(sent ? "Reaction sent privately." : "Reaction saved.");
@@ -1011,13 +1012,13 @@ export function StoriesBar({
       `Story reply: ${trimmedReply}`,
     );
 
-    await supabase.from("notifications").insert({
-      actor_id: currentUserId,
+    await createSafeNotification(supabase, {
+      actorId: currentUserId,
       body: trimmedReply,
       metadata: { story_id: activeStory.id },
       title: "Story reply",
       type: "story_reply",
-      user_id: activeStory.user_id,
+      userId: activeStory.user_id,
     });
 
     setReplyText("");
@@ -1104,8 +1105,8 @@ export function StoriesBar({
           `Sent ${gift.name} from your story.`,
           { giftType: gift.type },
         );
-        await supabase.from("notifications").insert({
-          actor_id: currentUserId,
+        await createSafeNotification(supabase, {
+          actorId: currentUserId,
           body: `Sent you ${gift.name} from your story.`,
           metadata: {
             client_request_id: clientRequestId,
@@ -1123,7 +1124,7 @@ export function StoriesBar({
           },
           title: "Story gift",
           type: "story_gift",
-          user_id: activeStory.user_id,
+          userId: activeStory.user_id,
         });
       }
 

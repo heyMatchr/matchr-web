@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function createNotification({
@@ -25,13 +26,13 @@ export async function createNotification({
   }
 
   const supabase = await createSupabaseServerClient();
-  await supabase.from("notifications").insert({
-    actor_id: actorId,
+  await createSafeNotification(supabase, {
+    actorId,
     body,
     metadata,
     title,
     type,
-    user_id: userId,
+    userId,
   });
 }
 
@@ -96,15 +97,15 @@ export async function followUser(userToFollowId: string) {
       throw new Error(error.message);
     }
 
-    await supabase.from("notifications").insert({
-      actor_id: user.id,
+    await createSafeNotification(supabase, {
+      actorId: user.id,
       body: `${profile?.display_name ?? "Someone"} followed your profile.`,
       metadata: {
         profile_id: user.id,
       },
       title: "New follower",
       type: "new_follower",
-      user_id: userToFollowId,
+      userId: userToFollowId,
     });
   }
 

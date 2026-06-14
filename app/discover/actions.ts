@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit } from "@/lib/action-limits";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 function orderedUsers(userA: string, userB: string) {
@@ -72,15 +73,15 @@ export async function likeProfile(profileUserId: string) {
       .maybeSingle(),
   ]);
 
-  await supabase.from("notifications").insert({
-    actor_id: userId,
+  await createSafeNotification(supabase, {
+    actorId: userId,
     body: `${currentProfile?.display_name ?? "Someone"} liked your profile.`,
     metadata: {
       profile_id: userId,
     },
     title: "New like",
     type: "new_like",
-    user_id: profileUserId,
+    userId: profileUserId,
   });
 
   const { data: reciprocalLike, error: reciprocalLikeError } = await supabase
@@ -108,25 +109,25 @@ export async function likeProfile(profileUserId: string) {
     }
 
     await Promise.all([
-      supabase.from("notifications").insert({
-        actor_id: userId,
+      createSafeNotification(supabase, {
+        actorId: userId,
         body: "You have a new mutual match. Start a conversation when it feels right.",
         metadata: {
           profile_id: profileUserId,
         },
         title: "It's a match",
         type: "mutual_attraction",
-        user_id: profileUserId,
+        userId: profileUserId,
       }),
-      supabase.from("notifications").insert({
-        actor_id: profileUserId,
+      createSafeNotification(supabase, {
+        actorId: profileUserId,
         body: "You have a new mutual match. Start a conversation when it feels right.",
         metadata: {
           profile_id: userId,
         },
         title: "It's a match",
         type: "mutual_attraction",
-        user_id: userId,
+        userId,
       }),
     ]);
 

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getGiftCatalog } from "@/lib/economy";
 import { getGiftOption } from "@/lib/gifts";
 import { ACTION_LIMIT_MESSAGE, enforceActionLimit, recordAction } from "@/lib/action-limits";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import {
   createMediaModerationPlaceholder,
   enforceTextSafety,
@@ -189,13 +190,13 @@ export async function toggleMomentLike(momentId: string, ownerId: string) {
     }
 
     if (ownerId !== user.id) {
-      await supabase.from("notifications").insert({
-        actor_id: user.id,
+      await createSafeNotification(supabase, {
+        actorId: user.id,
         body: "Liked your moment.",
         metadata: { moment_id: momentId },
         title: "Moment like",
         type: "moment_like",
-        user_id: ownerId,
+        userId: ownerId,
       });
     }
   }
@@ -246,13 +247,13 @@ export async function commentOnMoment(
   }
 
   if (ownerId !== user.id) {
-    await supabase.from("notifications").insert({
-      actor_id: user.id,
+    await createSafeNotification(supabase, {
+      actorId: user.id,
       body: content.length > 120 ? `${content.slice(0, 117)}...` : content,
       metadata: { moment_id: momentId },
       title: "Moment comment",
       type: "moment_comment",
-      user_id: ownerId,
+      userId: ownerId,
     });
   }
 
@@ -285,13 +286,13 @@ export async function giftMoment(
     .maybeSingle();
 
   if ((wallet?.gold_balance ?? 0) < gift.coinPrice) {
-    await supabase.from("notifications").insert({
-      actor_id: user.id,
+    await createSafeNotification(supabase, {
+      actorId: user.id,
       body: "Top up your Gold to keep going.",
       metadata: { gift_type: gift.type, moment_id: momentId },
       title: "Low gold",
       type: "low_gold",
-      user_id: user.id,
+      userId: user.id,
     });
 
     return {
@@ -354,8 +355,8 @@ export async function giftMoment(
       streakDays = getGiftStreakDays(streakResult);
     }
 
-    await supabase.from("notifications").insert({
-      actor_id: user.id,
+    await createSafeNotification(supabase, {
+      actorId: user.id,
       body: `Sent you ${gift.name}.`,
       metadata: {
         client_request_id: clientRequestId ?? null,
@@ -373,7 +374,7 @@ export async function giftMoment(
       },
       title: "Gift received",
       type: "gift_received",
-      user_id: ownerId,
+      userId: ownerId,
     });
   }
 

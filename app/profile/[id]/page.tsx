@@ -16,6 +16,7 @@ import {
   type GiftOption,
 } from "@/lib/gifts";
 import { isVisibleIdentityValue } from "@/lib/identity";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { isActivePremiumSubscription } from "@/lib/premium";
 import { getProfileHref, isMatchrPublicId, normalizePublicId } from "@/lib/profile-public-id";
@@ -221,15 +222,15 @@ export default async function ProfilePage({
             viewed_user_id: profile.id,
             viewer_id: user.id,
           }),
-          supabase.from("notifications").insert({
-            actor_id: user.id,
+          createSafeNotification(supabase, {
+            actorId: user.id,
             body: `${viewerProfileResult.data?.display_name ?? "Someone"} viewed your profile.`,
             metadata: {
               profile_id: user.id,
             },
             title: "Profile view",
             type: "profile_view",
-            user_id: profile.id,
+            userId: profile.id,
           }),
         ]),
       );

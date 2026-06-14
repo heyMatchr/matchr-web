@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createSafeNotification } from "@/lib/notifications/create-safe-notification";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 type GiftReactionRpcClient = {
@@ -99,8 +100,8 @@ export async function reactToGift(formData: FormData) {
   if (senderId) {
     const reactionLabel = giftReactionLabels[reactionType];
 
-    await supabase.from("notifications").insert({
-      actor_id: user.id,
+    await createSafeNotification(supabase, {
+      actorId: user.id,
       body: `${reactionLabel} for your gift.`,
       metadata: {
         gift_transaction_id: giftTransactionId,
@@ -108,7 +109,7 @@ export async function reactToGift(formData: FormData) {
       },
       title: "Gift reaction",
       type: "gift_reaction",
-      user_id: senderId,
+      userId: senderId,
     });
 
     const matchQuery = supabase
