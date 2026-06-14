@@ -81,13 +81,38 @@ type PrivateMediaWatermark = {
 type PrivateMediaDebugState = {
   apiError: string | null;
   apiReached: boolean | null;
+  blobImgComplete: boolean | null;
+  blobImgMounted: boolean;
+  blobImgNaturalHeight: number | null;
+  blobImgNaturalWidth: number | null;
+  blobImgOnErrorFired: boolean;
+  blobImgOnLoadFired: boolean;
+  blobSize: number | null;
+  blobType: string | null;
+  blobUrlCreated: boolean | null;
+  browserContentLength: string | null;
+  browserContentType: string | null;
+  browserFetchStatus: number | null;
+  browserFinalUrl: string | null;
+  browserRedirected: boolean | null;
+  browserResponseOk: boolean | null;
   imageLoadStatus: "idle" | "loading" | "loaded" | "failed";
+  imgComplete: boolean | null;
+  imgCurrentSrc: string | null;
+  imgDecoded: boolean | null;
+  imgOnErrorFired: boolean;
+  imgOnLoadFired: boolean;
   imgClientHeight: number | null;
   imgClientWidth: number | null;
   imgHeight: number | null;
   imgMounted: boolean;
   imgVisible: boolean | null;
   imgWidth: number | null;
+  jsImageComplete: boolean | null;
+  jsImageNaturalHeight: number | null;
+  jsImageNaturalWidth: number | null;
+  jsImageOnError: boolean;
+  jsImageOnLoad: boolean;
   mediaType: string | null;
   mediaUrlRaw: string | null;
   messageFound: boolean | null;
@@ -100,8 +125,16 @@ type PrivateMediaDebugState = {
   overlayZIndex: string | null;
   parentHeight: number | null;
   parentWidth: number | null;
+  payloadMagicBytes: string | null;
+  pngSignatureValid: boolean | null;
   signingAttempted: boolean | null;
   signingSuccess: boolean | null;
+  signedPreviewComplete: boolean | null;
+  signedPreviewMounted: boolean;
+  signedPreviewNaturalHeight: number | null;
+  signedPreviewNaturalWidth: number | null;
+  signedPreviewOnErrorFired: boolean;
+  signedPreviewOnLoadFired: boolean;
   signedUrlContentType: string | null;
   signedUrlFetchStatus: number | null;
   signedUrlGenerated: boolean | null;
@@ -254,13 +287,38 @@ function createPrivateMediaDebugState(
   return {
     apiError: payload?.API_ERROR ?? null,
     apiReached: payload?.API_REACHED ?? null,
+    blobImgComplete: null,
+    blobImgMounted: false,
+    blobImgNaturalHeight: null,
+    blobImgNaturalWidth: null,
+    blobImgOnErrorFired: false,
+    blobImgOnLoadFired: false,
+    blobSize: null,
+    blobType: null,
+    blobUrlCreated: null,
+    browserContentLength: null,
+    browserContentType: null,
+    browserFetchStatus: null,
+    browserFinalUrl: null,
+    browserRedirected: null,
+    browserResponseOk: null,
     imageLoadStatus,
+    imgComplete: null,
+    imgCurrentSrc: null,
+    imgDecoded: null,
+    imgOnErrorFired: false,
+    imgOnLoadFired: false,
     imgClientHeight: null,
     imgClientWidth: null,
     imgHeight: null,
     imgMounted: false,
     imgVisible: null,
     imgWidth: null,
+    jsImageComplete: null,
+    jsImageNaturalHeight: null,
+    jsImageNaturalWidth: null,
+    jsImageOnError: false,
+    jsImageOnLoad: false,
     mediaType: payload?.mediaType ?? fallbackMediaType,
     mediaUrlRaw: payload?.MEDIA_URL_RAW ?? null,
     messageFound: payload?.MESSAGE_FOUND ?? null,
@@ -273,8 +331,16 @@ function createPrivateMediaDebugState(
     overlayZIndex: null,
     parentHeight: null,
     parentWidth: null,
+    payloadMagicBytes: null,
+    pngSignatureValid: null,
     signingAttempted: payload?.SIGNING_ATTEMPTED ?? null,
     signingSuccess: payload?.SIGNING_SUCCESS ?? null,
+    signedPreviewComplete: null,
+    signedPreviewMounted: false,
+    signedPreviewNaturalHeight: null,
+    signedPreviewNaturalWidth: null,
+    signedPreviewOnErrorFired: false,
+    signedPreviewOnLoadFired: false,
     signedUrlContentType: payload?.signedUrlContentType ?? null,
     signedUrlFetchStatus: payload?.signedUrlFetchStatus ?? null,
     signedUrlGenerated: payload?.signedUrlGenerated ?? null,
@@ -368,6 +434,21 @@ function createGiftRequestId() {
   });
 }
 
+function formatMagicBytes(bytes: Uint8Array) {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0").toUpperCase())
+    .join(" ");
+}
+
+function isPngSignature(bytes: Uint8Array) {
+  const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+  return (
+    bytes.length >= pngSignature.length &&
+    pngSignature.every((byte, index) => bytes[index] === byte)
+  );
+}
+
 export function ChatClient({
   activeGiftStreakDays,
   anonKey,
@@ -414,6 +495,7 @@ export function ChatClient({
   const [activePrivateMediaSecondsLeft, setActivePrivateMediaSecondsLeft] =
     useState(PRIVATE_MEDIA_VIEW_SECONDS);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
+  const [activePrivateBlobUrl, setActivePrivateBlobUrl] = useState("");
   const [activePrivateMediaError, setActivePrivateMediaError] = useState("");
   const [activePrivateMediaIsPreparing, setActivePrivateMediaIsPreparing] =
     useState(false);
@@ -455,6 +537,7 @@ export function ChatClient({
   const privateMediaElementRef = useRef<HTMLImageElement | HTMLVideoElement | null>(
     null,
   );
+  const privateMediaBlobUrlRef = useRef<string | null>(null);
   const privateMediaOpenRequestRef = useRef(0);
   const privateMediaInputRef = useRef<HTMLInputElement>(null);
   const privatePhotoInputRef = useRef<HTMLInputElement>(null);
@@ -599,10 +682,15 @@ export function ChatClient({
 
   const closePrivateMediaViewer = useCallback(() => {
     privateMediaOpenRequestRef.current += 1;
+    if (privateMediaBlobUrlRef.current) {
+      URL.revokeObjectURL(privateMediaBlobUrlRef.current);
+      privateMediaBlobUrlRef.current = null;
+    }
     setActivePrivateMessage(null);
     setActivePrivateMediaIsCounting(false);
     setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
     setActivePrivateMediaUrl("");
+    setActivePrivateBlobUrl("");
     setActivePrivateMediaError("");
     setActivePrivateMediaIsPreparing(false);
     setActivePrivateMediaRetryCount(0);
@@ -623,8 +711,11 @@ export function ChatClient({
       if (!element) {
         return {
           ...current,
+          imgComplete: null,
           imgClientHeight: null,
           imgClientWidth: null,
+          imgCurrentSrc: null,
+          imgDecoded: null,
           imgHeight: null,
           imgMounted: false,
           imgVisible: false,
@@ -643,8 +734,14 @@ export function ChatClient({
 
       return {
         ...current,
+        imgComplete:
+          element instanceof HTMLImageElement ? element.complete : null,
         imgClientHeight: element.clientHeight || null,
         imgClientWidth: element.clientWidth || null,
+        imgCurrentSrc:
+          element instanceof HTMLImageElement
+            ? element.currentSrc || element.src || null
+            : element.currentSrc || null,
         imgHeight: Math.round(rect.height),
         imgMounted: true,
         imgVisible:
@@ -671,6 +768,23 @@ export function ChatClient({
       if (element) {
         window.requestAnimationFrame(measurePrivateMediaElement);
         window.setTimeout(measurePrivateMediaElement, 250);
+
+        if (element instanceof HTMLImageElement) {
+          void element
+            .decode()
+            .then(() => {
+              setActivePrivateMediaDebug((current) =>
+                current ? { ...current, imgDecoded: true } : current,
+              );
+              measurePrivateMediaElement();
+            })
+            .catch(() => {
+              setActivePrivateMediaDebug((current) =>
+                current ? { ...current, imgDecoded: false } : current,
+              );
+              measurePrivateMediaElement();
+            });
+        }
       }
     },
     [measurePrivateMediaElement],
@@ -828,21 +942,174 @@ export function ChatClient({
       return undefined;
     }
 
+    const privateMessage = activePrivateMessage;
+    let cancelled = false;
+    let createdBlobUrl: string | null = null;
+
+    async function verifyBrowserSignedUrl() {
+      try {
+        const isImageProbe = privateMessage.media_type !== "video";
+        const response = await fetch(activePrivateMediaUrl, {
+          cache: "no-store",
+          headers: isImageProbe ? undefined : { Range: "bytes=0-0" },
+          method: "GET",
+          redirect: "follow",
+        });
+
+        let blobSize: number | null = null;
+        let blobType: string | null = null;
+        let blobUrlCreated: boolean | null = null;
+        let payloadMagicBytes: string | null = null;
+        let pngSignatureValid: boolean | null = null;
+
+        if (isImageProbe) {
+          const arrayBuffer = await response.arrayBuffer();
+          const bytes = new Uint8Array(arrayBuffer);
+          const magicBytes = bytes.slice(0, 8);
+          const contentType =
+            response.headers.get("content-type") ?? "application/octet-stream";
+          const blob = new Blob([arrayBuffer], { type: contentType });
+
+          blobSize = blob.size;
+          blobType = blob.type || contentType;
+          payloadMagicBytes = formatMagicBytes(magicBytes);
+          pngSignatureValid = isPngSignature(magicBytes);
+
+          if (privateMediaBlobUrlRef.current) {
+            URL.revokeObjectURL(privateMediaBlobUrlRef.current);
+            privateMediaBlobUrlRef.current = null;
+          }
+
+          createdBlobUrl = URL.createObjectURL(blob);
+          privateMediaBlobUrlRef.current = createdBlobUrl;
+          blobUrlCreated = true;
+        } else {
+          await response.body?.cancel();
+        }
+
+        if (cancelled) {
+          if (createdBlobUrl) {
+            URL.revokeObjectURL(createdBlobUrl);
+          }
+          return;
+        }
+
+        if (createdBlobUrl) {
+          setActivePrivateBlobUrl(createdBlobUrl);
+        }
+
+        setActivePrivateMediaDebug((current) =>
+          current
+            ? {
+                ...current,
+                blobSize,
+                blobType,
+                blobUrlCreated,
+                browserContentLength: response.headers.get("content-length"),
+                browserContentType: response.headers.get("content-type"),
+                browserFetchStatus: response.status,
+                browserFinalUrl: response.url || null,
+                browserRedirected: response.redirected,
+                browserResponseOk: response.ok || response.status === 206,
+                payloadMagicBytes,
+                pngSignatureValid,
+              }
+            : current,
+        );
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setActivePrivateMediaDebug((current) =>
+          current
+            ? {
+                ...current,
+                apiError:
+                  error instanceof Error
+                    ? `Browser fetch failed: ${error.message}`
+                    : "Browser fetch failed.",
+                browserContentLength: null,
+                browserContentType: null,
+                browserFetchStatus: 0,
+                browserFinalUrl: null,
+                browserRedirected: null,
+                browserResponseOk: false,
+                blobUrlCreated: false,
+              }
+            : current,
+        );
+      }
+    }
+
+    const testImage = new window.Image();
+
+    testImage.onload = () => {
+      if (cancelled) {
+        return;
+      }
+
+      setActivePrivateMediaDebug((current) =>
+        current
+          ? {
+              ...current,
+              jsImageComplete: testImage.complete,
+              jsImageNaturalHeight: testImage.naturalHeight || null,
+              jsImageNaturalWidth: testImage.naturalWidth || null,
+              jsImageOnLoad: true,
+            }
+          : current,
+      );
+    };
+    testImage.onerror = () => {
+      if (cancelled) {
+        return;
+      }
+
+      setActivePrivateMediaDebug((current) =>
+        current
+          ? {
+              ...current,
+              jsImageComplete: testImage.complete,
+              jsImageNaturalHeight: testImage.naturalHeight || null,
+              jsImageNaturalWidth: testImage.naturalWidth || null,
+              jsImageOnError: true,
+            }
+          : current,
+      );
+    };
+    testImage.src = activePrivateMediaUrl;
+
+    void verifyBrowserSignedUrl();
     measurePrivateMediaElement();
     const frame = window.requestAnimationFrame(measurePrivateMediaElement);
     const timer = window.setTimeout(measurePrivateMediaElement, 300);
 
     return () => {
+      cancelled = true;
+      testImage.onload = null;
+      testImage.onerror = null;
       window.cancelAnimationFrame(frame);
       window.clearTimeout(timer);
     };
   }, [
-    activePrivateMediaIsCounting,
     activePrivateMediaRetryCount,
     activePrivateMediaUrl,
     activePrivateMessage,
     measurePrivateMediaElement,
   ]);
+
+  useEffect(() => {
+    setActivePrivateMediaDebug((current) =>
+      current
+        ? {
+            ...current,
+            blobImgMounted: Boolean(activePrivateBlobUrl),
+            signedPreviewMounted: Boolean(activePrivateMediaUrl),
+          }
+        : current,
+    );
+  }, [activePrivateBlobUrl, activePrivateMediaUrl]);
 
   useEffect(() => {
     if (!activePrivateMessage || !activePrivateMediaIsCounting) {
@@ -1564,10 +1831,15 @@ export function ChatClient({
     }
 
     if (message.viewed_at || expired) {
+      if (privateMediaBlobUrlRef.current) {
+        URL.revokeObjectURL(privateMediaBlobUrlRef.current);
+        privateMediaBlobUrlRef.current = null;
+      }
       setActivePrivateMessage(message);
       setActivePrivateMediaIsCounting(false);
       setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
       setActivePrivateMediaUrl("");
+      setActivePrivateBlobUrl("");
       setActivePrivateMediaError("Private media expired.");
       setActivePrivateMediaIsPreparing(false);
       setActivePrivateMediaRetryCount(0);
@@ -1581,10 +1853,15 @@ export function ChatClient({
     const requestId = privateMediaOpenRequestRef.current + 1;
 
     privateMediaOpenRequestRef.current = requestId;
+    if (privateMediaBlobUrlRef.current) {
+      URL.revokeObjectURL(privateMediaBlobUrlRef.current);
+      privateMediaBlobUrlRef.current = null;
+    }
     setActivePrivateMessage(message);
     setActivePrivateMediaIsCounting(false);
     setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
     setActivePrivateMediaUrl("");
+    setActivePrivateBlobUrl("");
     setActivePrivateMediaError("");
     setActivePrivateMediaIsPreparing(true);
     setActivePrivateMediaRetryCount(0);
@@ -2821,7 +3098,11 @@ export function ChatClient({
                     setActivePrivateMediaIsCounting(false);
                     setActivePrivateMediaDebug((current) =>
                       current
-                        ? { ...current, imageLoadStatus: "failed" }
+                        ? {
+                            ...current,
+                            imageLoadStatus: "failed",
+                            imgOnErrorFired: true,
+                          }
                         : current,
                     );
                   }}
@@ -2844,6 +3125,7 @@ export function ChatClient({
                         ? {
                             ...current,
                             imageLoadStatus: "loaded",
+                            imgOnLoadFired: true,
                             naturalHeight: event.currentTarget.videoHeight || null,
                             naturalWidth: event.currentTarget.videoWidth || null,
                           }
@@ -2888,7 +3170,11 @@ export function ChatClient({
                     setActivePrivateMediaIsCounting(false);
                     setActivePrivateMediaDebug((current) =>
                       current
-                        ? { ...current, imageLoadStatus: "failed" }
+                        ? {
+                            ...current,
+                            imageLoadStatus: "failed",
+                            imgOnErrorFired: true,
+                          }
                         : current,
                     );
                   }}
@@ -2911,6 +3197,12 @@ export function ChatClient({
                         ? {
                             ...current,
                             imageLoadStatus: "loaded",
+                            imgComplete: event.currentTarget.complete,
+                            imgCurrentSrc:
+                              event.currentTarget.currentSrc ||
+                              event.currentTarget.src ||
+                              null,
+                            imgOnLoadFired: true,
                             naturalHeight:
                               event.currentTarget.naturalHeight || null,
                             naturalWidth:
@@ -2934,6 +3226,100 @@ export function ChatClient({
                 <p className="font-semibold text-emerald-100">
                   Private media debug
                 </p>
+                {activePrivateMediaUrl ? (
+                  <a
+                    href={activePrivateMediaUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex rounded-full border border-fuchsia-200/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-fuchsia-100"
+                  >
+                    OPEN_SIGNED_URL
+                  </a>
+                ) : null}
+                {activePrivateMediaUrl ? (
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                      <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                        Signed URL Preview
+                      </p>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={activePrivateMediaUrl}
+                        alt=""
+                        className="h-16 w-full rounded-lg border border-white/10 bg-black object-contain"
+                        onError={() => {
+                          setActivePrivateMediaDebug((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  signedPreviewOnErrorFired: true,
+                                }
+                              : current,
+                          );
+                        }}
+                        onLoad={(event) => {
+                          setActivePrivateMediaDebug((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  signedPreviewComplete:
+                                    event.currentTarget.complete,
+                                  signedPreviewNaturalHeight:
+                                    event.currentTarget.naturalHeight || null,
+                                  signedPreviewNaturalWidth:
+                                    event.currentTarget.naturalWidth || null,
+                                  signedPreviewOnLoadFired: true,
+                                }
+                              : current,
+                          );
+                        }}
+                      />
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2">
+                      <p className="mb-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/45">
+                        Blob URL Preview
+                      </p>
+                      {activePrivateBlobUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={activePrivateBlobUrl}
+                          alt=""
+                          className="h-16 w-full rounded-lg border border-white/10 bg-black object-contain"
+                          onError={() => {
+                            setActivePrivateMediaDebug((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    blobImgOnErrorFired: true,
+                                  }
+                                : current,
+                            );
+                          }}
+                          onLoad={(event) => {
+                            setActivePrivateMediaDebug((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    blobImgComplete:
+                                      event.currentTarget.complete,
+                                    blobImgNaturalHeight:
+                                      event.currentTarget.naturalHeight || null,
+                                    blobImgNaturalWidth:
+                                      event.currentTarget.naturalWidth || null,
+                                    blobImgOnLoadFired: true,
+                                  }
+                                : current,
+                            );
+                          }}
+                        />
+                      ) : (
+                        <div className="grid h-16 place-items-center rounded-lg border border-white/10 bg-black text-[10px] text-white/35">
+                          No blob yet
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                   <dt className="text-white/45">API_REACHED</dt>
                   <dd>
@@ -2989,10 +3375,136 @@ export function ChatClient({
                   </dd>
                   <dt className="text-white/45">CONTENT_TYPE</dt>
                   <dd>{activePrivateMediaDebug.signedUrlContentType ?? "unknown"}</dd>
+                  <dt className="text-white/45">BROWSER_FETCH_STATUS</dt>
+                  <dd>{activePrivateMediaDebug.browserFetchStatus ?? "unknown"}</dd>
+                  <dt className="text-white/45">BROWSER_RESPONSE_OK</dt>
+                  <dd>
+                    {activePrivateMediaDebug.browserResponseOk === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.browserResponseOk)}
+                  </dd>
+                  <dt className="text-white/45">BROWSER_CONTENT_TYPE</dt>
+                  <dd>{activePrivateMediaDebug.browserContentType ?? "unknown"}</dd>
+                  <dt className="text-white/45">BROWSER_CONTENT_LENGTH</dt>
+                  <dd>
+                    {activePrivateMediaDebug.browserContentLength ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">BROWSER_REDIRECTED</dt>
+                  <dd>
+                    {activePrivateMediaDebug.browserRedirected === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.browserRedirected)}
+                  </dd>
+                  <dt className="text-white/45">BROWSER_FINAL_URL</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.browserFinalUrl ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">BLOB_SIZE</dt>
+                  <dd>{activePrivateMediaDebug.blobSize ?? "unknown"}</dd>
+                  <dt className="text-white/45">BLOB_TYPE</dt>
+                  <dd>{activePrivateMediaDebug.blobType ?? "unknown"}</dd>
+                  <dt className="text-white/45">BLOB_URL_CREATED</dt>
+                  <dd>
+                    {activePrivateMediaDebug.blobUrlCreated === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.blobUrlCreated)}
+                  </dd>
+                  <dt className="text-white/45">BLOB_IMG_MOUNTED</dt>
+                  <dd>{String(activePrivateMediaDebug.blobImgMounted)}</dd>
+                  <dt className="text-white/45">BLOB_IMG_ONLOAD_FIRED</dt>
+                  <dd>{String(activePrivateMediaDebug.blobImgOnLoadFired)}</dd>
+                  <dt className="text-white/45">BLOB_IMG_ONERROR_FIRED</dt>
+                  <dd>{String(activePrivateMediaDebug.blobImgOnErrorFired)}</dd>
+                  <dt className="text-white/45">BLOB_IMG_COMPLETE</dt>
+                  <dd>
+                    {activePrivateMediaDebug.blobImgComplete === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.blobImgComplete)}
+                  </dd>
+                  <dt className="text-white/45">BLOB_IMG_NATURAL_WIDTH</dt>
+                  <dd>
+                    {activePrivateMediaDebug.blobImgNaturalWidth ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">BLOB_IMG_NATURAL_HEIGHT</dt>
+                  <dd>
+                    {activePrivateMediaDebug.blobImgNaturalHeight ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">JS_IMAGE_ONLOAD</dt>
+                  <dd>{String(activePrivateMediaDebug.jsImageOnLoad)}</dd>
+                  <dt className="text-white/45">JS_IMAGE_ONERROR</dt>
+                  <dd>{String(activePrivateMediaDebug.jsImageOnError)}</dd>
+                  <dt className="text-white/45">JS_IMAGE_NATURAL_WIDTH</dt>
+                  <dd>
+                    {activePrivateMediaDebug.jsImageNaturalWidth ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">JS_IMAGE_NATURAL_HEIGHT</dt>
+                  <dd>
+                    {activePrivateMediaDebug.jsImageNaturalHeight ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">JS_IMAGE_COMPLETE</dt>
+                  <dd>
+                    {activePrivateMediaDebug.jsImageComplete === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.jsImageComplete)}
+                  </dd>
+                  <dt className="text-white/45">PAYLOAD_MAGIC_BYTES</dt>
+                  <dd>{activePrivateMediaDebug.payloadMagicBytes ?? "unknown"}</dd>
+                  <dt className="text-white/45">PNG_SIGNATURE_VALID</dt>
+                  <dd>
+                    {activePrivateMediaDebug.pngSignatureValid === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.pngSignatureValid)}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_PREVIEW_MOUNTED</dt>
+                  <dd>{String(activePrivateMediaDebug.signedPreviewMounted)}</dd>
+                  <dt className="text-white/45">SIGNED_PREVIEW_ONLOAD_FIRED</dt>
+                  <dd>
+                    {String(activePrivateMediaDebug.signedPreviewOnLoadFired)}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_PREVIEW_ONERROR_FIRED</dt>
+                  <dd>
+                    {String(activePrivateMediaDebug.signedPreviewOnErrorFired)}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_PREVIEW_COMPLETE</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedPreviewComplete === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.signedPreviewComplete)}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_PREVIEW_NATURAL_WIDTH</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedPreviewNaturalWidth ??
+                      "unknown"}
+                  </dd>
+                  <dt className="text-white/45">SIGNED_PREVIEW_NATURAL_HEIGHT</dt>
+                  <dd>
+                    {activePrivateMediaDebug.signedPreviewNaturalHeight ??
+                      "unknown"}
+                  </dd>
                   <dt className="text-white/45">MEDIA_TYPE</dt>
                   <dd>{activePrivateMediaDebug.mediaType ?? "unknown"}</dd>
                   <dt className="text-white/45">IMAGE_LOAD_STATE</dt>
                   <dd>{activePrivateMediaDebug.imageLoadStatus}</dd>
+                  <dt className="text-white/45">IMG_CURRENT_SRC</dt>
+                  <dd className="break-all">
+                    {activePrivateMediaDebug.imgCurrentSrc ?? "unknown"}
+                  </dd>
+                  <dt className="text-white/45">IMG_COMPLETE</dt>
+                  <dd>
+                    {activePrivateMediaDebug.imgComplete === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.imgComplete)}
+                  </dd>
+                  <dt className="text-white/45">IMG_DECODED</dt>
+                  <dd>
+                    {activePrivateMediaDebug.imgDecoded === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.imgDecoded)}
+                  </dd>
+                  <dt className="text-white/45">IMG_ONLOAD_FIRED</dt>
+                  <dd>{String(activePrivateMediaDebug.imgOnLoadFired)}</dd>
+                  <dt className="text-white/45">IMG_ONERROR_FIRED</dt>
+                  <dd>{String(activePrivateMediaDebug.imgOnErrorFired)}</dd>
                   <dt className="text-white/45">IMG_MOUNTED</dt>
                   <dd>{String(activePrivateMediaDebug.imgMounted)}</dd>
                   <dt className="text-white/45">IMG_VISIBLE</dt>
