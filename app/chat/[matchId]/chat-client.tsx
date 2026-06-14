@@ -82,6 +82,12 @@ type PrivateMediaDebugState = {
   apiError: string | null;
   apiReached: boolean | null;
   imageLoadStatus: "idle" | "loading" | "loaded" | "failed";
+  imgClientHeight: number | null;
+  imgClientWidth: number | null;
+  imgHeight: number | null;
+  imgMounted: boolean;
+  imgVisible: boolean | null;
+  imgWidth: number | null;
   mediaType: string | null;
   mediaUrlRaw: string | null;
   messageFound: boolean | null;
@@ -91,6 +97,7 @@ type PrivateMediaDebugState = {
   normalizedStoragePath: string | null;
   objectExists: boolean | null;
   objectExistsReason: string | null;
+  overlayZIndex: string | null;
   signingAttempted: boolean | null;
   signingSuccess: boolean | null;
   signedUrlContentType: string | null;
@@ -246,6 +253,12 @@ function createPrivateMediaDebugState(
     apiError: payload?.API_ERROR ?? null,
     apiReached: payload?.API_REACHED ?? null,
     imageLoadStatus,
+    imgClientHeight: null,
+    imgClientWidth: null,
+    imgHeight: null,
+    imgMounted: false,
+    imgVisible: null,
+    imgWidth: null,
     mediaType: payload?.mediaType ?? fallbackMediaType,
     mediaUrlRaw: payload?.MEDIA_URL_RAW ?? null,
     messageFound: payload?.MESSAGE_FOUND ?? null,
@@ -255,6 +268,7 @@ function createPrivateMediaDebugState(
     normalizedStoragePath: payload?.NORMALIZED_STORAGE_PATH ?? null,
     objectExists: payload?.objectExists ?? null,
     objectExistsReason: payload?.objectExistsReason ?? null,
+    overlayZIndex: null,
     signingAttempted: payload?.SIGNING_ATTEMPTED ?? null,
     signingSuccess: payload?.SIGNING_SUCCESS ?? null,
     signedUrlContentType: payload?.signedUrlContentType ?? null,
@@ -433,6 +447,9 @@ export function ChatClient({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const messagesViewportRef = useRef<HTMLDivElement>(null);
+  const privateMediaElementRef = useRef<HTMLImageElement | HTMLVideoElement | null>(
+    null,
+  );
   const privateMediaOpenRequestRef = useRef(0);
   const privateMediaInputRef = useRef<HTMLInputElement>(null);
   const privatePhotoInputRef = useRef<HTMLInputElement>(null);
@@ -588,6 +605,66 @@ export function ChatClient({
     setActivePrivateWatermark(null);
   }, []);
 
+  const measurePrivateMediaElement = useCallback(() => {
+    const element = privateMediaElementRef.current;
+
+    setActivePrivateMediaDebug((current) => {
+      if (!current) {
+        return current;
+      }
+
+      if (!element) {
+        return {
+          ...current,
+          imgClientHeight: null,
+          imgClientWidth: null,
+          imgHeight: null,
+          imgMounted: false,
+          imgVisible: false,
+          imgWidth: null,
+          overlayZIndex: null,
+        };
+      }
+
+      const rect = element.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(element);
+      const overlay = document.querySelector<HTMLElement>(
+        "[data-private-media-overlay]",
+      );
+
+      return {
+        ...current,
+        imgClientHeight: element.clientHeight || null,
+        imgClientWidth: element.clientWidth || null,
+        imgHeight: Math.round(rect.height),
+        imgMounted: true,
+        imgVisible:
+          rect.width > 0 &&
+          rect.height > 0 &&
+          computedStyle.display !== "none" &&
+          computedStyle.visibility !== "hidden" &&
+          computedStyle.opacity !== "0",
+        imgWidth: Math.round(rect.width),
+        overlayZIndex: overlay
+          ? window.getComputedStyle(overlay).zIndex || "auto"
+          : null,
+      };
+    });
+  }, []);
+
+  const setPrivateMediaElement = useCallback(
+    (element: HTMLImageElement | HTMLVideoElement | null) => {
+      privateMediaElementRef.current = element;
+      measurePrivateMediaElement();
+
+      if (element) {
+        window.requestAnimationFrame(measurePrivateMediaElement);
+        window.setTimeout(measurePrivateMediaElement, 250);
+      }
+    },
+    [measurePrivateMediaElement],
+  );
+
   const markMessageAsRead = useCallback(
     async (message: MessageRow) => {
       if (message.receiver_id !== currentUserId || message.read_at) {
@@ -734,6 +811,27 @@ export function ChatClient({
     const timer = window.setTimeout(() => setChatToast(""), 1800);
     return () => window.clearTimeout(timer);
   }, [chatToast]);
+
+  useEffect(() => {
+    if (!activePrivateMessage || !activePrivateMediaUrl) {
+      return undefined;
+    }
+
+    measurePrivateMediaElement();
+    const frame = window.requestAnimationFrame(measurePrivateMediaElement);
+    const timer = window.setTimeout(measurePrivateMediaElement, 300);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [
+    activePrivateMediaIsCounting,
+    activePrivateMediaRetryCount,
+    activePrivateMediaUrl,
+    activePrivateMessage,
+    measurePrivateMediaElement,
+  ]);
 
   useEffect(() => {
     if (!activePrivateMessage || !activePrivateMediaIsCounting) {
@@ -2624,7 +2722,10 @@ export function ChatClient({
 
       {activePrivateMessage ? (
         <PrivateMediaViewerBoundary onClose={closePrivateMediaViewer}>
-          <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
+          <div
+            data-private-media-overlay
+            className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4"
+          >
             <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
               <div className="absolute left-4 right-4 top-11 z-20 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200">
                 PRIVATE_VIEWER_VERSION: V3
@@ -2680,6 +2781,7 @@ export function ChatClient({
               ) : activePrivateMessage.media_type === "video" ? (
                 <video
                   key={`private-video-${activePrivateMediaRetryCount}`}
+                  ref={setPrivateMediaElement}
                   src={activePrivateMediaUrl}
                   autoPlay
                   muted
@@ -2692,6 +2794,7 @@ export function ChatClient({
                     showPrivacyWarning();
                   }}
                   onError={() => {
+                    measurePrivateMediaElement();
                     console.error("[PrivateMediaViewer] video onError", {
                       mediaType: activePrivateMediaDebug?.mediaType ?? null,
                       signedUrlFetchStatus:
@@ -2709,6 +2812,7 @@ export function ChatClient({
                     );
                   }}
                   onLoadedMetadata={(event) => {
+                    measurePrivateMediaElement();
                     console.info("[PrivateMediaViewer] video onLoadedMetadata", {
                       mediaType: activePrivateMediaDebug?.mediaType ?? null,
                       signedUrlFetchStatus:
@@ -2740,6 +2844,7 @@ export function ChatClient({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`private-image-${activePrivateMediaRetryCount}`}
+                  ref={setPrivateMediaElement}
                   src={activePrivateMediaUrl}
                   alt=""
                   draggable={false}
@@ -2748,6 +2853,7 @@ export function ChatClient({
                     showPrivacyWarning();
                   }}
                   onError={() => {
+                    measurePrivateMediaElement();
                     console.error("[PrivateMediaViewer] image onError", {
                       mediaType: activePrivateMediaDebug?.mediaType ?? null,
                       signedUrlFetchStatus:
@@ -2767,6 +2873,7 @@ export function ChatClient({
                     );
                   }}
                   onLoad={(event) => {
+                    measurePrivateMediaElement();
                     console.info("[PrivateMediaViewer] image onLoad", {
                       mediaType: activePrivateMediaDebug?.mediaType ?? null,
                       naturalHeight: event.currentTarget.naturalHeight,
@@ -2860,6 +2967,24 @@ export function ChatClient({
                   <dd>{activePrivateMediaDebug.mediaType ?? "unknown"}</dd>
                   <dt className="text-white/45">IMAGE_LOAD_STATE</dt>
                   <dd>{activePrivateMediaDebug.imageLoadStatus}</dd>
+                  <dt className="text-white/45">IMG_MOUNTED</dt>
+                  <dd>{String(activePrivateMediaDebug.imgMounted)}</dd>
+                  <dt className="text-white/45">IMG_VISIBLE</dt>
+                  <dd>
+                    {activePrivateMediaDebug.imgVisible === null
+                      ? "unknown"
+                      : String(activePrivateMediaDebug.imgVisible)}
+                  </dd>
+                  <dt className="text-white/45">IMG_WIDTH</dt>
+                  <dd>{activePrivateMediaDebug.imgWidth ?? "unknown"}</dd>
+                  <dt className="text-white/45">IMG_HEIGHT</dt>
+                  <dd>{activePrivateMediaDebug.imgHeight ?? "unknown"}</dd>
+                  <dt className="text-white/45">IMG_CLIENT_WIDTH</dt>
+                  <dd>{activePrivateMediaDebug.imgClientWidth ?? "unknown"}</dd>
+                  <dt className="text-white/45">IMG_CLIENT_HEIGHT</dt>
+                  <dd>{activePrivateMediaDebug.imgClientHeight ?? "unknown"}</dd>
+                  <dt className="text-white/45">OVERLAY_Z_INDEX</dt>
+                  <dd>{activePrivateMediaDebug.overlayZIndex ?? "unknown"}</dd>
                   <dt className="text-white/45">OBJECT_EXISTS</dt>
                   <dd>
                     {activePrivateMediaDebug.objectExists === null
