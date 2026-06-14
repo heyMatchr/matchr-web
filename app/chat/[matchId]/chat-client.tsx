@@ -3,9 +3,9 @@
 import { createBrowserClient } from "@supabase/ssr";
 import Link from "next/link";
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
-import type { ReactNode } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import { ReportButton } from "@/app/safety/report-button";
@@ -87,6 +87,59 @@ type PrivateMediaDebugState = {
   signedUrlExists: boolean;
   storagePath: string | null;
 };
+
+type PrivateMediaViewerBoundaryProps = {
+  children: ReactNode;
+  onClose: () => void;
+};
+
+type PrivateMediaViewerBoundaryState = {
+  hasError: boolean;
+};
+
+class PrivateMediaViewerBoundary extends Component<
+  PrivateMediaViewerBoundaryProps,
+  PrivateMediaViewerBoundaryState
+> {
+  state: PrivateMediaViewerBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[PrivateMediaViewer] render failed", {
+      componentStack: errorInfo.componentStack,
+      message: error.message,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-5 text-white backdrop-blur-xl">
+          <div className="w-full max-w-sm rounded-3xl border border-red-400/25 bg-black p-5 text-center shadow-xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-100/70">
+              PRIVATE_VIEWER_VERSION: V3
+            </p>
+            <p className="mt-4 text-sm font-semibold">
+              Private media could not load.
+            </p>
+            <button
+              type="button"
+              onClick={this.props.onClose}
+              className="mt-4 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-white/80"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 type ChatClientProps = {
   activeGiftStreakDays: number | null;
@@ -2515,8 +2568,12 @@ export function ChatClient({
       ) : null}
 
       {activePrivateMessage ? (
-        <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
-          <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
+        <PrivateMediaViewerBoundary onClose={closePrivateMediaViewer}>
+          <div className="fixed inset-0 z-[70] flex min-h-[100dvh] items-center justify-center bg-black/95 p-3 text-white backdrop-blur-xl sm:p-4">
+            <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
+              <div className="absolute left-4 right-4 top-11 z-20 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-fuchsia-200">
+                PRIVATE_VIEWER_VERSION: V3
+              </div>
             <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
               <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100 backdrop-blur">
                 {activePrivateMediaIsCounting
@@ -2709,8 +2766,9 @@ export function ChatClient({
             <div className="absolute bottom-4 left-4 right-4 text-center text-xs font-medium uppercase tracking-[0.18em] text-white/45">
               View once.
             </div>
+            </div>
           </div>
-        </div>
+        </PrivateMediaViewerBoundary>
       ) : null}
     </div>
   );
