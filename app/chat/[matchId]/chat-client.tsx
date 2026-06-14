@@ -270,8 +270,10 @@ export function ChatClient({
   const [templatesError, setTemplatesError] = useState("");
   const [activePrivateMessage, setActivePrivateMessage] =
     useState<MessageRow | null>(null);
-  const [activePrivateMediaExpiresAt, setActivePrivateMediaExpiresAt] =
-    useState<string | null>(null);
+  const [activePrivateMediaIsCounting, setActivePrivateMediaIsCounting] =
+    useState(false);
+  const [activePrivateMediaSecondsLeft, setActivePrivateMediaSecondsLeft] =
+    useState(PRIVATE_MEDIA_VIEW_SECONDS);
   const [activePrivateMediaUrl, setActivePrivateMediaUrl] = useState("");
   const [activePrivateMediaError, setActivePrivateMediaError] = useState("");
   const [activePrivateMediaIsPreparing, setActivePrivateMediaIsPreparing] =
@@ -382,15 +384,7 @@ export function ChatClient({
     },
     assistTone,
   );
-  const activePrivateSeconds =
-    activePrivateMediaExpiresAt
-      ? Math.max(
-          0,
-          Math.ceil(
-            (new Date(activePrivateMediaExpiresAt).getTime() - now) / 1000,
-          ),
-        )
-      : PRIVATE_MEDIA_VIEW_SECONDS;
+  const activePrivateSeconds = activePrivateMediaSecondsLeft;
   const messageGoldCost = calculateMessageCost({
     hasPremium,
     receiver: {
@@ -463,7 +457,8 @@ export function ChatClient({
   const closePrivateMediaViewer = useCallback(() => {
     privateMediaOpenRequestRef.current += 1;
     setActivePrivateMessage(null);
-    setActivePrivateMediaExpiresAt(null);
+    setActivePrivateMediaIsCounting(false);
+    setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
     setActivePrivateMediaUrl("");
     setActivePrivateMediaError("");
     setActivePrivateMediaIsPreparing(false);
@@ -620,27 +615,39 @@ export function ChatClient({
   }, [chatToast]);
 
   useEffect(() => {
-    if (!activePrivateMessage || !activePrivateMediaExpiresAt) {
+    if (!activePrivateMessage || !activePrivateMediaIsCounting) {
       return undefined;
     }
 
     const messageId = activePrivateMessage.id;
-    const expiresAtMs = new Date(activePrivateMediaExpiresAt).getTime();
-    const expiryTimer = window.setTimeout(() => {
-      setMessages((current) =>
-        current.map((currentMessage) =>
-          currentMessage.id === messageId
-            ? { ...currentMessage, expires_at: new Date().toISOString() }
-            : currentMessage,
-        ),
-      );
-      closePrivateMediaViewer();
-      void insertSystemMessage("private_media_expired", "Private media expired.");
-    }, Math.max(0, expiresAtMs - Date.now()));
+    const countdownTimer = window.setInterval(() => {
+      setActivePrivateMediaSecondsLeft((current) => {
+        const next = Math.max(0, current - 1);
 
-    return () => window.clearTimeout(expiryTimer);
+        if (next === 0) {
+          window.setTimeout(() => {
+            setMessages((currentMessages) =>
+              currentMessages.map((currentMessage) =>
+                currentMessage.id === messageId
+                  ? { ...currentMessage, expires_at: new Date().toISOString() }
+                  : currentMessage,
+              ),
+            );
+            closePrivateMediaViewer();
+            void insertSystemMessage(
+              "private_media_expired",
+              "Private media expired.",
+            ).catch(() => undefined);
+          }, 0);
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(countdownTimer);
   }, [
-    activePrivateMediaExpiresAt,
+    activePrivateMediaIsCounting,
     activePrivateMessage,
     closePrivateMediaViewer,
     insertSystemMessage,
@@ -1333,7 +1340,8 @@ export function ChatClient({
 
     if (message.viewed_at || expired) {
       setActivePrivateMessage(message);
-      setActivePrivateMediaExpiresAt(null);
+      setActivePrivateMediaIsCounting(false);
+      setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
       setActivePrivateMediaUrl("");
       setActivePrivateMediaError("Private media expired.");
       setActivePrivateMediaIsPreparing(false);
@@ -1355,7 +1363,8 @@ export function ChatClient({
 
     privateMediaOpenRequestRef.current = requestId;
     setActivePrivateMessage(message);
-    setActivePrivateMediaExpiresAt(null);
+    setActivePrivateMediaIsCounting(false);
+    setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
     setActivePrivateMediaUrl("");
     setActivePrivateMediaError("");
     setActivePrivateMediaIsPreparing(true);
@@ -1390,7 +1399,8 @@ export function ChatClient({
 
       setActivePrivateMediaUrl(signedMedia.signedUrl);
       setActivePrivateMediaError("");
-      setActivePrivateMediaExpiresAt(null);
+      setActivePrivateMediaIsCounting(false);
+      setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
       setActivePrivateMediaIsPreparing(false);
       setActivePrivateMediaRetryCount(0);
       setActivePrivateMediaDebug({
@@ -1441,7 +1451,8 @@ export function ChatClient({
     }
 
     setActivePrivateMediaError("");
-    setActivePrivateMediaExpiresAt(null);
+    setActivePrivateMediaIsCounting(false);
+    setActivePrivateMediaSecondsLeft(PRIVATE_MEDIA_VIEW_SECONDS);
     setActivePrivateMediaRetryCount((current) => current + 1);
     setActivePrivateMediaDebug((current) =>
       current ? { ...current, imageLoadStatus: "loading" } : current,
@@ -1449,14 +1460,11 @@ export function ChatClient({
   }
 
   function startPrivateMediaCountdown() {
-    const startedAt = Date.now();
-
-    setNow(startedAt);
-    setActivePrivateMediaExpiresAt(
-      (current) =>
-        current ??
-        new Date(startedAt + PRIVATE_MEDIA_VIEW_SECONDS * 1000).toISOString(),
+    setNow(Date.now());
+    setActivePrivateMediaSecondsLeft((current) =>
+      activePrivateMediaIsCounting ? current : PRIVATE_MEDIA_VIEW_SECONDS,
     );
+    setActivePrivateMediaIsCounting(true);
   }
 
   function renderCompactCallBubble(
@@ -2511,11 +2519,11 @@ export function ChatClient({
           <div className="relative flex h-[calc(100dvh-1.5rem)] max-h-[820px] w-full max-w-md flex-col overflow-hidden rounded-3xl border border-emerald-300/20 bg-black shadow-[0_0_80px_rgba(16,185,129,0.18)] sm:h-full">
             <div className="absolute left-4 right-4 top-4 z-20 flex items-center justify-between">
               <div className="rounded-full border border-white/10 bg-black/45 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100 backdrop-blur">
-                {activePrivateMediaExpiresAt
+                {activePrivateMediaIsCounting
                   ? `Private • ${activePrivateSeconds}s`
                   : "Private"}
               </div>
-              {!activePrivateMediaExpiresAt ? (
+              {!activePrivateMediaIsCounting ? (
                 <button
                   type="button"
                   onClick={closePrivateMediaViewer}
@@ -2526,7 +2534,7 @@ export function ChatClient({
                 </button>
               ) : null}
             </div>
-            {activePrivateMediaExpiresAt ? (
+            {activePrivateMediaIsCounting ? (
               <div className="absolute left-4 right-4 top-16 z-20">
                 <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.2em] text-white/60">
                   <span>View once</span>
@@ -2573,7 +2581,7 @@ export function ChatClient({
                   }}
                   onError={() => {
                     setActivePrivateMediaError("Private media could not load.");
-                    setActivePrivateMediaExpiresAt(null);
+                    setActivePrivateMediaIsCounting(false);
                     setActivePrivateMediaDebug((current) =>
                       current
                         ? { ...current, imageLoadStatus: "error" }
@@ -2613,7 +2621,7 @@ export function ChatClient({
                     setActivePrivateMediaError(
                       "Private media could not load. Try once more.",
                     );
-                    setActivePrivateMediaExpiresAt(null);
+                    setActivePrivateMediaIsCounting(false);
                     setActivePrivateMediaDebug((current) =>
                       current
                         ? { ...current, imageLoadStatus: "error" }
