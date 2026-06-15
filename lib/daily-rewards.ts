@@ -46,6 +46,26 @@ export const ACHIEVEMENT_DEFINITIONS: Record<
     title: "7-day streak",
     description: "A full week without missing a day.",
   },
+  conversation_streak_3: {
+    emoji: "💬",
+    title: "3-day chat streak",
+    description: "Three days of back-and-forth in a conversation.",
+  },
+  conversation_streak_7: {
+    emoji: "🔥",
+    title: "7-day chat streak",
+    description: "A full week of daily conversation.",
+  },
+  conversation_streak_14: {
+    emoji: "⚡",
+    title: "14-day chat streak",
+    description: "Two weeks of daily conversation.",
+  },
+  conversation_streak_30: {
+    emoji: "🏆",
+    title: "30-day chat streak",
+    description: "A month of daily conversation.",
+  },
 };
 
 export function describeAchievement(key: string) {

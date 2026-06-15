@@ -8,6 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
 import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
+import {
+  CONVERSATION_STREAK_MIN_DISPLAY,
+  type ConversationStreakInfo,
+} from "@/lib/conversation-streaks";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
 
@@ -43,6 +47,7 @@ export type Conversation = {
   profile: ConversationProfile;
   latestMessage: ConversationMessage | null;
   unreadCount: number;
+  streak?: ConversationStreakInfo | null;
 };
 
 type MessagesClientProps = {
@@ -540,11 +545,76 @@ export function MessagesClient({
     [conversations, currentUserId, isUserOnline, now],
   );
 
+  const streakSummary = useMemo(() => {
+    let active = 0;
+    let longest = 0;
+    let atRisk = 0;
+
+    conversations.forEach((conversation) => {
+      const days = conversation.streak?.activeDays ?? 0;
+
+      if (days >= CONVERSATION_STREAK_MIN_DISPLAY) {
+        active += 1;
+      }
+
+      if (days > longest) {
+        longest = days;
+      }
+
+      if (conversation.streak?.atRisk) {
+        atRisk += 1;
+      }
+    });
+
+    return { active, atRisk, longest };
+  }, [conversations]);
+
   return (
     <>
       {error ? (
         <div className="mt-8 rounded-lg border border-red-300/30 bg-red-300/10 p-4 text-sm text-red-100">
           {error}
+        </div>
+      ) : null}
+
+      {streakSummary.active > 0 ? (
+        <div className="mt-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.06] p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/70">
+                Conversation momentum
+              </p>
+              <h2 className="mt-1 text-lg font-black text-white">
+                {streakSummary.active} active{" "}
+                {streakSummary.active === 1 ? "streak" : "streaks"}
+              </h2>
+              <p className="mt-0.5 text-sm text-neutral-400">
+                {streakSummary.atRisk > 0
+                  ? "Message today to keep them alive."
+                  : "Keep the daily back-and-forth going."}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <div className="rounded-2xl border border-emerald-300/20 bg-black/30 px-3 py-2 text-center">
+                <p className="text-xl font-black text-emerald-100">
+                  {streakSummary.longest}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100/60">
+                  Longest
+                </p>
+              </div>
+              {streakSummary.atRisk > 0 ? (
+                <div className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-center">
+                  <p className="text-xl font-black text-amber-100">
+                    {streakSummary.atRisk}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100/70">
+                    At risk
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -617,6 +687,19 @@ export function MessagesClient({
                       {messageTypeChip(conversation.latestMessage) ? (
                         <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] text-emerald-100">
                           {messageTypeChip(conversation.latestMessage)}
+                        </span>
+                      ) : null}
+                      {conversation.streak &&
+                      conversation.streak.activeDays >=
+                        CONVERSATION_STREAK_MIN_DISPLAY ? (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                            conversation.streak.atRisk
+                              ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                              : "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
+                          }`}
+                        >
+                          🔥 {conversation.streak.activeDays}d
                         </span>
                       ) : null}
                       {visibleBadges.map((badge) => (

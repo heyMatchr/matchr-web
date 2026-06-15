@@ -196,6 +196,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     dailyRewardClaimsTodayResult,
     activeStreakUsersResult,
     sevenDayStreakUsersResult,
+    activeConversationStreaksResult,
+    sevenDayConversationStreaksResult,
     usersResult,
     recentUsersResult,
     reportsResult,
@@ -240,6 +242,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       .from("user_streaks")
       .select("user_id", { count: "exact", head: true })
       .gte("current_streak", 7),
+    supabase
+      .from("conversation_streaks")
+      .select("match_id", { count: "exact", head: true })
+      .gte("current_streak", 1)
+      .gte("last_mutual_date", yesterdayDate),
+    supabase
+      .from("conversation_streaks")
+      .select("match_id", { count: "exact", head: true })
+      .gte("current_streak", 7)
+      .gte("last_mutual_date", yesterdayDate),
     userQuery,
     supabase
       .from("profiles")
@@ -278,6 +290,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     dailyRewardClaimsTodayResult,
     activeStreakUsersResult,
     sevenDayStreakUsersResult,
+    activeConversationStreaksResult,
+    sevenDayConversationStreaksResult,
     usersResult,
     recentUsersResult,
     reportsResult,
@@ -423,6 +437,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <StatCard
           label="7-day streak users"
           value={sevenDayStreakUsersResult.count ?? 0}
+        />
+        <StatCard
+          label="Active convo streaks"
+          value={activeConversationStreaksResult.count ?? 0}
+        />
+        <StatCard
+          label="7-day convo streaks"
+          value={sevenDayConversationStreaksResult.count ?? 0}
         />
       </div>
 

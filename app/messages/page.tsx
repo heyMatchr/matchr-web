@@ -1,4 +1,5 @@
 import { AppShell } from "@/app/_components/app-shell";
+import { getConversationStreaksByMatch } from "@/lib/conversation-streaks";
 import { createDedupedNotification } from "@/lib/notification-events";
 import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
@@ -12,6 +13,7 @@ import {
 
 const YOUR_TURN_REMINDER_AFTER_MS = 6 * 60 * 60 * 1000;
 const YOUR_TURN_DEDUPE_SECONDS = 24 * 60 * 60;
+const STREAK_AT_RISK_DEDUPE_SECONDS = 20 * 60 * 60;
 
 export default async function MessagesPage() {
   const perfStartedAt = startPerfTimer();
@@ -224,6 +226,9 @@ export default async function MessagesPage() {
       latestMessageByMatchId.set(result.data.match_id, result.data);
     }
   });
+  const streakByMatchId = await timeAsync("[Perf] Messages streaks", () =>
+    getConversationStreaksByMatch(supabase, matchIds),
+  );
   const conversations: Conversation[] = [];
 
   for (const match of matches) {
@@ -250,6 +255,7 @@ export default async function MessagesPage() {
         has_premium: premiumUserIds.has(profile.id),
         preview_video_url: previewVideoByUserId.get(profile.id) ?? null,
       },
+      streak: streakByMatchId.get(match.id) ?? null,
       unreadCount: unreadCountByMatchId.get(match.id) ?? 0,
     });
   }
@@ -288,6 +294,31 @@ export default async function MessagesPage() {
         },
         title: "Your turn",
         type: "your_turn_reminder",
+        userId: user.id,
+      });
+    }),
+  );
+
+  // Streak-at-risk reminders are generated on visit (no scheduler exists);
+  // deduped per match so they fire at most once per day.
+  await Promise.all(
+    conversations.slice(0, 20).map(async (conversation) => {
+      if (!conversation.streak?.atRisk) {
+        return;
+      }
+
+      await createDedupedNotification(supabase, {
+        actorId: conversation.profile.id,
+        body: `Message ${conversation.profile.display_name} today to keep your ${conversation.streak.activeDays}-day streak.`,
+        dedupeMetadataKey: "match_id",
+        dedupeWindowSeconds: STREAK_AT_RISK_DEDUPE_SECONDS,
+        metadata: {
+          match_id: conversation.id,
+          profile_id: conversation.profile.id,
+          streak_day: conversation.streak.activeDays,
+        },
+        title: "Streak at risk",
+        type: "conversation_streak_at_risk",
         userId: user.id,
       });
     }),

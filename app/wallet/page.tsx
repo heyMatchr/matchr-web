@@ -43,12 +43,13 @@ type WalletPageProps = {
     payment?: string | string[];
     panel?: string | string[];
     reward?: string | string[];
+    reward_error?: string | string[];
   }>;
 };
 
 function getSearchValue(
   params: Awaited<NonNullable<WalletPageProps["searchParams"]>> | undefined,
-  key: "boost" | "payment" | "panel" | "reward",
+  key: "boost" | "payment" | "panel" | "reward" | "reward_error",
 ) {
   const value = params?.[key];
 
@@ -209,6 +210,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
   const boostState = getSearchValue(params, "boost") ?? "";
   const activePanel = getSearchValue(params, "panel") ?? "";
   const rewardState = getSearchValue(params, "reward") ?? "";
+  const rewardError = getSearchValue(params, "reward_error") ?? "";
   const activeBoost = activeBoostResult.data;
   const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
     isActivePremiumSubscription(subscription),
@@ -409,7 +411,7 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
               <p className="mt-1 text-sm text-neutral-300">
                 {dailyRewardStatus.canClaim
                   ? "Claim today to keep your streak alive."
-                  : "Come back tomorrow to keep your streak."}
+                  : "Reward claimed today."}
               </p>
             </div>
             <div className="rounded-2xl border border-emerald-300/20 bg-black/30 px-3 py-2 text-center">
@@ -424,17 +426,19 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
 
           {rewardState === "success" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
-              Reward claimed. Come back tomorrow to keep your streak.
+              +{dailyRewardStatus.nextRewardGold} Gold added to your wallet.
             </p>
           ) : null}
           {rewardState === "already" ? (
             <p className="mt-3 rounded-2xl border border-emerald-300/20 bg-black/25 px-4 py-3 text-sm leading-6 text-emerald-50">
-              Already claimed today. Come back tomorrow to keep your streak.
+              Already claimed today.
             </p>
           ) : null}
           {rewardState === "failed" ? (
             <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
-              Could not claim right now. Try again.
+              {rewardError
+                ? `Could not claim: ${rewardError}`
+                : "Could not claim right now. Try again."}
             </p>
           ) : null}
 

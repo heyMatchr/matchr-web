@@ -341,6 +341,16 @@ export type UserAchievementRow = {
   unlocked_at: string;
 };
 
+export type ConversationStreakRow = {
+  match_id: string;
+  current_streak: number;
+  best_streak: number;
+  last_mutual_date: string | null;
+  last_message_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type DailyRewardClaimResult = {
   ok: boolean;
   already_claimed: boolean;
@@ -1774,6 +1784,26 @@ export type Database = {
           unlocked_at?: string;
         };
         Update: never;
+        Relationships: [];
+      };
+      conversation_streaks: {
+        Row: ConversationStreakRow;
+        Insert: {
+          match_id: string;
+          current_streak?: number;
+          best_streak?: number;
+          last_mutual_date?: string | null;
+          last_message_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          current_streak?: number;
+          best_streak?: number;
+          last_mutual_date?: string | null;
+          last_message_at?: string | null;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       user_settings: {

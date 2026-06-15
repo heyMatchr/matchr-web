@@ -75,6 +75,19 @@ export function getNotificationPriority(
     };
   }
 
+  if (
+    type === "conversation_streak_milestone" ||
+    type === "conversation_streak_at_risk"
+  ) {
+    return {
+      href: matchId ? `/chat/${matchId}` : "/messages",
+      priorityLabel: "Streak",
+      priorityRank: 3,
+      shouldToast: type === "conversation_streak_milestone",
+      tone: "message",
+    };
+  }
+
   if (type === "mutual_attraction" || type === "new_match") {
     return {
       href: "/matches",

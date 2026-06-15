@@ -159,6 +159,7 @@ class PrivateMediaViewerBoundary extends Component<
 
 type ChatClientProps = {
   activeGiftStreakDays: number | null;
+  conversationStreakDays?: number | null;
   anonKey: string;
   currentUserId: string;
   currentUserGender: string;
@@ -299,6 +300,7 @@ function createGiftRequestId() {
 
 export function ChatClient({
   activeGiftStreakDays,
+  conversationStreakDays = null,
   anonKey,
   currentUserId,
   currentUserGender,
@@ -1760,6 +1762,11 @@ export function ChatClient({
               </span>
               <span className="text-neutral-700">·</span>
               <span className="truncate">{chatMomentumDetail}</span>
+              {conversationStreakDays && conversationStreakDays >= 2 ? (
+                <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-100">
+                  🔥 {conversationStreakDays}d
+                </span>
+              ) : null}
             </p>
           </div>
         </Link>

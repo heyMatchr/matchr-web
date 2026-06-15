@@ -1,0 +1,878 @@
+From c43bf5ab777f742a269d481703572214b4a657a9 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 15 Jun 2026 19:04:30 +0000
+Subject: [PATCH] Add Psychology Layer V2: conversation streaks, achievements,
+ at-risk reminders
+
+- supabase/psychology_layer_v2.sql: conversation_streaks table (per match),
+  AFTER INSERT trigger on messages that extends a streak when both
+  participants send a genuine (allow-listed, non-system) message on the same
+  UTC day, advisory-locked and dedupe-safe; awards global per-user
+  achievements (reuses user_achievements) and fires deduped milestone
+  notifications at 3/7/14/30 days; RLS (participants read own, admins read
+  all); additive notification types conversation_streak_milestone and
+  conversation_streak_at_risk
+- lib/conversation-streaks.ts: streak read + derive helpers (active days,
+  at-risk), UTC-based
+- Database types: conversation_streaks table + ConversationStreakRow
+- Messages page: momentum summary card + per-row streak badge; on-visit
+  at-risk reminders (deduped per match), mirroring your_turn_reminder
+- Chat header: streak pill next to momentum status
+- Notification priority + wallet achievement labels for new keys
+- Admin: active / 7-day conversation streak stat cards
+
+Excludes system message types (story_*, gift_reaction, private_media_opened/
+expired, call_event) from streak activity. Push kept out of scope. Does not
+touch private media viewer/API, gifts economy, wallet payments, Paystack,
+Gold purchase, or the daily reward claim function.
+---
+ app/admin/page.tsx                 |  22 ++
+ app/chat/[matchId]/chat-client.tsx |   7 +
+ app/chat/[matchId]/page.tsx        |  12 ++
+ app/messages/messages-client.tsx   |  83 ++++++++
+ app/messages/page.tsx              |  31 +++
+ lib/conversation-streaks.ts        |  75 +++++++
+ lib/daily-rewards.ts               |  20 ++
+ lib/notification-priority.ts       |  13 ++
+ lib/supabase/types.ts              |  30 +++
+ supabase/psychology_layer_v2.sql   | 323 +++++++++++++++++++++++++++++
+ 10 files changed, 616 insertions(+)
+ create mode 100644 lib/conversation-streaks.ts
+ create mode 100644 supabase/psychology_layer_v2.sql
+
+diff --git a/app/admin/page.tsx b/app/admin/page.tsx
+index a6f7001..e324437 100644
+--- a/app/admin/page.tsx
++++ b/app/admin/page.tsx
+@@ -196,6 +196,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
+     dailyRewardClaimsTodayResult,
+     activeStreakUsersResult,
+     sevenDayStreakUsersResult,
++    activeConversationStreaksResult,
++    sevenDayConversationStreaksResult,
+     usersResult,
+     recentUsersResult,
+     reportsResult,
+@@ -240,6 +242,16 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
+       .from("user_streaks")
+       .select("user_id", { count: "exact", head: true })
+       .gte("current_streak", 7),
++    supabase
++      .from("conversation_streaks")
++      .select("match_id", { count: "exact", head: true })
++      .gte("current_streak", 1)
++      .gte("last_mutual_date", yesterdayDate),
++    supabase
++      .from("conversation_streaks")
++      .select("match_id", { count: "exact", head: true })
++      .gte("current_streak", 7)
++      .gte("last_mutual_date", yesterdayDate),
+     userQuery,
+     supabase
+       .from("profiles")
+@@ -278,6 +290,8 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
+     dailyRewardClaimsTodayResult,
+     activeStreakUsersResult,
+     sevenDayStreakUsersResult,
++    activeConversationStreaksResult,
++    sevenDayConversationStreaksResult,
+     usersResult,
+     recentUsersResult,
+     reportsResult,
+@@ -424,6 +438,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
+           label="7-day streak users"
+           value={sevenDayStreakUsersResult.count ?? 0}
+         />
++        <StatCard
++          label="Active convo streaks"
++          value={activeConversationStreaksResult.count ?? 0}
++        />
++        <StatCard
++          label="7-day convo streaks"
++          value={sevenDayConversationStreaksResult.count ?? 0}
++        />
+       </div>
+ 
+       <section className="mt-8 rounded-2xl border border-neutral-800 bg-black/50 p-5">
+diff --git a/app/chat/[matchId]/chat-client.tsx b/app/chat/[matchId]/chat-client.tsx
+index f03bb8b..35171f8 100644
+--- a/app/chat/[matchId]/chat-client.tsx
++++ b/app/chat/[matchId]/chat-client.tsx
+@@ -159,6 +159,7 @@ class PrivateMediaViewerBoundary extends Component<
+ 
+ type ChatClientProps = {
+   activeGiftStreakDays: number | null;
++  conversationStreakDays?: number | null;
+   anonKey: string;
+   currentUserId: string;
+   currentUserGender: string;
+@@ -299,6 +300,7 @@ function createGiftRequestId() {
+ 
+ export function ChatClient({
+   activeGiftStreakDays,
++  conversationStreakDays = null,
+   anonKey,
+   currentUserId,
+   currentUserGender,
+@@ -1794,6 +1796,11 @@ export function ChatClient({
+               </span>
+               <span className="text-neutral-700">·</span>
+               <span className="truncate">{chatMomentumDetail}</span>
++              {conversationStreakDays && conversationStreakDays >= 2 ? (
++                <span className="shrink-0 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-100">
++                  🔥 {conversationStreakDays}d
++                </span>
++              ) : null}
+             </p>
+           </div>
+         </Link>
+diff --git a/app/chat/[matchId]/page.tsx b/app/chat/[matchId]/page.tsx
+index 544b4e0..be3c25e 100644
+--- a/app/chat/[matchId]/page.tsx
++++ b/app/chat/[matchId]/page.tsx
+@@ -12,6 +12,7 @@ import {
+ import { getUserEliteStatus } from "@/lib/elite-status";
+ import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+ import { isActivePremiumSubscription } from "@/lib/premium";
++import { deriveConversationStreak } from "@/lib/conversation-streaks";
+ import { getActiveGiftStreakDays } from "@/lib/retention";
+ import { createSupabaseServerClient } from "@/lib/supabase/server";
+ import { requiredSupabaseEnv } from "@/lib/supabase/env";
+@@ -86,6 +87,7 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps)
+     { data: premiumSubscriptions },
+     { data: receiverPreviewVideo },
+     { data: activeGiftStreak },
++    { data: conversationStreak },
+     eliteStatus,
+     giftCatalog,
+     messageRules,
+@@ -125,6 +127,11 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps)
+           .eq("sender_id", user.id)
+           .eq("receiver_id", receiverId)
+           .maybeSingle(),
++        supabase
++          .from("conversation_streaks")
++          .select("match_id, current_streak, best_streak, last_mutual_date")
++          .eq("match_id", match.id)
++          .maybeSingle(),
+         getUserEliteStatus(supabase, user.id),
+         getGiftCatalog(supabase),
+         getEconomyConfig<typeof DEFAULT_MESSAGE_RULES>(
+@@ -168,6 +175,11 @@ export default async function ChatPage({ params, searchParams }: ChatPageProps)
+         <ChatClient
+           anonKey={requiredSupabaseEnv("SUPABASE_ANON_KEY")}
+           activeGiftStreakDays={getActiveGiftStreakDays(activeGiftStreak)}
++          conversationStreakDays={
++            conversationStreak
++              ? deriveConversationStreak(conversationStreak).activeDays || null
++              : null
++          }
+           currentUserId={user.id}
+           currentUserGender={currentProfile.gender}
+           currentUserGenderIdentity={currentProfile.gender_identity}
+diff --git a/app/messages/messages-client.tsx b/app/messages/messages-client.tsx
+index 1059430..038c53a 100644
+--- a/app/messages/messages-client.tsx
++++ b/app/messages/messages-client.tsx
+@@ -8,6 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
+ import { useGlobalPresence } from "@/app/_components/global-presence";
+ import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
+ import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
++import {
++  CONVERSATION_STREAK_MIN_DISPLAY,
++  type ConversationStreakInfo,
++} from "@/lib/conversation-streaks";
+ import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
+ import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
+ 
+@@ -43,6 +47,7 @@ export type Conversation = {
+   profile: ConversationProfile;
+   latestMessage: ConversationMessage | null;
+   unreadCount: number;
++  streak?: ConversationStreakInfo | null;
+ };
+ 
+ type MessagesClientProps = {
+@@ -540,6 +545,30 @@ export function MessagesClient({
+     [conversations, currentUserId, isUserOnline, now],
+   );
+ 
++  const streakSummary = useMemo(() => {
++    let active = 0;
++    let longest = 0;
++    let atRisk = 0;
++
++    conversations.forEach((conversation) => {
++      const days = conversation.streak?.activeDays ?? 0;
++
++      if (days >= CONVERSATION_STREAK_MIN_DISPLAY) {
++        active += 1;
++      }
++
++      if (days > longest) {
++        longest = days;
++      }
++
++      if (conversation.streak?.atRisk) {
++        atRisk += 1;
++      }
++    });
++
++    return { active, atRisk, longest };
++  }, [conversations]);
++
+   return (
+     <>
+       {error ? (
+@@ -548,6 +577,47 @@ export function MessagesClient({
+         </div>
+       ) : null}
+ 
++      {streakSummary.active > 0 ? (
++        <div className="mt-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.06] p-4 sm:p-5">
++          <div className="flex items-center justify-between gap-3">
++            <div className="min-w-0">
++              <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/70">
++                Conversation momentum
++              </p>
++              <h2 className="mt-1 text-lg font-black text-white">
++                {streakSummary.active} active{" "}
++                {streakSummary.active === 1 ? "streak" : "streaks"}
++              </h2>
++              <p className="mt-0.5 text-sm text-neutral-400">
++                {streakSummary.atRisk > 0
++                  ? "Message today to keep them alive."
++                  : "Keep the daily back-and-forth going."}
++              </p>
++            </div>
++            <div className="flex shrink-0 gap-2">
++              <div className="rounded-2xl border border-emerald-300/20 bg-black/30 px-3 py-2 text-center">
++                <p className="text-xl font-black text-emerald-100">
++                  {streakSummary.longest}
++                </p>
++                <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-100/60">
++                  Longest
++                </p>
++              </div>
++              {streakSummary.atRisk > 0 ? (
++                <div className="rounded-2xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-center">
++                  <p className="text-xl font-black text-amber-100">
++                    {streakSummary.atRisk}
++                  </p>
++                  <p className="text-[10px] uppercase tracking-[0.18em] text-amber-100/70">
++                    At risk
++                  </p>
++                </div>
++              ) : null}
++            </div>
++          </div>
++        </div>
++      ) : null}
++
+       {conversations.length > 0 ? (
+         <div className="mt-6 grid gap-3 md:mt-10">
+           {sortedConversations.map((conversation) => {
+@@ -619,6 +689,19 @@ export function MessagesClient({
+                           {messageTypeChip(conversation.latestMessage)}
+                         </span>
+                       ) : null}
++                      {conversation.streak &&
++                      conversation.streak.activeDays >=
++                        CONVERSATION_STREAK_MIN_DISPLAY ? (
++                        <span
++                          className={`rounded-full border px-2 py-0.5 text-[10px] ${
++                            conversation.streak.atRisk
++                              ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
++                              : "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
++                          }`}
++                        >
++                          🔥 {conversation.streak.activeDays}d
++                        </span>
++                      ) : null}
+                       {visibleBadges.map((badge) => (
+                         <StatusBadge
+                           key={badge.type}
+diff --git a/app/messages/page.tsx b/app/messages/page.tsx
+index 68bf02f..624cf5e 100644
+--- a/app/messages/page.tsx
++++ b/app/messages/page.tsx
+@@ -1,4 +1,5 @@
+ import { AppShell } from "@/app/_components/app-shell";
++import { getConversationStreaksByMatch } from "@/lib/conversation-streaks";
+ import { createDedupedNotification } from "@/lib/notification-events";
+ import { finishPerfTimer, startPerfTimer, timeAsync } from "@/lib/performance";
+ import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
+@@ -12,6 +13,7 @@ import {
+ 
+ const YOUR_TURN_REMINDER_AFTER_MS = 6 * 60 * 60 * 1000;
+ const YOUR_TURN_DEDUPE_SECONDS = 24 * 60 * 60;
++const STREAK_AT_RISK_DEDUPE_SECONDS = 20 * 60 * 60;
+ 
+ export default async function MessagesPage() {
+   const perfStartedAt = startPerfTimer();
+@@ -224,6 +226,9 @@ export default async function MessagesPage() {
+       latestMessageByMatchId.set(result.data.match_id, result.data);
+     }
+   });
++  const streakByMatchId = await timeAsync("[Perf] Messages streaks", () =>
++    getConversationStreaksByMatch(supabase, matchIds),
++  );
+   const conversations: Conversation[] = [];
+ 
+   for (const match of matches) {
+@@ -250,6 +255,7 @@ export default async function MessagesPage() {
+         has_premium: premiumUserIds.has(profile.id),
+         preview_video_url: previewVideoByUserId.get(profile.id) ?? null,
+       },
++      streak: streakByMatchId.get(match.id) ?? null,
+       unreadCount: unreadCountByMatchId.get(match.id) ?? 0,
+     });
+   }
+@@ -293,6 +299,31 @@ export default async function MessagesPage() {
+     }),
+   );
+ 
++  // Streak-at-risk reminders are generated on visit (no scheduler exists);
++  // deduped per match so they fire at most once per day.
++  await Promise.all(
++    conversations.slice(0, 20).map(async (conversation) => {
++      if (!conversation.streak?.atRisk) {
++        return;
++      }
++
++      await createDedupedNotification(supabase, {
++        actorId: conversation.profile.id,
++        body: `Message ${conversation.profile.display_name} today to keep your ${conversation.streak.activeDays}-day streak.`,
++        dedupeMetadataKey: "match_id",
++        dedupeWindowSeconds: STREAK_AT_RISK_DEDUPE_SECONDS,
++        metadata: {
++          match_id: conversation.id,
++          profile_id: conversation.profile.id,
++          streak_day: conversation.streak.activeDays,
++        },
++        title: "Streak at risk",
++        type: "conversation_streak_at_risk",
++        userId: user.id,
++      });
++    }),
++  );
++
+   finishPerfTimer("[Perf] Messages queries", perfStartedAt);
+ 
+   return (
+diff --git a/lib/conversation-streaks.ts b/lib/conversation-streaks.ts
+new file mode 100644
+index 0000000..0787294
+--- /dev/null
++++ b/lib/conversation-streaks.ts
+@@ -0,0 +1,75 @@
++import type { SupabaseClient } from "@supabase/supabase-js";
++import type { Database } from "@/lib/supabase/types";
++
++// Show a streak badge once a conversation has at least this many active days.
++export const CONVERSATION_STREAK_MIN_DISPLAY = 2;
++// Only nudge about streaks worth protecting.
++export const CONVERSATION_STREAK_AT_RISK_MIN = 3;
++export const CONVERSATION_STREAK_MILESTONES = [3, 7, 14, 30] as const;
++
++type ConversationStreakSupabase = SupabaseClient<Database>;
++
++type ConversationStreakInput = {
++  match_id: string;
++  current_streak: number;
++  best_streak: number;
++  last_mutual_date: string | null;
++};
++
++export type ConversationStreakInfo = {
++  matchId: string;
++  currentStreak: number;
++  bestStreak: number;
++  lastMutualDate: string | null;
++  // current streak if still alive (mutual today or yesterday), otherwise 0.
++  activeDays: number;
++  // alive but not yet extended today — will break unless they message today.
++  atRisk: boolean;
++};
++
++function utcDateString(date: Date): string {
++  return date.toISOString().slice(0, 10);
++}
++
++export function deriveConversationStreak(
++  row: ConversationStreakInput,
++): ConversationStreakInfo {
++  const today = utcDateString(new Date());
++  const yesterday = utcDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
++  const lastMutual = row.last_mutual_date;
++  const alive = lastMutual === today || lastMutual === yesterday;
++  const activeDays = alive ? row.current_streak : 0;
++  const atRisk =
++    activeDays >= CONVERSATION_STREAK_AT_RISK_MIN && lastMutual === yesterday;
++
++  return {
++    matchId: row.match_id,
++    currentStreak: row.current_streak,
++    bestStreak: row.best_streak,
++    lastMutualDate: lastMutual,
++    activeDays,
++    atRisk,
++  };
++}
++
++export async function getConversationStreaksByMatch(
++  supabase: ConversationStreakSupabase,
++  matchIds: string[],
++): Promise<Map<string, ConversationStreakInfo>> {
++  const result = new Map<string, ConversationStreakInfo>();
++
++  if (matchIds.length === 0) {
++    return result;
++  }
++
++  const { data } = await supabase
++    .from("conversation_streaks")
++    .select("match_id, current_streak, best_streak, last_mutual_date")
++    .in("match_id", matchIds);
++
++  (data ?? []).forEach((row) => {
++    result.set(row.match_id, deriveConversationStreak(row));
++  });
++
++  return result;
++}
+diff --git a/lib/daily-rewards.ts b/lib/daily-rewards.ts
+index 8f24618..2ccd4d5 100644
+--- a/lib/daily-rewards.ts
++++ b/lib/daily-rewards.ts
+@@ -46,6 +46,26 @@ export const ACHIEVEMENT_DEFINITIONS: Record<
+     title: "7-day streak",
+     description: "A full week without missing a day.",
+   },
++  conversation_streak_3: {
++    emoji: "💬",
++    title: "3-day chat streak",
++    description: "Three days of back-and-forth in a conversation.",
++  },
++  conversation_streak_7: {
++    emoji: "🔥",
++    title: "7-day chat streak",
++    description: "A full week of daily conversation.",
++  },
++  conversation_streak_14: {
++    emoji: "⚡",
++    title: "14-day chat streak",
++    description: "Two weeks of daily conversation.",
++  },
++  conversation_streak_30: {
++    emoji: "🏆",
++    title: "30-day chat streak",
++    description: "A month of daily conversation.",
++  },
+ };
+ 
+ export function describeAchievement(key: string) {
+diff --git a/lib/notification-priority.ts b/lib/notification-priority.ts
+index ed37d48..369790d 100644
+--- a/lib/notification-priority.ts
++++ b/lib/notification-priority.ts
+@@ -75,6 +75,19 @@ export function getNotificationPriority(
+     };
+   }
+ 
++  if (
++    type === "conversation_streak_milestone" ||
++    type === "conversation_streak_at_risk"
++  ) {
++    return {
++      href: matchId ? `/chat/${matchId}` : "/messages",
++      priorityLabel: "Streak",
++      priorityRank: 3,
++      shouldToast: type === "conversation_streak_milestone",
++      tone: "message",
++    };
++  }
++
+   if (type === "mutual_attraction" || type === "new_match") {
+     return {
+       href: "/matches",
+diff --git a/lib/supabase/types.ts b/lib/supabase/types.ts
+index 35cb398..9f55604 100644
+--- a/lib/supabase/types.ts
++++ b/lib/supabase/types.ts
+@@ -341,6 +341,16 @@ export type UserAchievementRow = {
+   unlocked_at: string;
+ };
+ 
++export type ConversationStreakRow = {
++  match_id: string;
++  current_streak: number;
++  best_streak: number;
++  last_mutual_date: string | null;
++  last_message_at: string | null;
++  created_at: string;
++  updated_at: string;
++};
++
+ export type DailyRewardClaimResult = {
+   claimed: boolean;
+   gold_awarded: number;
+@@ -1773,6 +1783,26 @@ export type Database = {
+         Update: never;
+         Relationships: [];
+       };
++      conversation_streaks: {
++        Row: ConversationStreakRow;
++        Insert: {
++          match_id: string;
++          current_streak?: number;
++          best_streak?: number;
++          last_mutual_date?: string | null;
++          last_message_at?: string | null;
++          created_at?: string;
++          updated_at?: string;
++        };
++        Update: {
++          current_streak?: number;
++          best_streak?: number;
++          last_mutual_date?: string | null;
++          last_message_at?: string | null;
++          updated_at?: string;
++        };
++        Relationships: [];
++      };
+       user_settings: {
+         Row: UserSettingsRow;
+         Insert: Partial<UserSettingsRow> & { user_id: string };
+diff --git a/supabase/psychology_layer_v2.sql b/supabase/psychology_layer_v2.sql
+new file mode 100644
+index 0000000..c49c44c
+--- /dev/null
++++ b/supabase/psychology_layer_v2.sql
+@@ -0,0 +1,323 @@
++-- Psychology Layer V2
++-- Conversation streaks (per match), global achievements (reuses user_achievements),
++-- milestone notifications, and notification types for at-risk reminders.
++--
++-- Additive only. Does NOT touch: private media viewer/API, gifts economy,
++-- wallet payment logic, Paystack, Gold purchase flow, or the daily reward
++-- claim function.
++
++create extension if not exists pgcrypto;
++
++-- ---------------------------------------------------------------------------
++-- Conversation streak: one shared row per match (both participants).
++-- ---------------------------------------------------------------------------
++
++create table if not exists public.conversation_streaks (
++  match_id uuid primary key references public.matches(id) on delete cascade,
++  current_streak integer not null default 0 check (current_streak >= 0),
++  best_streak integer not null default 0 check (best_streak >= 0),
++  last_mutual_date date,
++  last_message_at timestamptz,
++  created_at timestamptz not null default timezone('utc', now()),
++  updated_at timestamptz not null default timezone('utc', now()),
++  constraint conversation_streaks_best_check check (best_streak >= current_streak)
++);
++
++create index if not exists conversation_streaks_active_idx
++  on public.conversation_streaks (current_streak desc, last_mutual_date desc);
++
++-- Speeds up the trigger's "did the other participant message today?" lookup.
++create index if not exists messages_match_sender_created_idx
++  on public.messages (match_id, sender_id, created_at desc);
++
++-- ---------------------------------------------------------------------------
++-- Notification types (additive: full current list + two new V2 types).
++-- ---------------------------------------------------------------------------
++
++alter table public.notifications drop constraint if exists notifications_type_check;
++alter table public.notifications add constraint notifications_type_check check (
++  type in (
++    'new_like',
++    'new_match',
++    'new_message',
++    'profile_view',
++    'new_follower',
++    'moment_like',
++    'moment_comment',
++    'gift_received',
++    'private_media_received',
++    'story_reaction',
++    'story_reply',
++    'story_gift',
++    'low_gold',
++    'mutual_attraction',
++    'profile_trending',
++    'streak_milestone',
++    'profile_completion_reminder',
++    'follow_request',
++    'follow_request_accepted',
++    'moderation_update',
++    'premium_teaser',
++    'incoming_call',
++    'missed_call',
++    'gift_reaction',
++    'referral_joined',
++    'weekly_recap_ready',
++    'your_turn_reminder',
++    'premium_expiring',
++    'elite_near_level',
++    'creator_goal_progress',
++    'daily_reward_claimed',
++    'conversation_streak_milestone',
++    'conversation_streak_at_risk'
++  )
++);
++
++-- ---------------------------------------------------------------------------
++-- Row level security: participants read their own match's streak; admins all.
++-- All writes flow through the security-definer trigger below.
++-- ---------------------------------------------------------------------------
++
++alter table public.conversation_streaks enable row level security;
++
++grant usage on schema public to authenticated;
++grant select on public.conversation_streaks to authenticated;
++revoke insert, update, delete on public.conversation_streaks from authenticated;
++
++drop policy if exists "Participants can read their conversation streak"
++  on public.conversation_streaks;
++drop policy if exists "Admins can read all conversation streaks"
++  on public.conversation_streaks;
++
++create policy "Participants can read their conversation streak"
++  on public.conversation_streaks
++  for select
++  to authenticated
++  using (
++    exists (
++      select 1
++      from public.matches m
++      where m.id = conversation_streaks.match_id
++        and (m.user_one_id = auth.uid() or m.user_two_id = auth.uid())
++    )
++  );
++
++create policy "Admins can read all conversation streaks"
++  on public.conversation_streaks
++  for select
++  to authenticated
++  using (public.is_admin(auth.uid()));
++
++-- ---------------------------------------------------------------------------
++-- Global achievements (reuses public.user_achievements) + milestone notice.
++-- ---------------------------------------------------------------------------
++
++create or replace function public.award_conversation_streak_milestone(
++  participant_one uuid,
++  participant_two uuid,
++  related_match_id uuid,
++  streak_days integer
++)
++returns void
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  achievement_key text;
++  dedupe_value text;
++  streak_metadata jsonb;
++begin
++  if streak_days not in (3, 7, 14, 30) then
++    return;
++  end if;
++
++  achievement_key := 'conversation_streak_' || streak_days;
++
++  -- Global, per-user achievement (unlocked the first time with anyone).
++  insert into public.user_achievements (user_id, achievement_key)
++  values (participant_one, achievement_key), (participant_two, achievement_key)
++  on conflict (user_id, achievement_key) do nothing;
++
++  dedupe_value := related_match_id::text || ':' || streak_days;
++  streak_metadata := jsonb_build_object(
++    'match_id', related_match_id::text,
++    'route', '/chat/' || related_match_id::text,
++    'streak_day', streak_days,
++    'streak_dedupe', dedupe_value
++  );
++
++  -- Notify both participants. Actor is the other participant, which also
++  -- satisfies create_deduped_notification's auth guard inside the trigger.
++  perform public.create_deduped_notification(
++    participant_one,
++    'conversation_streak_milestone',
++    'Conversation streak',
++    streak_days || '-day streak. Keep it going.',
++    participant_two,
++    streak_metadata,
++    'streak_dedupe',
++    interval '7 days'
++  );
++
++  perform public.create_deduped_notification(
++    participant_two,
++    'conversation_streak_milestone',
++    'Conversation streak',
++    streak_days || '-day streak. Keep it going.',
++    participant_one,
++    streak_metadata,
++    'streak_dedupe',
++    interval '7 days'
++  );
++end;
++$$;
++
++-- ---------------------------------------------------------------------------
++-- AFTER INSERT trigger on messages: extend the conversation streak when both
++-- participants have sent a genuine message on the same UTC day.
++-- ---------------------------------------------------------------------------
++
++create or replace function public.update_conversation_streak()
++returns trigger
++language plpgsql
++security definer
++set search_path = public
++as $$
++declare
++  v_today date := (timezone('utc', now()))::date;
++  v_user_one uuid;
++  v_user_two uuid;
++  v_other uuid;
++  v_other_today boolean;
++  v_prev_streak integer;
++  v_prev_best integer;
++  v_prev_date date;
++  v_new_streak integer;
++begin
++  -- Allow-list of genuine conversation messages. This inherently excludes all
++  -- system/event types (story_reply, story_reaction, story_gift, gift_reaction,
++  -- private_media_opened, private_media_expired, call_event).
++  if new.message_type not in (
++    'text', 'image', 'video', 'voice', 'gift', 'private_media'
++  ) then
++    return new;
++  end if;
++
++  select user_one_id, user_two_id
++  into v_user_one, v_user_two
++  from public.matches
++  where id = new.match_id;
++
++  if v_user_one is null then
++    return new;
++  end if;
++
++  v_other := case
++    when new.sender_id = v_user_one then v_user_two
++    else v_user_one
++  end;
++
++  -- Serialise concurrent inserts for the same match.
++  perform pg_advisory_xact_lock(
++    hashtext('conversation_streak:' || new.match_id::text)
++  );
++
++  select current_streak, best_streak, last_mutual_date
++  into v_prev_streak, v_prev_best, v_prev_date
++  from public.conversation_streaks
++  where match_id = new.match_id;
++
++  -- Has the other participant also sent a qualifying message today?
++  select exists (
++    select 1
++    from public.messages m
++    where m.match_id = new.match_id
++      and m.sender_id = v_other
++      and m.message_type in (
++        'text', 'image', 'video', 'voice', 'gift', 'private_media'
++      )
++      and (timezone('utc', m.created_at))::date = v_today
++  ) into v_other_today;
++
++  -- Mutual day not achieved yet: only record recency / ensure the row exists.
++  if not v_other_today then
++    insert into public.conversation_streaks (
++      match_id, current_streak, best_streak, last_mutual_date, last_message_at
++    )
++    values (
++      new.match_id,
++      coalesce(v_prev_streak, 0),
++      coalesce(v_prev_best, 0),
++      v_prev_date,
++      new.created_at
++    )
++    on conflict (match_id) do update
++      set last_message_at = greatest(
++            coalesce(public.conversation_streaks.last_message_at, new.created_at),
++            new.created_at
++          ),
++          updated_at = timezone('utc', now());
++    return new;
++  end if;
++
++  -- Already counted a mutual day today: just touch recency.
++  if v_prev_date = v_today then
++    update public.conversation_streaks
++      set last_message_at = greatest(
++            coalesce(last_message_at, new.created_at),
++            new.created_at
++          ),
++          updated_at = timezone('utc', now())
++      where match_id = new.match_id;
++    return new;
++  end if;
++
++  -- New mutual day: continue the streak only if yesterday was also mutual.
++  if v_prev_date = v_today - 1 then
++    v_new_streak := coalesce(v_prev_streak, 0) + 1;
++  else
++    v_new_streak := 1;
++  end if;
++
++  insert into public.conversation_streaks (
++    match_id, current_streak, best_streak, last_mutual_date, last_message_at
++  )
++  values (
++    new.match_id,
++    v_new_streak,
++    greatest(coalesce(v_prev_best, 0), v_new_streak),
++    v_today,
++    new.created_at
++  )
++  on conflict (match_id) do update
++    set current_streak = excluded.current_streak,
++        best_streak = greatest(
++          public.conversation_streaks.best_streak,
++          excluded.best_streak
++        ),
++        last_mutual_date = excluded.last_mutual_date,
++        last_message_at = greatest(
++          coalesce(public.conversation_streaks.last_message_at, excluded.last_message_at),
++          excluded.last_message_at
++        ),
++        updated_at = timezone('utc', now());
++
++  perform public.award_conversation_streak_milestone(
++    v_user_one, v_user_two, new.match_id, v_new_streak
++  );
++
++  return new;
++end;
++$$;
++
++drop trigger if exists update_conversation_streak_trigger on public.messages;
++create trigger update_conversation_streak_trigger
++  after insert on public.messages
++  for each row
++  execute function public.update_conversation_streak();
++
++revoke all on function public.update_conversation_streak() from public;
++revoke all on function public.award_conversation_streak_milestone(
++  uuid, uuid, uuid, integer
++) from public;
+-- 
+2.43.0
+
