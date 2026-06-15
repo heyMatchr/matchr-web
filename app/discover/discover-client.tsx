@@ -4,7 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { OpportunityCards } from "@/app/_components/opportunity-cards";
 import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
+import type { OpportunityCard } from "@/lib/opportunities";
 import {
   getProfileHref,
   isMatchrPublicId,
@@ -52,6 +54,7 @@ export type DiscoverProfile = {
 };
 
 type DiscoverClientProps = {
+  opportunities?: OpportunityCard[];
   profiles: DiscoverProfile[];
   recentlyActive: DiscoverProfile[];
   searchProfiles?: DiscoverProfile[];
@@ -128,6 +131,7 @@ function PlayPreviewIcon({ className = "h-4 w-4" }: { className?: string }) {
 }
 
 export function DiscoverClient({
+  opportunities = [],
   profiles,
   recentlyActive,
   searchProfiles,
@@ -275,6 +279,8 @@ export function DiscoverClient({
         profiles={trending}
         title="Trending"
       />
+
+      <OpportunityCards cards={opportunities} />
 
       {visibleProfiles.length > 0 ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 md:mt-8 md:gap-5 lg:grid-cols-3">

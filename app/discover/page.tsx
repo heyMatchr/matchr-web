@@ -10,6 +10,7 @@ import { isActivePremiumSubscription } from "@/lib/premium";
 import { getActiveGiftStreakDays } from "@/lib/retention";
 import { getCurrentUserProfile } from "@/lib/supabase/current-user-profile";
 import { requiredSupabaseEnv } from "@/lib/supabase/env";
+import { buildDiscoverOpportunities } from "@/lib/opportunities";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DiscoverClient, type DiscoverProfile } from "./discover-client";
 import { StoriesBarLazy } from "./stories-bar-lazy";
@@ -718,6 +719,11 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
   const recentlyActive = discoverProfiles.filter((profile) => profile.isOnline || profile.hasStories).slice(0, 10);
   const trendingProfiles = [...discoverProfiles].sort((a, b) => b.trendingScore - a.trendingScore).slice(0, 10);
 
+  const discoverOpportunities = await buildDiscoverOpportunities(
+    supabase,
+    user.id,
+  );
+
   finishPerfTimer("[Perf] Discover queries", perfStartedAt);
 
   return (
@@ -740,6 +746,7 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
         />
 
         <DiscoverClient
+          opportunities={discoverOpportunities}
           profiles={discoverProfiles}
           recentlyActive={recentlyActive}
           searchProfiles={allDiscoverProfiles}

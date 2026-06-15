@@ -6,12 +6,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGlobalPresence } from "@/app/_components/global-presence";
+import { OpportunityCards } from "@/app/_components/opportunity-cards";
 import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import { sanitizeNotificationPreview } from "@/lib/browser-notifications";
 import {
   CONVERSATION_STREAK_MIN_DISPLAY,
   type ConversationStreakInfo,
 } from "@/lib/conversation-streaks";
+import { buildMatchedNotMessagedCards } from "@/lib/opportunities";
 import { finishPerfTimer, startPerfTimer } from "@/lib/performance";
 import type { Database, MatchRow, MessageRow } from "@/lib/supabase/types";
 
@@ -545,6 +547,11 @@ export function MessagesClient({
     [conversations, currentUserId, isUserOnline, now],
   );
 
+  const opportunityCards = useMemo(
+    () => buildMatchedNotMessagedCards(conversations),
+    [conversations],
+  );
+
   const streakSummary = useMemo(() => {
     let active = 0;
     let longest = 0;
@@ -617,6 +624,8 @@ export function MessagesClient({
           </div>
         </div>
       ) : null}
+
+      <OpportunityCards cards={opportunityCards} />
 
       {conversations.length > 0 ? (
         <div className="mt-6 grid gap-3 md:mt-10">

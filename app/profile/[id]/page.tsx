@@ -4,12 +4,19 @@ import Image from "next/image";
 import { AppShell } from "@/app/_components/app-shell";
 import { CreatorDailyActionCard } from "@/app/_components/creator-daily-action-card";
 import { DailyAttentionDigest } from "@/app/_components/daily-attention-digest";
+import { OpportunityCards } from "@/app/_components/opportunity-cards";
 import { getVisibleStatusBadges, StatusBadge } from "@/app/_components/status-badge";
 import { LogoutButton } from "@/app/auth/logout-button";
 import { SafetyActions } from "@/app/safety/safety-actions";
 import { FollowButton } from "@/app/social/follow-button";
 import { getGiftCatalog } from "@/lib/economy";
 import { getUserEliteStatus } from "@/lib/elite-status";
+import {
+  buildPrivateMediaEventCard,
+  capOpportunities,
+  profileViewsCard,
+  storyReactionsCard,
+} from "@/lib/opportunities";
 import {
   getGiftRarityLabel,
   shouldShowGiftRarity,
@@ -509,6 +516,16 @@ export default async function ProfilePage({
   };
   const creatorHabitAction = getCreatorHabitAction(creatorHabitSignals);
   const creatorQuietLately = hasLowCreatorActivity(creatorHabitSignals);
+  // Reuses today's counts already fetched for the digest; only the private
+  // media lookup is an extra (cheap, indexed) read, and only for own profile.
+  const profileOpportunities =
+    profile.id === user.id
+      ? capOpportunities([
+          profileViewsCard(dailyDigestCounts.profileViews),
+          storyReactionsCard(dailyDigestCounts.storyReactions),
+          await buildPrivateMediaEventCard(supabase, user.id),
+        ])
+      : [];
   const activeGiftStreakDays = getActiveGiftStreakDays(
     activeGiftStreakResult.data,
   );
@@ -879,6 +896,10 @@ export default async function ProfilePage({
                   </p>
                 ) : null}
               </section>
+            ) : null}
+
+            {profile.id === user.id && profileOpportunities.length > 0 ? (
+              <OpportunityCards cards={profileOpportunities} />
             ) : null}
 
             {profile.id === user.id ? (
