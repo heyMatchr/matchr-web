@@ -162,6 +162,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   weekStartDate.setDate(weekStartDate.getDate() - 7);
   const dayStart = dayStartDate.toISOString();
   const weekStart = weekStartDate.toISOString();
+  // dayStartDate is already "now minus one day".
+  const todayDate = new Date().toISOString().slice(0, 10);
+  const yesterdayDate = dayStartDate.toISOString().slice(0, 10);
   const emailMatchedUserIds = searchQuery
     ? await getAdminEmailSearchUserIds(supabase, searchQuery)
     : [];
@@ -190,6 +193,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     underReviewResult,
     dailyMessagesResult,
     weeklyMessagesResult,
+    dailyRewardClaimsTodayResult,
+    activeStreakUsersResult,
+    sevenDayStreakUsersResult,
     usersResult,
     recentUsersResult,
     reportsResult,
@@ -221,6 +227,19 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       .from("messages")
       .select("id", { count: "exact", head: true })
       .gte("created_at", weekStart),
+    supabase
+      .from("daily_reward_claims")
+      .select("id", { count: "exact", head: true })
+      .eq("claim_date", todayDate),
+    supabase
+      .from("user_streaks")
+      .select("user_id", { count: "exact", head: true })
+      .gte("current_streak", 1)
+      .gte("last_claim_date", yesterdayDate),
+    supabase
+      .from("user_streaks")
+      .select("user_id", { count: "exact", head: true })
+      .gte("current_streak", 7),
     userQuery,
     supabase
       .from("profiles")
@@ -256,6 +275,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     underReviewResult,
     dailyMessagesResult,
     weeklyMessagesResult,
+    dailyRewardClaimsTodayResult,
+    activeStreakUsersResult,
+    sevenDayStreakUsersResult,
     usersResult,
     recentUsersResult,
     reportsResult,
@@ -390,6 +412,18 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         <StatCard label="Users under review" value={underReviewResult.count ?? 0} />
         <StatCard label="Messages last 24h" value={dailyMessagesResult.count ?? 0} />
         <StatCard label="Messages last 7d" value={weeklyMessagesResult.count ?? 0} />
+        <StatCard
+          label="Daily rewards today"
+          value={dailyRewardClaimsTodayResult.count ?? 0}
+        />
+        <StatCard
+          label="Active streak users"
+          value={activeStreakUsersResult.count ?? 0}
+        />
+        <StatCard
+          label="7-day streak users"
+          value={sevenDayStreakUsersResult.count ?? 0}
+        />
       </div>
 
       <section className="mt-8 rounded-2xl border border-neutral-800 bg-black/50 p-5">

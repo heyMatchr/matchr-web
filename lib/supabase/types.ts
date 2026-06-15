@@ -316,6 +316,42 @@ export type UserWalletRow = {
   updated_at: string;
 };
 
+export type UserStreakRow = {
+  user_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_claim_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DailyRewardClaimRow = {
+  id: string;
+  user_id: string;
+  claim_date: string;
+  streak_day: number;
+  gold_amount: number;
+  created_at: string;
+};
+
+export type UserAchievementRow = {
+  id: string;
+  user_id: string;
+  achievement_key: string;
+  unlocked_at: string;
+};
+
+export type DailyRewardClaimResult = {
+  ok: boolean;
+  already_claimed: boolean;
+  gold_amount: number;
+  streak_day: number;
+  current_streak: number;
+  longest_streak: number;
+  remaining_gold: number;
+  unlocked_achievements: string[];
+};
+
 export type GoldPackageRow = {
   id: string;
   name: string;
@@ -1698,6 +1734,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_streaks: {
+        Row: UserStreakRow;
+        Insert: {
+          user_id: string;
+          current_streak?: number;
+          longest_streak?: number;
+          last_claim_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          current_streak?: number;
+          longest_streak?: number;
+          last_claim_date?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      daily_reward_claims: {
+        Row: DailyRewardClaimRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          claim_date?: string;
+          streak_day: number;
+          gold_amount: number;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      user_achievements: {
+        Row: UserAchievementRow;
+        Insert: {
+          id?: string;
+          user_id: string;
+          achievement_key: string;
+          unlocked_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       user_settings: {
         Row: UserSettingsRow;
         Insert: Partial<UserSettingsRow> & { user_id: string };
@@ -1830,6 +1908,10 @@ export type Database = {
       activate_profile_boost: {
         Args: Record<string, never>;
         Returns: ProfileBoostActivationResult;
+      };
+      claim_daily_reward: {
+        Args: Record<string, never>;
+        Returns: DailyRewardClaimResult;
       };
       start_call: {
         Args: {

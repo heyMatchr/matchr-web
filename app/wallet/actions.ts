@@ -321,3 +321,24 @@ export async function activateProfileBoost() {
   revalidatePath("/discover");
   redirect("/wallet?boost=success");
 }
+
+export async function claimDailyReward() {
+  const { supabase } = await currentUser();
+  // All Gold crediting, streak and achievement writes happen server-side
+  // inside the claim_daily_reward() RPC. The client never mutates Gold.
+  const { error } = await supabase.rpc("claim_daily_reward");
+
+  if (error) {
+    if (error.message.includes("already_claimed")) {
+      redirect("/wallet?reward=already#daily-reward");
+    }
+
+    console.error("[Wallet] daily reward claim failed", {
+      error: error.message,
+    });
+    redirect("/wallet?reward=failed#daily-reward");
+  }
+
+  revalidatePath("/wallet");
+  redirect("/wallet?reward=success#daily-reward");
+}

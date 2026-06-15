@@ -21,8 +21,16 @@ import {
   type DailyAttentionDigestCounts,
 } from "@/lib/retention";
 import { getReferralSummary } from "@/lib/referrals";
+import {
+  getDailyRewardStatus,
+  getRecentAchievements,
+} from "@/lib/daily-rewards";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { activateProfileBoost, startPremiumCheckout } from "./actions";
+import {
+  activateProfileBoost,
+  claimDailyReward,
+  startPremiumCheckout,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,12 +42,13 @@ type WalletPageProps = {
     boost?: string | string[];
     payment?: string | string[];
     panel?: string | string[];
+    reward?: string | string[];
   }>;
 };
 
 function getSearchValue(
   params: Awaited<NonNullable<WalletPageProps["searchParams"]>> | undefined,
-  key: "boost" | "payment" | "panel",
+  key: "boost" | "payment" | "panel" | "reward",
 ) {
   const value = params?.[key];
 
@@ -99,6 +108,8 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
     giftsTodayResult,
     messagesTodayResult,
     referralSummary,
+    dailyRewardStatus,
+    recentAchievements,
   ] = await Promise.all([
     supabase.from("user_wallets").select("gold_balance").eq("user_id", user.id).maybeSingle(),
     supabase
@@ -190,11 +201,14 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
       .eq("receiver_id", user.id)
       .gte("created_at", todayStartIso),
     getReferralSummary(supabase, user.id),
+    getDailyRewardStatus(supabase, user.id),
+    getRecentAchievements(supabase, user.id),
   ]);
   const defaultProvider = availableProviders[0]?.provider_key ?? "";
   const paymentState = getSearchValue(params, "payment") ?? "";
   const boostState = getSearchValue(params, "boost") ?? "";
   const activePanel = getSearchValue(params, "panel") ?? "";
+  const rewardState = getSearchValue(params, "reward") ?? "";
   const activeBoost = activeBoostResult.data;
   const activePremium = (premiumSubscriptionsResult.data ?? []).find((subscription) =>
     isActivePremiumSubscription(subscription),
@@ -375,6 +389,96 @@ export default async function WalletPage({ searchParams }: WalletPageProps) {
         </section>
 
         <DailyAttentionDigest counts={dailyDigestCounts} />
+
+        <section
+          id="daily-reward"
+          className="rounded-3xl border border-emerald-300/20 bg-emerald-300/[0.07] p-4 sm:p-5"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-emerald-100/70">
+                Daily reward
+              </p>
+              <h2 className="mt-2 text-xl font-black text-white">
+                Day{" "}
+                {dailyRewardStatus.canClaim
+                  ? dailyRewardStatus.nextStreakDay
+                  : dailyRewardStatus.currentStreak}{" "}
+                streak
+              </h2>
+              <p className="mt-1 text-sm text-neutral-300">
+                {dailyRewardStatus.canClaim
+                  ? "Claim today to keep your streak alive."
+                  : "Come back tomorrow to keep your streak."}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-emerald-300/20 bg-black/30 px-3 py-2 text-center">
+              <p className="text-2xl font-black text-emerald-100">
+                +{dailyRewardStatus.nextRewardGold}
+              </p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-100/60">
+                Gold
+              </p>
+            </div>
+          </div>
+
+          {rewardState === "success" ? (
+            <p className="mt-3 rounded-2xl border border-emerald-300/25 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50">
+              Reward claimed. Come back tomorrow to keep your streak.
+            </p>
+          ) : null}
+          {rewardState === "already" ? (
+            <p className="mt-3 rounded-2xl border border-emerald-300/20 bg-black/25 px-4 py-3 text-sm leading-6 text-emerald-50">
+              Already claimed today. Come back tomorrow to keep your streak.
+            </p>
+          ) : null}
+          {rewardState === "failed" ? (
+            <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm leading-6 text-amber-50">
+              Could not claim right now. Try again.
+            </p>
+          ) : null}
+
+          <div className="mt-4">
+            {dailyRewardStatus.canClaim ? (
+              <form action={claimDailyReward}>
+                <button
+                  type="submit"
+                  className="rounded-full bg-emerald-200 px-5 py-2.5 text-sm font-black text-black"
+                >
+                  Claim +{dailyRewardStatus.nextRewardGold} Gold
+                </button>
+              </form>
+            ) : (
+              <p className="text-sm font-medium text-emerald-100/70">
+                Come back tomorrow to keep your streak.
+              </p>
+            )}
+          </div>
+
+          {recentAchievements.length ? (
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-emerald-100/60">
+                Recent achievements
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recentAchievements.map((achievement) => (
+                  <div
+                    key={achievement.key}
+                    className="flex items-center gap-2 rounded-full border border-white/10 bg-black/30 px-3 py-1.5"
+                    title={achievement.description}
+                  >
+                    <span aria-hidden className="text-base">
+                      {achievement.emoji}
+                    </span>
+                    <span className="text-xs font-semibold text-white">
+                      {achievement.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </section>
 
         <section className="rounded-3xl border border-[#C8A24A]/25 bg-[#C8A24A]/10 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
