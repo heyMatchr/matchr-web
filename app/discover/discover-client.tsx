@@ -494,7 +494,6 @@ const ProfileRail = memo(function ProfileRail({
                 ) : null}
               </div>
               <p className="mt-2 truncate text-sm font-black">{profile.display_name}</p>
-              <p className="text-xs text-neutral-500">{profile.compatibility}% compatible</p>
             </Link>
             {profile.previewVideo ? (
               <button
@@ -757,25 +756,25 @@ const SwipeCard = memo(function SwipeCard({
         ) : null}
       </div>
       <div className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-black tracking-tight">{profile.display_name}, {profile.age}</h2>
-            <p className="mt-1 text-sm text-neutral-400">{profile.location}{profile.country ? `, ${profile.country}` : ""}</p>
+        <div className="min-w-0">
+          <h2 className="text-2xl font-black tracking-tight">{profile.display_name}, {profile.age}</h2>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-1 text-sm font-black text-emerald-100">
+              {profile.compatibility}% match
+            </span>
+            {profile.relationship_intent ? (
+              <span className="rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-neutral-200">
+                {profile.relationship_intent}
+              </span>
+            ) : null}
           </div>
-          <span className="rounded-full border border-emerald-300/20 px-3 py-1 text-xs text-emerald-100">
-            {profile.compatibility}%
-          </span>
+          <p className="mt-2 text-sm text-neutral-400">{profile.location}{profile.country ? `, ${profile.country}` : ""}</p>
         </div>
         <p className="mt-4 line-clamp-3 text-sm leading-6 text-neutral-300">{profile.bio}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {profile.interests.slice(0, 5).map((interest) => (
             <span key={interest} className="rounded-full bg-white/5 px-3 py-1 text-xs text-neutral-300">{interest}</span>
           ))}
-        </div>
-        <div className="mt-5 grid grid-cols-3 gap-2 text-center text-xs text-neutral-500">
-          <span>{profile.followerCount} followers</span>
-          <span>{profile.momentCount} moments</span>
-          <span>{profile.relationship_intent}</span>
         </div>
         {profile.pronouns || profile.gender_identity || profile.sexual_orientation ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -791,10 +790,37 @@ const SwipeCard = memo(function SwipeCard({
               ))}
           </div>
         ) : null}
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <button disabled={disabled} onClick={onPass} className="rounded-full border border-neutral-700 px-3 py-2 text-sm text-neutral-300">Pass</button>
-          <Link href={getProfileHref(profile)} className="rounded-full border border-neutral-700 px-3 py-2 text-center text-sm text-neutral-300">View</Link>
-          <button disabled={disabled} onClick={onLike} className="rounded-full bg-white px-3 py-2 text-sm font-medium text-black">Like</button>
+        {profile.followerCount > 0 || profile.momentCount > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+            {profile.followerCount > 0 ? (
+              <span>{profile.followerCount} followers</span>
+            ) : null}
+            {profile.momentCount > 0 ? (
+              <span>{profile.momentCount} moments</span>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="mt-5 flex items-center gap-2">
+          <button
+            disabled={disabled}
+            onClick={onPass}
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-neutral-700 px-3 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-500 disabled:opacity-60"
+          >
+            Pass
+          </button>
+          <button
+            disabled={disabled}
+            onClick={onLike}
+            className="inline-flex min-h-11 flex-[1.6] items-center justify-center rounded-full bg-white px-3 text-sm font-black text-black transition-colors hover:bg-neutral-200 disabled:opacity-60"
+          >
+            Like
+          </button>
+          <Link
+            href={getProfileHref(profile)}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full px-3 text-sm font-medium text-neutral-400 underline-offset-2 transition-colors hover:text-neutral-200 hover:underline"
+          >
+            View
+          </Link>
         </div>
       </div>
     </article>
