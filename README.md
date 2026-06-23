@@ -55,3 +55,4 @@ Webhook event: charge.success
 ```
 
 Gold is credited only after Paystack verification marks the matching `payment_orders` row paid through the existing payment RPC flow.
+
